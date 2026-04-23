@@ -33,7 +33,10 @@ export default function Dashboard() {
         .select('*')
         .eq('user_id', data.user.id)
         .maybeSingle()
-        .then(({ data: biz }) => setBusiness(biz))
+        .then(({ data: biz }) => {
+          if (!biz) { navigate('/onboarding'); return }
+          setBusiness(biz)
+        })
     })
   }, [navigate])
 

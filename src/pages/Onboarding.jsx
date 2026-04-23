@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { generateWithClaude } from '../lib/claude'
 
 /* ── Categories ── */
 const CATEGORIES = [
@@ -47,7 +48,8 @@ export default function Onboarding() {
   const [step, setStep]     = useState(0)
   const [form, setForm]     = useState(EMPTY)
   const [errors, setErrors] = useState({})
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState('')
   const [serverError, setServerError] = useState(null)
 
   useEffect(() => {
@@ -93,30 +95,59 @@ export default function Onboarding() {
   const handleSubmit = async () => {
     if (!validate()) return
     setLoading(true)
+    setLoadingMsg('Salvataggio in corso…')
     setServerError(null)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { navigate('/auth'); return }
 
-    const { error } = await supabase.from('businesses').insert({
-      user_id:     user.id,
-      name:        form.name.trim(),
-      slug:        toSlug(form.name.trim()),
-      category:    form.category,
-      description: form.description.trim() || null,
-      phone:       form.phone.trim()     || null,
-      whatsapp:    form.whatsapp.trim()  || null,
-      email:       form.email.trim()     || null,
-      address:     form.address.trim()   || null,
-      city:        form.city.trim(),
-    })
+    // 1. Insert business
+    const { data: biz, error } = await supabase
+      .from('businesses')
+      .insert({
+        user_id:  user.id,
+        name:     form.name.trim(),
+        slug:     toSlug(form.name.trim()),
+        category: form.category,
+        phone:    form.phone.trim()    || null,
+        whatsapp: form.whatsapp.trim() || null,
+        email:    form.email.trim()    || null,
+        address:  form.address.trim()  || null,
+        city:     form.city.trim(),
+      })
+      .select('id')
+      .single()
 
-    setLoading(false)
     if (error) {
       setServerError('Errore nel salvataggio. Riprova tra qualche istante.')
-    } else {
-      navigate('/dashboard')
+      setLoading(false)
+      return
     }
+
+    // 2. Generate AI description
+    setLoadingMsg('Generazione descrizione AI…')
+    try {
+      const prompt = buildDescriptionPrompt(form)
+      console.log('[Claude] prompt inviato:', prompt)
+
+      const aiDescription = await generateWithClaude(prompt)
+      console.log('[Claude] risposta ricevuta:', aiDescription)
+
+      const { error: updateError } = await supabase
+        .from('businesses')
+        .update({ description: aiDescription.trim() })
+        .eq('id', biz.id)
+
+      if (updateError) {
+        console.error('[Supabase] errore aggiornamento description:', updateError)
+      } else {
+        console.log('[Supabase] description salvata correttamente')
+      }
+    } catch (err) {
+      console.error('[Claude] errore durante la generazione:', err)
+    }
+
+    navigate('/dashboard')
   }
 
   return (
@@ -329,7 +360,8 @@ export default function Onboarding() {
                 onClick={handleSubmit}
                 disabled={loading}
               >
-                {loading ? <ObSpinner /> : 'Salva e inizia →'}
+                <ObSpinner visible={loading} />
+                {loading ? loadingMsg : 'Salva e inizia →'}
               </button>
             )
           }
@@ -338,6 +370,23 @@ export default function Onboarding() {
       </div>
     </div>
   )
+}
+
+/* ── AI prompt ── */
+function buildDescriptionPrompt(form) {
+  const lines = [
+    'Scrivi una descrizione professionale e accattivante (massimo 3 frasi, tono caldo e diretto) per la seguente attività locale:',
+    `- Nome: ${form.name}`,
+    `- Categoria: ${form.category}`,
+    `- Città: ${form.city}`,
+    form.address.trim()     ? `- Indirizzo: ${form.address.trim()}`                                    : null,
+    form.description.trim() ? `- Note del titolare: "${form.description.trim()}"`                      : null,
+    form.phone.trim()       ? `- Telefono disponibile`                                                 : null,
+    form.whatsapp.trim()    ? `- Contattabile su WhatsApp`                                             : null,
+    '',
+    'Rispondi solo con il testo della descrizione. Niente titoli, niente virgolette, niente commenti. Scrivi in italiano.',
+  ]
+  return lines.filter((l) => l !== null).join('\n')
 }
 
 /* ── Icons ── */
@@ -365,6 +414,7 @@ function IconCity() {
 function IconAlertCircle() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
 }
-function ObSpinner() {
+function ObSpinner({ visible }) {
+  if (!visible) return null
   return <svg className="ob-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2a10 10 0 0 1 10 10"/></svg>
 }
