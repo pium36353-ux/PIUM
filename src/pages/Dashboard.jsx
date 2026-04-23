@@ -74,7 +74,7 @@ export default function Dashboard() {
             <div className="db-brand-icon">
               <IconHome />
             </div>
-            <span className="db-brand-name">LocalHub</span>
+            <span className="db-brand-name">PIUM</span>
           </div>
 
           {business && (

@@ -1,4 +1,4 @@
-# LocalHub — Stato avanzamento
+# PIUM — Stato avanzamento
 
 | # | Funzionalità | Stato |
 |---|---|---|
@@ -20,3 +20,10 @@
 | 16 | Admin panel | ⬜ |
 | 17 | Dashboard affiliati | ⬜ |
 | 18 | Deploy + dominio | ⬜ |
+
+## Prima del lancio
+
+- [ ] Verificare numero di telefono sull'account Anthropic
+- [ ] Aggiungere dati di fatturazione completi su Anthropic
+- [ ] Descrivere il progetto nel profilo Anthropic
+- [ ] Spostare le chiamate Claude API su Supabase Edge Functions per sicurezza e gestione rate limit

@@ -159,7 +159,7 @@ export default function Onboarding() {
           <div className="ob-brand-icon">
             <IconHome />
           </div>
-          <span className="ob-brand-name">LocalHub</span>
+          <span className="ob-brand-name">PIUM</span>
         </div>
 
         {/* Step indicator */}

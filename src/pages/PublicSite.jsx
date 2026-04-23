@@ -31,10 +31,10 @@ export default function PublicSite() {
       setBusiness(biz)
       setServices(svcs ?? [])
       setStatus('found')
-      document.title = `${biz.name} — LocalHub`
+      document.title = `${biz.name} — PIUM`
     }
     load()
-    return () => { document.title = 'LocalHub' }
+    return () => { document.title = 'PIUM' }
   }, [slug])
 
   if (status === 'loading') return <LoadingScreen />
@@ -169,7 +169,7 @@ export default function PublicSite() {
       {/* ── Footer ── */}
       <footer className="ps-footer">
         <span>Pagina realizzata con</span>
-        <Link to="/" className="ps-footer-brand">LocalHub</Link>
+        <Link to="/" className="ps-footer-brand">PIUM</Link>
       </footer>
 
     </div>

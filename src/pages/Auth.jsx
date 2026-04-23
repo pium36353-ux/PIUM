@@ -72,7 +72,7 @@ export default function Auth() {
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
           </div>
-          <span className="auth-brand-name">LocalHub</span>
+          <span className="auth-brand-name">PIUM</span>
         </div>
 
         <h1 className="auth-title">

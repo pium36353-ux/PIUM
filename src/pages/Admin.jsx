@@ -114,7 +114,7 @@ export default function Admin() {
           <h1 className="adm-denied-title">Accesso negato</h1>
           <p className="adm-denied-msg">
             Non hai i permessi per accedere a questa pagina.<br />
-            Solo gli amministratori di LocalHub possono accedervi.
+            Solo gli amministratori di PIUM possono accedervi.
           </p>
           <button className="adm-btn-primary" onClick={() => navigate('/dashboard')}>
             Torna alla dashboard
@@ -132,7 +132,7 @@ export default function Admin() {
         <div className="adm-header-left">
           <div className="adm-brand">
             <div className="adm-brand-icon"><IconHome /></div>
-            <span className="adm-brand-name">LocalHub</span>
+            <span className="adm-brand-name">PIUM</span>
           </div>
           <span className="adm-admin-badge">Admin</span>
         </div>
