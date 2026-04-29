@@ -15,7 +15,7 @@ export default function App() {
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/dashboard"  element={<Dashboard />} />
         <Route path="/admin"      element={<Admin />} />
-        <Route path="/b/:slug"    element={<PublicSite />} />
+        <Route path="/site/:slug"  element={<PublicSite />} />
       </Routes>
     </BrowserRouter>
   )

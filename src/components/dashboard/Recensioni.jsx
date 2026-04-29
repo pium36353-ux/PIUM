@@ -159,6 +159,13 @@ export default function Recensioni({ business }) {
     }
   }
 
+  /* ── Publish toggle ── */
+  const togglePublish = async (review) => {
+    const next = !review.published
+    await supabase.from('reviews').update({ published: next }).eq('id', review.id)
+    setReviews(prev => prev.map(r => r.id === review.id ? { ...r, published: next } : r))
+  }
+
   /* ── Delete ── */
   const handleDelete = async (id) => {
     setDeletingId(id)
@@ -253,6 +260,7 @@ export default function Recensioni({ business }) {
               onConfirmDelete={() => setConfirmId(r.id)}
               onCancelDelete={() => setConfirmId(null)}
               onDelete={() => handleDelete(r.id)}
+              onTogglePublish={() => togglePublish(r)}
             />
           ))}
         </div>
@@ -352,18 +360,21 @@ export default function Recensioni({ business }) {
 }
 
 /* ── Review card ── */
-function ReviewCard({ review: r, business, reply, confirmId, deletingId, onGenerate, onReplyChange, onEditToggle, onSaveReply, onConfirmDelete, onCancelDelete, onDelete }) {
+function ReviewCard({ review: r, business, reply, confirmId, deletingId, onGenerate, onReplyChange, onEditToggle, onSaveReply, onConfirmDelete, onCancelDelete, onDelete, onTogglePublish }) {
   const date = new Date(r.reviewed_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
   const src  = SOURCES.find(s => s.value === r.source)
 
   return (
-    <div className="rv-card">
+    <div className={`rv-card ${r.published ? 'rv-card--published' : ''}`}>
       {/* Header */}
       <div className="rv-card-head">
         <div className="rv-card-author-row">
           <div className="rv-avatar">{r.author_name[0].toUpperCase()}</div>
           <div className="rv-author-info">
-            <span className="rv-author-name">{r.author_name}</span>
+            <div className="rv-author-name-row">
+              <span className="rv-author-name">{r.author_name}</span>
+              {r.published && <span className="rv-published-badge"><IconGlobe size={10} /> Pubblicata</span>}
+            </div>
             <div className="rv-author-meta">
               <Stars rating={r.rating} size={13} />
               <span className="rv-date">{date}</span>
@@ -372,6 +383,15 @@ function ReviewCard({ review: r, business, reply, confirmId, deletingId, onGener
           </div>
         </div>
         <div className="rv-card-actions">
+          {confirmId !== r.id && (
+            <button
+              className={`rv-action-btn ${r.published ? 'rv-action-btn--published' : 'rv-action-btn--publish'}`}
+              title={r.published ? 'Rimuovi dal sito pubblico' : 'Pubblica sul sito pubblico'}
+              onClick={onTogglePublish}
+            >
+              {r.published ? <IconGlobe size={14} /> : <IconGlobeOff size={14} />}
+            </button>
+          )}
           {confirmId === r.id ? (
             <div className="rv-confirm-row">
               <span className="rv-confirm-label">Eliminare?</span>
@@ -448,6 +468,8 @@ function ReviewCard({ review: r, business, reply, confirmId, deletingId, onGener
 }
 
 /* ── Icons ── */
+function IconGlobe({ size = 15 })    { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> }
+function IconGlobeOff({ size = 15 }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.54 15H17a2 2 0 0 0-2 2v4.54"/><path d="M7 3.34V5a3 3 0 0 0 3 3h0a2 2 0 0 1 2 2 2 2 0 0 0 4 0 2 2 0 0 1 2-2h3.17"/><path d="M11 21.95V18a2 2 0 0 0-2-2 2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05"/><circle cx="12" cy="12" r="10"/><line x1="2" y1="2" x2="22" y2="22"/></svg> }
 function IconX()          { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
 function IconCheck()      { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
 function IconCheckCircle(){ return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> }

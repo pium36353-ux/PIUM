@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import Logo from '../components/Logo'
 import Panoramica  from '../components/dashboard/Panoramica'
 import EditorSito  from '../components/dashboard/EditorSito'
 import Servizi     from '../components/dashboard/Servizi'
 import Social      from '../components/dashboard/Social'
 import Recensioni  from '../components/dashboard/Recensioni'
 import Promemoria  from '../components/dashboard/Promemoria'
+import Agenda      from '../components/dashboard/Agenda'
 
 const NAV = [
   { id: 'panoramica', label: 'Panoramica',  icon: IconGrid },
@@ -15,6 +17,7 @@ const NAV = [
   { id: 'social',     label: 'Social',      icon: IconShare },
   { id: 'recensioni', label: 'Recensioni',  icon: IconStar },
   { id: 'promemoria', label: 'Promemoria',  icon: IconBell },
+  { id: 'agenda',     label: 'Agenda',      icon: IconCalendar },
 ]
 
 export default function Dashboard() {
@@ -52,6 +55,7 @@ export default function Dashboard() {
     social:     Social,
     recensioni: Recensioni,
     promemoria: Promemoria,
+    agenda:     Agenda,
   }[section]
 
   const navigate_section = (id) => {
@@ -74,7 +78,7 @@ export default function Dashboard() {
             <div className="db-brand-icon">
               <IconHome />
             </div>
-            <span className="db-brand-name">PIUM</span>
+            <Logo className="db-brand-name" />
           </div>
 
           {business && (
@@ -173,4 +177,7 @@ function IconLogout() {
 }
 function IconMenu() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+}
+function IconCalendar() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
 }

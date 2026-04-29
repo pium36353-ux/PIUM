@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import Logo from '../components/Logo'
 
 export default function PublicSite() {
   const { slug } = useParams()
-  const [business, setBusiness] = useState(null)
-  const [services, setServices] = useState([])
-  const [status, setStatus]     = useState('loading') // loading | found | notfound
+  const [business,    setBusiness]    = useState(null)
+  const [siteContent, setSiteContent] = useState({})
+  const [services,    setServices]    = useState([])
+  const [reviews,     setReviews]     = useState([])
+  const [status,      setStatus]      = useState('loading') // loading | found | notfound
 
   useEffect(() => {
     async function load() {
@@ -19,17 +22,26 @@ export default function PublicSite() {
 
       if (error || !biz) { setStatus('notfound'); return }
 
-      const { data: svcs } = await supabase
-        .from('services')
-        .select('*')
-        .eq('business_id', biz.id)
-        .eq('is_available', true)
-        .order('sort_order')
+      const [{ data: svcs }, { data: rvs }, { data: sc }] = await Promise.all([
+        supabase.from('services').select('*').eq('business_id', biz.id).eq('is_available', true).order('sort_order'),
+        supabase.from('reviews').select('id,author_name,rating,body,reply,reviewed_at').eq('business_id', biz.id).eq('published', true).order('reviewed_at', { ascending: false }),
+        supabase.from('site_content').select('*').eq('business_id', biz.id),
+      ])
 
-      console.log('[PublicSite] dati attività:', biz)
-      console.log('[PublicSite] servizi:', svcs)
+      // Indicizza per block_key, poi estrae solo i campi rilevanti per blocco
+      const byBlock = {}
+      for (const row of sc ?? []) byBlock[row.block_key] = row
+const scFlat = {
+        hero_title:      byBlock.hero?.hero_title      ?? null,
+        hero_subtitle:   byBlock.hero?.hero_subtitle   ?? null,
+        hero_cta_text:   byBlock.hero?.hero_cta_text   ?? null,
+        about_text:      byBlock.about?.about_text     ?? null,
+        cover_image_url: byBlock.cover?.cover_image_url ?? null,
+      }
       setBusiness(biz)
+      setSiteContent(scFlat)
       setServices(svcs ?? [])
+      setReviews(rvs ?? [])
       setStatus('found')
       document.title = `${biz.name} — PIUM`
     }
@@ -41,8 +53,21 @@ export default function PublicSite() {
   if (status === 'notfound') return <NotFound />
 
   const { name, category, description, phone, whatsapp, email, address, city, logo_url } = business
-  const hasContacts = phone || whatsapp || email
-  const hasLocation = address || city
+  const { hero_title, hero_subtitle, hero_cta_text, about_text, cover_image_url } = siteContent
+
+  const displayName    = hero_title || name
+  const displayAbout   = about_text || description
+  const hasContacts    = phone || whatsapp || email
+  const hasLocation    = address || city
+
+  // Link per il pulsante contatto: telefono > whatsapp > email
+  const ctaHref = phone
+    ? `tel:${phone}`
+    : whatsapp
+      ? `https://wa.me/${whatsapp.replace(/\D/g, '')}`
+      : email
+        ? `mailto:${email}`
+        : '#ps-contacts'
 
   return (
     <div className="ps-shell">
@@ -58,26 +83,39 @@ export default function PublicSite() {
           </div>
           <div className="ps-hero-text">
             {category && <span className="ps-category-badge">{category}</span>}
-            <h1 className="ps-name">{name}</h1>
+            <h1 className="ps-name">{displayName}</h1>
+            {hero_subtitle && <p className="ps-hero-subtitle">{hero_subtitle}</p>}
             {(address || city) && (
               <p className="ps-location">
                 <IconPin size={14} />
                 {[address, city].filter(Boolean).join(', ')}
               </p>
             )}
+            {hero_cta_text && hasContacts && (
+              <a href={ctaHref} className="ps-hero-cta">
+                {hero_cta_text}
+              </a>
+            )}
           </div>
         </div>
       </header>
+
+      {/* ── Copertina ── */}
+      {cover_image_url && (
+        <div className="ps-cover">
+          <img src={cover_image_url} alt={`${displayName} — copertina`} className="ps-cover-img" />
+        </div>
+      )}
 
       {/* ── Body ── */}
       <div className="ps-body">
         <main className="ps-main">
 
-          {/* Description */}
-          {description && (
+          {/* Chi siamo */}
+          {displayAbout && (
             <section className="ps-section">
               <h2 className="ps-section-title">Chi siamo</h2>
-              <p className="ps-description">{description}</p>
+              <p className="ps-description">{displayAbout}</p>
             </section>
           )}
 
@@ -108,6 +146,16 @@ export default function PublicSite() {
               </div>
             </section>
           )}
+
+          {/* Reviews */}
+          {reviews.length > 0 && (
+            <section className="ps-section">
+              <h2 className="ps-section-title">Recensioni</h2>
+              <div className="ps-reviews-list">
+                {reviews.map(r => <PsReviewCard key={r.id} review={r} />)}
+              </div>
+            </section>
+          )}
         </main>
 
         {/* ── Sidebar ── */}
@@ -115,7 +163,7 @@ export default function PublicSite() {
 
           {/* Contacts */}
           {hasContacts && (
-            <div className="ps-card">
+            <div id="ps-contacts" className="ps-card">
               <h2 className="ps-card-title">Contatti</h2>
               <div className="ps-contacts">
                 {phone && (
@@ -169,9 +217,45 @@ export default function PublicSite() {
       {/* ── Footer ── */}
       <footer className="ps-footer">
         <span>Pagina realizzata con</span>
-        <Link to="/" className="ps-footer-brand">PIUM</Link>
+        <Link to="/" className="ps-footer-brand"><Logo /></Link>
       </footer>
 
+    </div>
+  )
+}
+
+/* ── Public review card ── */
+function PsStars({ rating }) {
+  return (
+    <span className="ps-review-stars">
+      {[1,2,3,4,5].map(n => (
+        <span key={n} style={{ color: n <= rating ? '#f59e0b' : 'var(--border)' }}>★</span>
+      ))}
+    </span>
+  )
+}
+
+function PsReviewCard({ review: r }) {
+  const date = new Date(r.reviewed_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
+  return (
+    <div className="ps-review-card">
+      <div className="ps-review-head">
+        <div className="ps-review-avatar">{r.author_name[0].toUpperCase()}</div>
+        <div className="ps-review-author-info">
+          <span className="ps-review-author-name">{r.author_name}</span>
+          <div className="ps-review-meta">
+            {r.rating != null && <PsStars rating={r.rating} />}
+            <span className="ps-review-date">{date}</span>
+          </div>
+        </div>
+      </div>
+      {r.body && <p className="ps-review-body">{r.body}</p>}
+      {r.reply && (
+        <div className="ps-review-reply">
+          <span className="ps-review-reply-label">Risposta del titolare</span>
+          <p className="ps-review-reply-text">{r.reply}</p>
+        </div>
+      )}
     </div>
   )
 }

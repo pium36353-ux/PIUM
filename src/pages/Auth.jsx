@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import Logo from '../components/Logo'
 
 const FIELDS = {
   login: [
@@ -72,7 +73,7 @@ export default function Auth() {
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
           </div>
-          <span className="auth-brand-name">PIUM</span>
+          <Logo className="auth-brand-name" />
         </div>
 
         <h1 className="auth-title">

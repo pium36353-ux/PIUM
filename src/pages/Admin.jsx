@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import Logo from '../components/Logo'
 
 /* ── Constants ── */
 const PLANS = [
@@ -132,7 +133,7 @@ export default function Admin() {
         <div className="adm-header-left">
           <div className="adm-brand">
             <div className="adm-brand-icon"><IconHome /></div>
-            <span className="adm-brand-name">PIUM</span>
+            <Logo className="adm-brand-name" />
           </div>
           <span className="adm-admin-badge">Admin</span>
         </div>
@@ -273,7 +274,7 @@ export default function Admin() {
                             {b.slug && (
                               <a
                                 className="adm-link-btn"
-                                href={`/b/${b.slug}`}
+                                href={`/site/${b.slug}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 title="Vedi sito pubblico"
@@ -335,7 +336,7 @@ export default function Admin() {
                         {b.slug && (
                           <a
                             className="adm-link-btn"
-                            href={`/b/${b.slug}`}
+                            href={`/site/${b.slug}`}
                             target="_blank"
                             rel="noreferrer"
                             title="Vedi sito pubblico"

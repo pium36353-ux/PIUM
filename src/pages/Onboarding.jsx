@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { generateWithClaude } from '../lib/claude'
+import Logo from '../components/Logo'
 
 /* ── Categories ── */
 const CATEGORIES = [
@@ -159,7 +160,7 @@ export default function Onboarding() {
           <div className="ob-brand-icon">
             <IconHome />
           </div>
-          <span className="ob-brand-name">PIUM</span>
+          <Logo className="ob-brand-name" />
         </div>
 
         {/* Step indicator */}

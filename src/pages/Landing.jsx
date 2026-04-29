@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import Logo from '../components/Logo'
 
 /* ── Feature data ── */
 const FEATURES = [
@@ -53,7 +54,7 @@ export default function Landing() {
       <nav className="ln-nav">
         <div className="ln-brand">
           <div className="ln-brand-icon"><IconHome /></div>
-          <span className="ln-brand-name">PIUM</span>
+          <Logo className="ln-brand-name" />
         </div>
         <div className="ln-nav-links">
           <a href="#funzionalita" className="ln-nav-link">Funzionalità</a>
@@ -198,9 +199,9 @@ export default function Landing() {
         <div className="ln-footer-inner">
           <div className="ln-footer-brand">
             <div className="ln-brand-icon ln-brand-icon--sm"><IconHome /></div>
-            <span className="ln-footer-name">PIUM</span>
+            <Logo className="ln-footer-name" />
           </div>
-          <p className="ln-footer-copy">© {new Date().getFullYear()} PIUM · Tutti i diritti riservati</p>
+          <p className="ln-footer-copy">© {new Date().getFullYear()} <Logo /> · Tutti i diritti riservati</p>
           <div className="ln-footer-links">
             <a href="#" className="ln-footer-link">Privacy</a>
             <a href="#" className="ln-footer-link">Termini</a>
