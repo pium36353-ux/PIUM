@@ -49,6 +49,17 @@ const scFlat = {
     return () => { document.title = 'PIUM' }
   }, [slug])
 
+  useEffect(() => {
+    if (status !== 'found' || !business) return
+    const t = getTheme(business.category)
+    document.body.style.backgroundImage = t.patternImage
+    document.body.style.backgroundSize  = t.patternSize
+    return () => {
+      document.body.style.backgroundImage = ''
+      document.body.style.backgroundSize  = ''
+    }
+  }, [status, business?.category])
+
   if (status === 'loading') return <LoadingScreen />
   if (status === 'notfound') return <NotFound />
 
@@ -69,43 +80,60 @@ const scFlat = {
         ? `mailto:${email}`
         : '#ps-contacts'
 
+  const theme = getTheme(category)
+  const hasImgBg = !!cover_image_url
+
+  const heroStyle = hasImgBg
+    ? { backgroundImage: `url(${cover_image_url})`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }
+    : { background: theme.heroBg }
+
+  const txtColor  = hasImgBg ? '#ffffff' : theme.textColor
+  const subColor  = hasImgBg ? 'rgba(255,255,255,0.82)' : theme.subtitleColor
+  const badgeBg   = hasImgBg ? 'rgba(255,255,255,0.15)' : theme.accentLight
+  const badgeFg   = hasImgBg ? '#ffffff' : theme.accent
+  const badgeBdr  = hasImgBg ? 'rgba(255,255,255,0.35)' : theme.accentBorder
+  const avatarBg  = hasImgBg ? 'rgba(255,255,255,0.18)' : theme.accentLight
+  const avatarBdr = hasImgBg ? 'rgba(255,255,255,0.4)'  : theme.accentBorder
+  const avatarFg  = hasImgBg ? '#ffffff' : theme.accent
+  const ctaBg     = hasImgBg ? 'rgba(255,255,255,0.22)' : theme.accent
+
   return (
     <div className="ps-shell">
 
       {/* ── Hero ── */}
-      <header className="ps-hero">
-        <div className="ps-hero-inner">
-          <div className="ps-avatar">
+      <header className="ps-hero" style={heroStyle}>
+        {hasImgBg && <div className="ps-hero-overlay" />}
+        <div className="ps-hero-inner" style={{ position: 'relative', zIndex: 1 }}>
+          <div className="ps-avatar" style={{ background: avatarBg, borderColor: avatarBdr }}>
             {logo_url
               ? <img src={logo_url} alt={name} className="ps-avatar-img" />
-              : <span className="ps-avatar-letter">{name[0].toUpperCase()}</span>
+              : <span className="ps-avatar-letter" style={{ color: avatarFg }}>{name[0].toUpperCase()}</span>
             }
           </div>
           <div className="ps-hero-text">
-            {category && <span className="ps-category-badge">{category}</span>}
-            <h1 className="ps-name">{displayName}</h1>
-            {hero_subtitle && <p className="ps-hero-subtitle">{hero_subtitle}</p>}
+            {category && (
+              <span className="ps-category-badge" style={{ background: badgeBg, color: badgeFg, borderColor: badgeBdr }}>
+                {theme.emoji && <span style={{ marginRight: 4 }}>{theme.emoji}</span>}{category}
+              </span>
+            )}
+            <h1 className="ps-name" style={{ fontWeight: theme.titleWeight, color: txtColor }}>
+              {displayName}
+            </h1>
+            {hero_subtitle && <p className="ps-hero-subtitle" style={{ color: subColor }}>{hero_subtitle}</p>}
             {(address || city) && (
-              <p className="ps-location">
+              <p className="ps-location" style={{ color: subColor }}>
                 <IconPin size={14} />
                 {[address, city].filter(Boolean).join(', ')}
               </p>
             )}
             {hero_cta_text && hasContacts && (
-              <a href={ctaHref} className="ps-hero-cta">
+              <a href={ctaHref} className="ps-hero-cta" style={{ background: ctaBg }}>
                 {hero_cta_text}
               </a>
             )}
           </div>
         </div>
       </header>
-
-      {/* ── Copertina ── */}
-      {cover_image_url && (
-        <div className="ps-cover">
-          <img src={cover_image_url} alt={`${displayName} — copertina`} className="ps-cover-img" />
-        </div>
-      )}
 
       {/* ── Body ── */}
       <div className="ps-body">
@@ -285,6 +313,106 @@ function NotFound() {
       </div>
     </div>
   )
+}
+
+/* ── Temi visivi per categoria ── */
+const THEMES = {
+  default: {
+    heroBg:        'linear-gradient(135deg, var(--accent-bg) 0%, var(--bg) 60%)',
+    accent:        'var(--accent)',
+    accentLight:   'var(--accent-bg)',
+    accentBorder:  'var(--accent-border)',
+    titleWeight:   '800',
+    textColor:     undefined,
+    subtitleColor: undefined,
+    emoji:         null,
+    patternImage:  'radial-gradient(rgba(168,85,247,0.12) 1px, transparent 1px)',
+    patternSize:   '18px 18px',
+  },
+  bar: {
+    heroBg:        'linear-gradient(135deg, #FFF0DC 0%, #FFFAF4 70%)',
+    accent:        '#6F4E37',
+    accentLight:   'rgba(111,78,55,0.1)',
+    accentBorder:  'rgba(111,78,55,0.28)',
+    titleWeight:   '800',
+    textColor:     '#3B2314',
+    subtitleColor: '#7A5C47',
+    emoji:         '☕',
+    patternImage:  'radial-gradient(circle, rgba(111,78,55,0.13) 2px, transparent 2px)',
+    patternSize:   '22px 22px',
+  },
+  fitness: {
+    heroBg:        'linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%)',
+    accent:        '#FFD700',
+    accentLight:   'rgba(255,215,0,0.15)',
+    accentBorder:  'rgba(255,215,0,0.4)',
+    titleWeight:   '900',
+    textColor:     '#FFD700',
+    subtitleColor: 'rgba(255,255,255,0.65)',
+    emoji:         '💪',
+    patternImage:  'repeating-linear-gradient(45deg, rgba(255,215,0,0.13) 0, rgba(255,215,0,0.13) 1px, transparent 0, transparent 50%)',
+    patternSize:   '10px 10px',
+  },
+  ristorante: {
+    heroBg:        'linear-gradient(135deg, #F2E0CC 0%, #FAF0E6 70%)',
+    accent:        '#8B0000',
+    accentLight:   'rgba(139,0,0,0.08)',
+    accentBorder:  'rgba(139,0,0,0.22)',
+    titleWeight:   '800',
+    textColor:     '#4A0000',
+    subtitleColor: '#7A3030',
+    emoji:         '🍽️',
+    patternImage:  'repeating-linear-gradient(45deg, rgba(139,0,0,0.11) 0, rgba(139,0,0,0.11) 1px, transparent 0, transparent 50%), repeating-linear-gradient(-45deg, rgba(139,0,0,0.11) 0, rgba(139,0,0,0.11) 1px, transparent 0, transparent 50%)',
+    patternSize:   '16px 16px',
+  },
+  parrucchiere: {
+    heroBg:        'linear-gradient(135deg, #FAF0F0 0%, #FFFFFF 70%)',
+    accent:        '#A87070',
+    accentLight:   'rgba(201,160,160,0.14)',
+    accentBorder:  'rgba(201,160,160,0.38)',
+    titleWeight:   '800',
+    textColor:     '#4A2C2C',
+    subtitleColor: '#9A7070',
+    emoji:         '✂️',
+    patternImage:  'radial-gradient(circle, rgba(201,160,160,0.15) 1.5px, transparent 1.5px)',
+    patternSize:   '14px 14px',
+  },
+  spa: {
+    heroBg:        'linear-gradient(135deg, #E4F0E4 0%, #F8FFF8 70%)',
+    accent:        '#5A8A5A',
+    accentLight:   'rgba(143,175,143,0.14)',
+    accentBorder:  'rgba(143,175,143,0.35)',
+    titleWeight:   '700',
+    textColor:     '#2A4A2A',
+    subtitleColor: '#5A7A5A',
+    emoji:         '🌿',
+    patternImage:  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='20'%3E%3Cpath d='M0 15 Q10 5 20 15 Q30 25 40 15' fill='none' stroke='%238FAF8F' stroke-opacity='0.15' stroke-width='1.5'/%3E%3C/svg%3E")`,
+    patternSize:   '40px 20px',
+  },
+  professionista: {
+    heroBg:        'linear-gradient(135deg, #DDE4F0 0%, #F5F5F5 70%)',
+    accent:        '#1B2A4A',
+    accentLight:   'rgba(27,42,74,0.08)',
+    accentBorder:  'rgba(27,42,74,0.2)',
+    titleWeight:   '700',
+    textColor:     '#0D1A30',
+    subtitleColor: '#4A5A70',
+    emoji:         '💼',
+    patternImage:  'linear-gradient(rgba(27,42,74,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(27,42,74,0.12) 1px, transparent 1px)',
+    patternSize:   '24px 24px',
+  },
+}
+
+function getTheme(category) {
+  if (!category) return THEMES.default
+  const c = category.toLowerCase()
+  if (c.includes('bar') || c.includes('caffè') || c.includes('caffe') || c.includes('café')) return THEMES.bar
+  if (c.includes('palestra') || c.includes('fitness') || c.includes('gym') || c.includes('crossfit')) return THEMES.fitness
+  if (c.includes('ristorante') || c.includes('trattoria') || c.includes('pizzeria') || c.includes('osteria')) return THEMES.ristorante
+  if (c.includes('parrucchiere') || c.includes('barbiere') || c.includes('hair') || c.includes('coiffeur')) return THEMES.parrucchiere
+  if (c.includes('estetista') || c.includes('estetica') || c.includes('spa') || c.includes('benessere') || c.includes('centro estetico')) return THEMES.spa
+  if (c.includes('professionista') || c.includes('studio') || c.includes('consulenza') || c.includes('avvocato') || c.includes('commercialista') || c.includes('notaio')) return THEMES.professionista
+  return THEMES.default
 }
 
 /* ── Helpers ── */

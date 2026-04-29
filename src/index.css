@@ -2651,6 +2651,13 @@ body {
   padding: 48px 24px 40px;
 }
 
+.ps-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 0;
+}
+
 .ps-hero-inner {
   max-width: 860px;
   margin: 0 auto;
@@ -2711,7 +2718,7 @@ body {
 .ps-name {
   font-size: 32px !important;
   font-weight: 800 !important;
-  color: var(--text-h) !important;
+  color: var(--text-h);
   margin: 0 !important;
   letter-spacing: -0.8px;
   line-height: 1.15;
