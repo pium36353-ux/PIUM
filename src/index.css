@@ -756,6 +756,41 @@ body {
   flex-direction: column;
   gap: 4px;
 }
+.db-stat-card--link {
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.db-stat-card--link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  border-color: var(--accent);
+}
+.db-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.db-back-btn:hover { background: var(--accent-bg); color: var(--text-h); }
+.db-back-btn--mobile { display: none; }
+@media (max-width: 768px) {
+  .db-back-btn--mobile {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 44px;
+    padding: 0 14px;
+    margin-bottom: 12px;
+  }
+}
 
 .db-stat-icon { font-size: 20px; margin-bottom: 4px; }
 .db-stat-value { font-size: 26px; font-weight: 700; color: var(--text-h); letter-spacing: -0.8px; }
