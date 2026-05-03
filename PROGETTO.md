@@ -14,7 +14,7 @@
 | 10 | Analytics | ⬜ |
 | 11 | Landing page | ✅ |
 | 12 | Sito pubblico cliente | ✅ |
-| 13 | Bozze social AI | ✅ |
+| 13 | Bozze social AI | ✅ Completata (aggiunto pulsante copia testo) |
 | 14 | Gestione recensioni | ✅ |
 | 15 | Promemoria | ✅ |
 | 16 | Admin panel | ✅ |
@@ -81,3 +81,9 @@ Prossimi step in ordine:
 - [ ] Template visivi per categoria attività (ristorante, parrucchiere, estetica, ecc.)
 - [ ] Opuscolo venditori PDF
 - [ ] Deploy su Vercel + collegamento dominio piumapp.com
+
+---
+
+Aggiunto pulsante "Copia testo" nelle bozze social con feedback visivo "Copiato ✓".  
+Fix panoramica dashboard: contatori aggiornati in tempo reale con query Supabase, card cliccabili che navigano alle sezioni, tasto "← Panoramica" ripristinato in tutte le sezioni.  
+**Prossimo step immediato: deploy su Vercel con dominio piumapp.com.**
