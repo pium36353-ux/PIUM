@@ -88,6 +88,9 @@ export default function Social({ business }) {
   const [confirmId,   setConfirmId]   = useState(null)
   const [deletingId,  setDeletingId]  = useState(null)
 
+  // Copy
+  const [copiedId, setCopiedId] = useState(null)
+
   /* ── Load ── */
   const load = useCallback(async () => {
     if (!business) return
@@ -196,6 +199,16 @@ export default function Social({ business }) {
     setDrafts(prev => prev.map(x => x.id === d.id ? { ...x, status: next } : x))
   }
 
+  /* ── Copy ── */
+  const handleCopy = (d) => {
+    const text = d.hashtags?.length
+      ? `${d.content}\n\n${d.hashtags.join(' ')}`
+      : d.content
+    navigator.clipboard.writeText(text)
+    setCopiedId(d.id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
   /* ── Delete ── */
   const handleDelete = async (id) => {
     setDeletingId(id)
@@ -264,6 +277,8 @@ export default function Social({ business }) {
               draft={d}
               confirmId={confirmId}
               deletingId={deletingId}
+              copied={copiedId === d.id}
+              onCopy={() => handleCopy(d)}
               onEdit={() => openEdit(d)}
               onApprove={() => toggleApprove(d)}
               onDelete={() => handleDelete(d.id)}
@@ -470,7 +485,7 @@ export default function Social({ business }) {
 }
 
 /* ── Draft card ── */
-function DraftCard({ draft: d, confirmId, deletingId, onEdit, onApprove, onConfirmDelete, onCancelDelete, onDelete }) {
+function DraftCard({ draft: d, confirmId, deletingId, copied, onCopy, onEdit, onApprove, onConfirmDelete, onCancelDelete, onDelete }) {
   const meta = STATUS_META[d.status] ?? STATUS_META.draft
   const platform = PLATFORMS.find(p => p.value === d.platform)
 
@@ -488,6 +503,13 @@ function DraftCard({ draft: d, confirmId, deletingId, onEdit, onApprove, onConfi
           {d.ai_generated && <span className="so-badge so-badge--ai"><IconSparkle size={11} /> AI</span>}
         </div>
         <div className="so-card-actions">
+          <button
+            className={`so-copy-btn ${copied ? 'so-copy-btn--copied' : ''}`}
+            title="Copia testo"
+            onClick={onCopy}
+          >
+            {copied ? <><IconCheck /> Copiato</> : <><IconCopy /> Copia testo</>}
+          </button>
           <button
             className={`so-action-btn ${d.status === 'approved' ? 'so-action-btn--active' : ''}`}
             title={d.status === 'approved' ? 'Riporta in bozza' : 'Approva'}
@@ -548,6 +570,7 @@ function IconCheck()   { return <svg width="15" height="15" viewBox="0 0 24 24" 
 function IconX()       { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
 function IconRefresh() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> }
 function IconAlert()   { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> }
+function IconCopy()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> }
 function SoSpinner({ small }) {
   const s = small ? 14 : 20
   return <svg style={{ width: s, height: s, animation: 'so-spin 0.8s linear infinite', flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2a10 10 0 0 1 10 10"/></svg>

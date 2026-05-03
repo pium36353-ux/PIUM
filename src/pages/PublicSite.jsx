@@ -84,7 +84,7 @@ const scFlat = {
   const hasImgBg = !!cover_image_url
 
   const heroStyle = hasImgBg
-    ? { backgroundImage: `url(${cover_image_url})`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }
+    ? { backgroundImage: `url(${cover_image_url})`, backgroundSize: 'cover', backgroundPosition: 'center center', backgroundRepeat: 'no-repeat', position: 'relative' }
     : { background: theme.heroBg }
 
   const txtColor  = hasImgBg ? '#ffffff' : theme.textColor
