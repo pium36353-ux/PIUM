@@ -31,6 +31,24 @@
 
 ## Note sessione corrente
 
+**Fatto oggi:**
+- Card panoramica: 3 card funzionanti (Attività recenti, Prossime attività, Promemoria) con navigazione cliccabile
+- Bottone "Accedi / Registrati" in landing
+- PWA installabile con icone del fulmine viola su sfondo bianco
+- Sicurezza: Claude API key spostata in Supabase Edge Function, non più esposta nel frontend
+
+**Da fare prima del lancio commerciale:**
+- Sostituire Claude API key temporanea con quella dell'account aziendale (solo variabile Supabase, nessun codice)
+- Icona PWA da migliorare (attualmente nera su alcuni dispositivi)
+
+**Da fare prossima sessione:**
+- Bot supporto clienti con FAQ di PIUM
+- Sottodominio personalizzato per ogni attività
+- Controllo analytics_events (rate limit insert pubblico)
+- Sottodominio personalizzato nomeattivita.piumapp.com
+
+---
+
 Agenda completata. Tabelle Supabase create: appointments ed employees. Funzionalità: vista settimana e giornata con slot 30 minuti, più appuntamenti sovrapposti affiancati per colore dipendente, spunta completato con verde, festività italiane evidenziate, riepilogo lordo/netto con percentuale tasse, gestione dipendenti con palette colori. Voce Agenda aggiunta nel menu dashboard. Logo PIUM: scelta variante C (testo minimalista + punto viola luminoso). Prossimi step: implementare logo C nella Landing.jsx, definire payoff finale, poi deploy su Vercel dopo sblocco account Anthropic.
 
 Logo PIUM scelto — Variante C (minimalismo puro):

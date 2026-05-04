@@ -1,22 +1,24 @@
-const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY
+import { supabase } from './supabase'
+
+const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/claude-proxy`
 
 export async function generateWithClaude(prompt) {
-  console.log('[Claude] API key (primi 10 char):', CLAUDE_API_KEY?.slice(0, 10))
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const { data: { session } } = await supabase.auth.getSession()
+
+  const response = await fetch(FUNCTION_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': CLAUDE_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
+      'Authorization': `Bearer ${session?.access_token ?? ''}`,
     },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }]
-    })
+    body: JSON.stringify({ prompt }),
   })
-  const data = await response.json()
-  console.log('[Claude] risposta completa API:', JSON.stringify(data))
-  return data.content[0].text
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.error ?? `Errore Edge Function: ${response.status}`)
+  }
+
+  const { text } = await response.json()
+  return text
 }

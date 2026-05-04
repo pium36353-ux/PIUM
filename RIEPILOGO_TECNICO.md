@@ -283,4 +283,5 @@ La chiave API Anthropic è esposta nel frontend (`VITE_CLAUDE_API_KEY`). Chiunqu
 - **File env**: `.env` (escluso da git via `.gitignore`)
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`
-  - `VITE_CLAUDE_API_KEY`
+- **Variabili d'ambiente Supabase Edge Functions** (dashboard → Settings → Edge Functions):
+  - `CLAUDE_API_KEY` — chiave Anthropic (mai nel frontend)
