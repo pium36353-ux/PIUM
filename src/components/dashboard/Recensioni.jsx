@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { generateWithClaude } from '../../lib/claude'
+import { logActivity } from '../../lib/activityLog'
 
 /* ── Constants ── */
 const SOURCES = [
@@ -128,6 +129,9 @@ export default function Recensioni({ business }) {
       replied_at: text.trim() ? new Date().toISOString() : null,
     }).eq('id', review.id)
     setReply(review.id, { saved: !!text.trim(), editing: false })
+    if (text.trim()) {
+      logActivity(business.id, business.user_id, 'review_replied', `Risposta inviata a: ${review.author_name}`)
+    }
   }
 
   /* ── Add review ── */

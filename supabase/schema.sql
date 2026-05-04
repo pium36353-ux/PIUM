@@ -168,6 +168,42 @@ create index idx_analytics_events_event_type on analytics_events(business_id, ev
 create index idx_analytics_events_occurred_at on analytics_events(business_id, occurred_at desc);
 
 -- ============================================================
+-- EMPLOYEES
+-- Staff members linked to a business (for appointment assignment)
+-- ============================================================
+create table employees (
+  id            uuid primary key default uuid_generate_v4(),
+  business_id   uuid not null references businesses(id) on delete cascade,
+  name          text not null,
+  color         text not null default '#94a3b8',
+  created_at    timestamptz not null default now()
+);
+
+create index idx_employees_business_id on employees(business_id);
+
+-- ============================================================
+-- APPOINTMENTS
+-- Bookings for a business, optionally assigned to an employee
+-- ============================================================
+create table appointments (
+  id               uuid primary key default uuid_generate_v4(),
+  business_id      uuid not null references businesses(id) on delete cascade,
+  employee_id      uuid references employees(id) on delete set null,
+  client_name      text not null,
+  date             date not null,
+  start_time       time not null default '09:00',
+  duration_minutes int  not null default 60,
+  price            numeric(10, 2),
+  notes            text,
+  completed        boolean not null default false,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+create index idx_appointments_business_id on appointments(business_id);
+create index idx_appointments_date        on appointments(business_id, date);
+
+-- ============================================================
 -- UPDATED_AT TRIGGER (auto-aggiorna updated_at)
 -- ============================================================
 create or replace function set_updated_at()
@@ -202,6 +238,10 @@ create trigger trg_reminders_updated_at
   before update on reminders
   for each row execute function set_updated_at();
 
+create trigger trg_appointments_updated_at
+  before update on appointments
+  for each row execute function set_updated_at();
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
@@ -212,6 +252,8 @@ alter table social_drafts    enable row level security;
 alter table reviews          enable row level security;
 alter table reminders        enable row level security;
 alter table analytics_events enable row level security;
+alter table employees        enable row level security;
+alter table appointments     enable row level security;
 
 -- businesses: owner full access
 create policy "businesses: owner access"
@@ -299,3 +341,23 @@ create policy "analytics_events: owner read"
 create policy "analytics_events: public insert"
   on analytics_events for insert
   with check (true);
+
+-- employees: owner via business
+create policy "employees: owner access"
+  on employees for all
+  using (
+    exists (
+      select 1 from businesses b
+      where b.id = employees.business_id and b.user_id = auth.uid()
+    )
+  );
+
+-- appointments: owner via business
+create policy "appointments: owner access"
+  on appointments for all
+  using (
+    exists (
+      select 1 from businesses b
+      where b.id = appointments.business_id and b.user_id = auth.uid()
+    )
+  );

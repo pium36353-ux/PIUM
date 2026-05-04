@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { generateWithClaude } from '../../lib/claude'
+import { logActivity } from '../../lib/activityLog'
 
 /* ── Constants ── */
 const PLATFORMS = [
@@ -197,6 +198,9 @@ export default function Social({ business }) {
     const next = d.status === 'approved' ? 'draft' : 'approved'
     await supabase.from('social_drafts').update({ status: next }).eq('id', d.id)
     setDrafts(prev => prev.map(x => x.id === d.id ? { ...x, status: next } : x))
+    if (next === 'approved') {
+      logActivity(business.id, business.user_id, 'draft_approved', `Bozza approvata: ${d.platform ?? 'social'}`)
+    }
   }
 
   /* ── Copy ── */

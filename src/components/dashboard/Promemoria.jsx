@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import { logActivity } from '../../lib/activityLog'
 
 /* ── Constants ── */
 const PRIORITY_META = {
@@ -128,6 +129,7 @@ export default function Promemoria({ business }) {
         user_id:     user.id,
         status:      'pending',
       })
+      logActivity(business.id, user.id, 'reminder_created', `Promemoria creato: ${payload.title}`)
     } else {
       await supabase.from('reminders').update(payload).eq('id', editId)
     }

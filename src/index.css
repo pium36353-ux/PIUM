@@ -756,6 +756,38 @@ body {
   padding: 20px 0;
 }
 
+/* Activity log list (Panoramica) */
+.pn-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pn-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.pn-activity-icon {
+  flex-shrink: 0;
+  font-size: 15px;
+  line-height: 1;
+}
+.pn-activity-desc {
+  flex: 1;
+  color: var(--text);
+  line-height: 1.3;
+}
+.pn-activity-time {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-muted, #888);
+  white-space: nowrap;
+}
+
 /* Stats grid */
 .db-stats-grid {
   display: grid;
@@ -826,6 +858,33 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Three-column row (Panoramica) */
+.pn-cards-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr 1fr;
+  }
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Reminder urgency badges */
+.pn-reminder-due {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.pn-reminder-due--red    { background: #fee2e2; color: #dc2626; }
+.pn-reminder-due--orange { background: #ffedd5; color: #ea580c; }
+.pn-reminder-due--green  { background: #dcfce7; color: #16a34a; }
 
 /* Empty banner */
 .db-empty-banner {

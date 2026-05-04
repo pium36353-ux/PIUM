@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import { logActivity } from '../../lib/activityLog'
 
 const EMPTY_FORM = {
   name:         '',
@@ -107,8 +108,10 @@ export default function Servizi({ business }) {
         business_id: business.id,
         sort_order:  services.length,
       })
+      logActivity(business.id, business.user_id, 'service_added', `Servizio aggiunto: ${payload.name}`)
     } else {
       await supabase.from('services').update(payload).eq('id', editingId)
+      logActivity(business.id, business.user_id, 'service_updated', `Servizio modificato: ${payload.name}`)
     }
 
     setSaving(false)
@@ -125,6 +128,7 @@ export default function Servizi({ business }) {
     setServices((prev) =>
       prev.map((x) => x.id === s.id ? { ...x, is_available: !x.is_available } : x)
     )
+    logActivity(business.id, business.user_id, 'service_toggled', `Servizio ${!s.is_available ? 'attivato' : 'disattivato'}: ${s.name}`)
   }
 
   /* ── Delete ── */

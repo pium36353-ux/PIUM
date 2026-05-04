@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { logActivity } from '../../lib/activityLog'
 
 const BLOCKS = [
   { id: 'hero',  label: 'Intestazione principale' },
@@ -41,8 +42,11 @@ export default function EditorSito({ business }) {
     )
   }
 
-  const mergeBlock = (blockKey, row) =>
+  const mergeBlock = (blockKey, row) => {
     setContent(prev => ({ ...prev, [blockKey]: row }))
+    const label = BLOCKS.find(b => b.id === blockKey)?.label ?? blockKey
+    logActivity(business.id, business.user_id, 'site_updated', `Sito aggiornato: ${label}`)
+  }
 
   return (
     <div className="db-section">
