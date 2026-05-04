@@ -99,6 +99,16 @@ Prossimi step in ordine:
 - [ ] Template visivi per categoria attività (ristorante, parrucchiere, estetica, ecc.)
 - [ ] Opuscolo venditori PDF
 - [ ] Deploy su Vercel + collegamento dominio piumapp.com
+- [ ] Verifica onboarding → sito pubblico funzionante end-to-end
+- [ ] Tabella activity_log nel database (usata da Panoramica.jsx ma non presente nello schema principale)
+- [ ] Sistema trial/blocco dopo 1 mese gratis
+- [ ] Notifiche push con azione "✓ Fatto" direttamente dalla notifica
+- [ ] Limite chiamate AI bozze social (già presente come todo, confermare implementazione)
+- [ ] Dashboard affiliati + sistema retribuzione manuale
+- [ ] Bot supporto clienti con FAQ PIUM
+- [ ] Sottodominio personalizzato per ogni attività (es. nomeattivita.piumapp.com)
+- [ ] Icona PWA da correggere (appare nera su alcuni dispositivi)
+- [ ] Sostituire Claude API key temporanea con quella account aziendale prima del lancio
 
 ---
 
