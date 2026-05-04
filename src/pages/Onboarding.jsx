@@ -55,7 +55,7 @@ export default function Onboarding() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) navigate('/auth')
+      if (!data.user) navigate('/auth', { replace: true })
     })
   }, [navigate])
 
@@ -100,7 +100,7 @@ export default function Onboarding() {
     setServerError(null)
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { navigate('/auth'); return }
+    if (!user) { navigate('/auth', { replace: true }); return }
 
     // 1. Insert business
     const { data: biz, error } = await supabase
@@ -148,7 +148,7 @@ export default function Onboarding() {
       console.error('[Claude] errore durante la generazione:', err)
     }
 
-    navigate('/dashboard')
+    navigate('/dashboard', { replace: true })
   }
 
   return (

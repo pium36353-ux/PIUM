@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
@@ -23,6 +23,12 @@ export default function Auth() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) navigate('/dashboard', { replace: true })
+    })
+  }, [navigate])
+
   const set = (id) => (e) => setValues((v) => ({ ...v, [id]: e.target.value }))
 
   const switchMode = (next) => {
@@ -43,7 +49,7 @@ export default function Auth() {
       if (error) {
         setError(translateError(error.message))
       } else {
-        navigate('/dashboard')
+        navigate('/dashboard', { replace: true })
       }
     } else {
       const { error } = await supabase.auth.signUp({
@@ -54,7 +60,7 @@ export default function Auth() {
       if (error) {
         setError(translateError(error.message))
       } else {
-        navigate('/onboarding')
+        navigate('/onboarding', { replace: true })
       }
     }
 
