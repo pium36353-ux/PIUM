@@ -6126,3 +6126,88 @@ code {
   color: #16a34a;
   margin: 0;
 }
+
+/* ── Agenda: month view ── */
+.ag-month { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.ag-month-header {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  background: var(--accent-bg); border-bottom: 1px solid var(--border);
+}
+.ag-month-day-name {
+  text-align: center; padding: 8px 4px; font-size: 12px; font-weight: 600;
+  color: var(--text); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.ag-month-week { display: grid; grid-template-columns: repeat(7, 1fr); }
+.ag-month-cell {
+  min-height: 80px; padding: 6px 8px; border: none; border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border); background: var(--bg); cursor: pointer;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  transition: background 0.12s; text-align: left;
+}
+.ag-month-cell:last-child { border-right: none; }
+.ag-month-week:last-child .ag-month-cell { border-bottom: none; }
+.ag-month-cell:hover { background: var(--accent-bg); }
+.ag-month-cell--today { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+.ag-month-cell--today .ag-month-cell-num {
+  background: var(--accent); color: #fff; border-radius: 50%;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+}
+.ag-month-cell--other { opacity: 0.38; }
+.ag-month-cell--holiday { background: color-mix(in srgb, #f59e0b 6%, var(--bg)); }
+.ag-month-cell-num { font-size: 13px; font-weight: 600; color: var(--text-h); line-height: 1; }
+.ag-month-holiday-name { font-size: 10px; color: #d97706; font-weight: 500; line-height: 1; }
+.ag-month-dots { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.ag-month-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.ag-month-dot-more { font-size: 10px; color: var(--text); line-height: 7px; }
+.ag-month-hint { font-size: 12px; color: var(--text); text-align: center; padding: 8px; opacity: 0.6; }
+@media (max-width: 600px) {
+  .ag-month-cell { min-height: 56px; padding: 4px 4px; }
+  .ag-month-cell-num { font-size: 12px; }
+  .ag-month-holiday-name { display: none; }
+}
+
+/* ── Agenda: day list view ── */
+.ag-day-loading { display: flex; justify-content: center; padding: 40px; }
+.ag-day-empty {
+  text-align: center; padding: 48px 24px; border: 1px solid var(--border);
+  border-radius: 12px; color: var(--text); display: flex; flex-direction: column;
+  align-items: center; gap: 16px;
+}
+.ag-day-list { display: flex; flex-direction: column; gap: 8px; }
+.ag-day-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); transition: border-color 0.12s;
+}
+.ag-day-item--done { opacity: 0.6; }
+.ag-day-item-time {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  flex-shrink: 0; min-width: 44px;
+}
+.ag-day-time-text { font-size: 14px; font-weight: 700; color: var(--text-h); font-variant-numeric: tabular-nums; }
+.ag-day-color-bar { width: 3px; flex: 1; min-height: 20px; border-radius: 2px; }
+.ag-day-item-body { flex: 1; min-width: 0; }
+.ag-day-client { font-size: 15px; font-weight: 600; color: var(--text-h); display: block; }
+.ag-day-meta {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px;
+  font-size: 12px; color: var(--text);
+}
+.ag-day-meta span::after { content: '·'; margin-left: 6px; }
+.ag-day-meta span:last-child::after { content: ''; }
+.ag-day-notes { font-size: 12px; color: var(--text); margin-top: 4px; font-style: italic; }
+.ag-day-item-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+
+/* ── Agenda: view tabs (larger) ── */
+.ag-view-tab {
+  padding: 8px 20px; font-size: 14px; font-weight: 600;
+  border-radius: 8px; border: 1px solid var(--border);
+  background: none; color: var(--text); cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.ag-view-tab--active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.ag-view-tab:not(.ag-view-tab--active):hover { background: var(--accent-bg); }
+
+/* spin keyframe (reuse) */
+@keyframes ag-spin { to { transform: rotate(360deg); } }

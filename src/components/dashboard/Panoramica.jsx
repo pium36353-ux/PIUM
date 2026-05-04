@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
 export default function Panoramica({ business, onNavigate }) {
+  const rNav = useNavigate()
   const [counts, setCounts] = useState({ servizi: null, recensioni: null, appuntamenti: null, bozzeSocial: null })
   const [loading, setLoading] = useState(true)
 
@@ -52,7 +54,12 @@ export default function Panoramica({ business, onNavigate }) {
           <button
             key={s.label}
             className="db-stat-card db-stat-card--link"
-            onClick={() => onNavigate?.(s.section)}
+            onClick={() => {
+              if (s.section === 'agenda') {
+                rNav(window.location.pathname, { state: { agendaView: 'day' }, replace: true })
+              }
+              onNavigate?.(s.section)
+            }}
           >
             <span className="db-stat-icon">{s.icon}</span>
             <span className="db-stat-value">
