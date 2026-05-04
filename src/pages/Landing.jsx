@@ -62,7 +62,7 @@ export default function Landing() {
         </div>
         <div className="ln-nav-actions">
           <button className="ln-btn-ghost" onClick={() => navigate('/auth')}>Accedi</button>
-          <button className="ln-btn-primary" onClick={() => navigate('/auth')}>Inizia gratis</button>
+          <button className="ln-btn-primary" onClick={() => navigate('/auth')}>Accedi / Registrati</button>
         </div>
       </nav>
 
