@@ -787,6 +787,16 @@ body {
   color: var(--text-muted, #888);
   white-space: nowrap;
 }
+.pn-activity-item--link {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  transition: background 0.15s;
+}
+.pn-activity-item--link:hover {
+  background: var(--hover-bg, rgba(0,0,0,0.05));
+}
 
 /* Stats grid */
 .db-stats-grid {

@@ -104,9 +104,9 @@ export default function Panoramica({ business, onNavigate }) {
       setReminders(rems ?? [])
 
       const merged = [
-        ...(recentServices  ?? []).map(s => ({ id: 's-' + s.id, icon: '🛎️', desc: `Servizio: ${s.name}`,                                            ts: s.created_at })),
-        ...(recentReviews   ?? []).map(r => ({ id: 'r-' + r.id, icon: '⭐',  desc: `Recensione da ${r.author_name}${r.rating ? ` (${r.rating}★)` : ''}`, ts: r.created_at })),
-        ...(recentReminders ?? []).map(r => ({ id: 'm-' + r.id, icon: '🔔', desc: `Promemoria: ${r.title}`,                                           ts: r.created_at })),
+        ...(recentServices  ?? []).map(s => ({ id: 's-' + s.id, icon: '🛎️', desc: `Servizio: ${s.name}`,                                                section: 'servizi',    ts: s.created_at })),
+        ...(recentReviews   ?? []).map(r => ({ id: 'r-' + r.id, icon: '⭐',  desc: `Recensione da ${r.author_name}${r.rating ? ` (${r.rating}★)` : ''}`, section: 'recensioni', ts: r.created_at })),
+        ...(recentReminders ?? []).map(r => ({ id: 'm-' + r.id, icon: '🔔', desc: `Promemoria: ${r.title}`,                                              section: 'promemoria', ts: r.created_at })),
       ]
       merged.sort((a, b) => (b.ts > a.ts ? 1 : -1))
       setActivity(merged.slice(0, 5))
@@ -165,7 +165,7 @@ export default function Panoramica({ business, onNavigate }) {
           ) : (
             <ul className="pn-activity-list">
               {activity.map(ev => (
-                <li key={ev.id} className="pn-activity-item">
+                <li key={ev.id} className="pn-activity-item pn-activity-item--link" onClick={() => onNavigate?.(ev.section)}>
                   <span className="pn-activity-icon">{ev.icon}</span>
                   <span className="pn-activity-desc">{ev.desc}</span>
                   <span className="pn-activity-time">{formatActivityTime(ev.ts)}</span>
@@ -185,7 +185,14 @@ export default function Panoramica({ business, onNavigate }) {
           ) : (
             <ul className="pn-activity-list">
               {upcoming.map(apt => (
-                <li key={apt.id} className="pn-activity-item">
+                <li
+                  key={apt.id}
+                  className="pn-activity-item pn-activity-item--link"
+                  onClick={() => {
+                    rNav(window.location.pathname, { state: { agendaView: 'day', agendaDate: apt.date }, replace: true })
+                    onNavigate?.('agenda')
+                  }}
+                >
                   <span className="pn-activity-icon">📅</span>
                   <span className="pn-activity-desc">{apt.client_name}</span>
                   <span className="pn-activity-time">{formatAptDate(apt.date, apt.start_time)}</span>
@@ -208,7 +215,7 @@ export default function Panoramica({ business, onNavigate }) {
                 const urgency = reminderUrgency(r.due_at)
                 const due     = formatReminderDue(r.due_at)
                 return (
-                  <li key={r.id} className="pn-activity-item">
+                  <li key={r.id} className="pn-activity-item pn-activity-item--link" onClick={() => onNavigate?.('promemoria')}>
                     <span className="pn-activity-icon">🔔</span>
                     <span className="pn-activity-desc">{r.title}</span>
                     {due && (

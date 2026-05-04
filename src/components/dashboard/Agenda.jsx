@@ -69,10 +69,23 @@ export default function Agenda({ business }) {
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
-  // Init view from location state (set by Panoramica when clicking "Appuntamenti")
+  // Init view/day from location state (set by Panoramica)
   const [view,         setView]         = useState(() => location.state?.agendaView === 'day' ? 'day' : 'month')
-  const [monthDate,    setMonthDate]    = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
-  const [selectedDay,  setSelectedDay]  = useState(today)
+  const [monthDate,    setMonthDate]    = useState(() => {
+    if (location.state?.agendaDate) {
+      const d = new Date(location.state.agendaDate + 'T00:00:00')
+      return new Date(d.getFullYear(), d.getMonth(), 1)
+    }
+    return new Date(today.getFullYear(), today.getMonth(), 1)
+  })
+  const [selectedDay,  setSelectedDay]  = useState(() => {
+    if (location.state?.agendaDate) {
+      const d = new Date(location.state.agendaDate + 'T00:00:00')
+      d.setHours(0, 0, 0, 0)
+      return d
+    }
+    return today
+  })
 
   const [appointments, setAppointments] = useState([])
   const [employees,    setEmployees]    = useState([])
@@ -93,7 +106,7 @@ export default function Agenda({ business }) {
 
   // Clear location state after reading so back-navigation doesn't re-trigger day view
   useEffect(() => {
-    if (location.state?.agendaView) {
+    if (location.state?.agendaView || location.state?.agendaDate) {
       rNav(location.pathname, { state: {}, replace: true })
     }
   }, []) // eslint-disable-line
