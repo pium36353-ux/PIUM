@@ -624,6 +624,26 @@ body {
     background: rgba(239,68,68,0.08);
   }
 }
+.db-sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.db-icon-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--text);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s;
+  text-decoration: none;
+}
+.db-icon-btn:hover { color: var(--text-h); background: var(--accent-bg); }
 
 /* Main */
 .db-main {
@@ -5979,3 +5999,130 @@ code {
 /* ============================================================
    End EditorSito
    ============================================================ */
+
+/* ── Settings ── */
+.sett-shell {
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+.sett-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.sett-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.sett-back:hover { background: var(--accent-bg); color: var(--text-h); }
+.sett-main {
+  max-width: 540px;
+  width: 100%;
+  margin: 40px auto;
+  padding: 0 20px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.sett-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+.sett-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sett-card--danger { border-color: rgba(239,68,68,0.25); }
+.sett-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-h);
+  margin: 0;
+}
+.sett-field { display: flex; flex-direction: column; gap: 6px; }
+.sett-label { font-size: 13px; font-weight: 500; color: var(--text); }
+.sett-email {
+  font-size: 14px;
+  color: var(--text);
+  padding: 9px 12px;
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.sett-input {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.sett-input:focus { border-color: var(--accent); }
+.sett-btn-primary {
+  padding: 10px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: opacity 0.15s;
+}
+.sett-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.sett-btn-primary:not(:disabled):hover { opacity: 0.88; }
+.sett-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  background: none;
+  border: 1px solid rgba(239,68,68,0.4);
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background 0.15s;
+}
+.sett-btn-danger:hover { background: rgba(239,68,68,0.07); }
+.sett-danger-desc { font-size: 13px; color: var(--text); margin: 0; }
+.sett-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #dc2626;
+  margin: 0;
+}
+.sett-success {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #16a34a;
+  margin: 0;
+}

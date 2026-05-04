@@ -7,6 +7,7 @@ import Onboarding from './pages/Onboarding'
 import Dashboard  from './pages/Dashboard'
 import PublicSite from './pages/PublicSite'
 import Admin      from './pages/Admin'
+import Settings   from './pages/Settings'
 
 function PublicRoute({ children }) {
   const [status, setStatus] = useState('loading') // loading | authed | public
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/dashboard"  element={<Dashboard />} />
         <Route path="/admin"      element={<Admin />} />
+        <Route path="/settings"   element={<Settings />} />
         <Route path="/site/:slug" element={<PublicSite />} />
       </Routes>
     </BrowserRouter>
