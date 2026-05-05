@@ -8,7 +8,8 @@ import Dashboard  from './pages/Dashboard'
 import PublicSite from './pages/PublicSite'
 import Admin      from './pages/Admin'
 import Settings   from './pages/Settings'
-import Affiliates from './pages/Affiliates'
+import Affiliates     from './pages/Affiliates'
+import AffiliatesAuth from './pages/AffiliatesAuth'
 
 function RefRedirect() {
   const { code } = useParams()
@@ -41,7 +42,8 @@ export default function App() {
         <Route path="/admin"      element={<Admin />} />
         <Route path="/settings"   element={<Settings />} />
         <Route path="/site/:slug"   element={<PublicSite />} />
-        <Route path="/affiliates"   element={<Affiliates />} />
+        <Route path="/affiliates"      element={<Affiliates />} />
+        <Route path="/affiliates/auth" element={<AffiliatesAuth />} />
         <Route path="/ref/:code"    element={<RefRedirect />} />
       </Routes>
     </BrowserRouter>

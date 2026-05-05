@@ -122,7 +122,7 @@ export default function Affiliates() {
           <div className="af-card">
             <h1 className="af-title">Programma Affiliati PIUM</h1>
             <p className="af-subtitle">Porta nuovi clienti su PIUM e guadagna una commissione per ogni attivazione. Accedi per gestire la tua dashboard.</p>
-            <Link to="/auth" className="af-cta-btn">Accedi / Registrati</Link>
+            <Link to="/affiliates/auth" className="af-cta-btn">Accedi / Registrati</Link>
           </div>
         ) : !affiliate ? (
           <div className="af-card">
