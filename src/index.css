@@ -877,19 +877,32 @@ body {
   }
 }
 
-/* Three-column row (Panoramica) */
+/* Panoramica layout */
+.pn-cards-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .pn-cards-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
 
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr 1fr;
-  }
   @media (max-width: 600px) {
     grid-template-columns: 1fr;
   }
 }
+.pn-apt-check-btn {
+  flex-shrink: 0;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--text-muted, #888);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.pn-apt-check-btn:hover:not(:disabled) { background: #dcfce7; border-color: #16a34a; color: #16a34a; }
+.pn-apt-check-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Reminder urgency badges */
 .pn-reminder-due {

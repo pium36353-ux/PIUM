@@ -58,12 +58,13 @@ function formatReminderDue(due_at) {
 /* ── Component ── */
 export default function Panoramica({ business, onNavigate }) {
   const rNav = useNavigate()
-  const [counts,    setCounts]    = useState({ servizi: null, recensioni: null, appuntamenti: null, bozzeSocial: null })
-  const [loading,   setLoading]   = useState(true)
-  const [activity,  setActivity]  = useState([])
-  const [upcoming,  setUpcoming]  = useState([])
-  const [reminders, setReminders] = useState([])
+  const [counts,       setCounts]       = useState({ servizi: null, recensioni: null, appuntamenti: null, bozzeSocial: null })
+  const [loading,      setLoading]      = useState(true)
+  const [activity,     setActivity]     = useState([])
+  const [upcoming,     setUpcoming]     = useState([])
+  const [reminders,    setReminders]    = useState([])
   const [cardsLoading, setCardsLoading] = useState(true)
+  const [completingId, setCompletingId] = useState(null)
 
   useEffect(() => {
     if (!business) return
@@ -114,6 +115,13 @@ export default function Panoramica({ business, onNavigate }) {
     load()
   }, [business?.id])
 
+  const markComplete = async (id) => {
+    setCompletingId(id)
+    await supabase.from('appointments').update({ completed: true }).eq('id', id)
+    setUpcoming(prev => prev.filter(a => a.id !== id))
+    setCompletingId(null)
+  }
+
   const stats = [
     { label: 'Servizi',             value: counts.servizi,      icon: '🛎️', section: 'servizi'    },
     { label: 'Recensioni',          value: counts.recensioni,   icon: '⭐',  section: 'recensioni' },
@@ -150,29 +158,9 @@ export default function Panoramica({ business, onNavigate }) {
         ))}
       </div>
 
-      <div className="pn-cards-row">
+      <div className="pn-cards-stack">
 
-        {/* Card 1 — Attività completate */}
-        <div className="db-card">
-          <h3 className="db-card-title">Attività completate</h3>
-          {cardsLoading ? (
-            <p className="db-card-empty">…</p>
-          ) : activity.length === 0 ? (
-            <p className="db-card-empty">Nessuna attività completata.</p>
-          ) : (
-            <ul className="pn-activity-list">
-              {activity.map(ev => (
-                <li key={ev.id} className="pn-activity-item pn-activity-item--link" onClick={() => onNavigate?.(ev.section)}>
-                  <span className="pn-activity-icon">{ev.icon}</span>
-                  <span className="pn-activity-desc">{ev.desc}</span>
-                  <span className="pn-activity-time">{formatActivityTime(ev.ts)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Card 2 — Prossime attività */}
+        {/* Card top — Prossime attività (full width) */}
         <div className="db-card">
           <h3 className="db-card-title">Prossime attività</h3>
           {cardsLoading ? (
@@ -200,38 +188,68 @@ export default function Panoramica({ business, onNavigate }) {
                     )}
                   </span>
                   <span className="pn-activity-time">{formatAptDate(apt.date, apt.start_time)}</span>
+                  <button
+                    className="pn-apt-check-btn"
+                    onClick={e => { e.stopPropagation(); markComplete(apt.id) }}
+                    disabled={completingId === apt.id}
+                    title="Segna completato"
+                  >✓</button>
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        {/* Card 3 — Promemoria */}
-        <div className="db-card">
-          <h3 className="db-card-title">Promemoria</h3>
-          {cardsLoading ? (
-            <p className="db-card-empty">…</p>
-          ) : reminders.length === 0 ? (
-            <p className="db-card-empty">Nessun promemoria in scadenza.</p>
-          ) : (
-            <ul className="pn-activity-list">
-              {reminders.map(r => {
-                const urgency = reminderUrgency(r.due_at)
-                const due     = formatReminderDue(r.due_at)
-                return (
-                  <li key={r.id} className="pn-activity-item pn-activity-item--link" onClick={() => onNavigate?.('promemoria')}>
-                    <span className="pn-activity-icon">🔔</span>
-                    <span className="pn-activity-desc">{r.title}</span>
-                    {due && (
-                      <span className={`pn-reminder-due pn-reminder-due--${urgency}`}>{due}</span>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
+        {/* Bottom row — Promemoria + Attività completate */}
+        <div className="pn-cards-row">
 
+          {/* Card — Promemoria */}
+          <div className="db-card">
+            <h3 className="db-card-title">Promemoria</h3>
+            {cardsLoading ? (
+              <p className="db-card-empty">…</p>
+            ) : reminders.length === 0 ? (
+              <p className="db-card-empty">Nessun promemoria in scadenza.</p>
+            ) : (
+              <ul className="pn-activity-list">
+                {reminders.map(r => {
+                  const urgency = reminderUrgency(r.due_at)
+                  const due     = formatReminderDue(r.due_at)
+                  return (
+                    <li key={r.id} className="pn-activity-item pn-activity-item--link" onClick={() => onNavigate?.('promemoria')}>
+                      <span className="pn-activity-icon">🔔</span>
+                      <span className="pn-activity-desc">{r.title}</span>
+                      {due && (
+                        <span className={`pn-reminder-due pn-reminder-due--${urgency}`}>{due}</span>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Card — Attività completate */}
+          <div className="db-card">
+            <h3 className="db-card-title">Attività completate</h3>
+            {cardsLoading ? (
+              <p className="db-card-empty">…</p>
+            ) : activity.length === 0 ? (
+              <p className="db-card-empty">Nessuna attività completata.</p>
+            ) : (
+              <ul className="pn-activity-list">
+                {activity.map(ev => (
+                  <li key={ev.id} className="pn-activity-item pn-activity-item--link" onClick={() => onNavigate?.(ev.section)}>
+                    <span className="pn-activity-icon">{ev.icon}</span>
+                    <span className="pn-activity-desc">{ev.desc}</span>
+                    <span className="pn-activity-time">{formatActivityTime(ev.ts)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+        </div>
       </div>
     </div>
   )
