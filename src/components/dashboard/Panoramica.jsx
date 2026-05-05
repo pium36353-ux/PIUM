@@ -79,9 +79,8 @@ export default function Panoramica({ business, onNavigate }) {
         { count: cSocial },
         { data: apts },
         { data: rems },
-        { data: recentServices },
-        { data: recentReviews },
-        { data: recentReminders },
+        { data: doneApts },
+        { data: doneRems },
       ] = await Promise.all([
         supabase.from('services').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
         supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
@@ -89,9 +88,8 @@ export default function Panoramica({ business, onNavigate }) {
         supabase.from('social_drafts').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'draft'),
         supabase.from('appointments').select('id, client_name, date, start_time').eq('business_id', business.id).gte('date', today).order('date').order('start_time').limit(5),
         supabase.from('reminders').select('id, title, due_at, priority').eq('business_id', business.id).eq('status', 'pending').gte('due_at', today).order('due_at').limit(5),
-        supabase.from('services').select('id, name, created_at').eq('business_id', business.id).order('created_at', { ascending: false }).limit(5),
-        supabase.from('reviews').select('id, author_name, rating, created_at').eq('business_id', business.id).order('created_at', { ascending: false }).limit(5),
-        supabase.from('reminders').select('id, title, created_at').eq('business_id', business.id).order('created_at', { ascending: false }).limit(5),
+        supabase.from('appointments').select('id, client_name, date, updated_at').eq('business_id', business.id).eq('completed', true).order('updated_at', { ascending: false }).limit(5),
+        supabase.from('reminders').select('id, title, updated_at').eq('business_id', business.id).eq('status', 'done').order('updated_at', { ascending: false }).limit(5),
       ])
 
       setCounts({
@@ -104,9 +102,8 @@ export default function Panoramica({ business, onNavigate }) {
       setReminders(rems ?? [])
 
       const merged = [
-        ...(recentServices  ?? []).map(s => ({ id: 's-' + s.id, icon: '🛎️', desc: `Servizio: ${s.name}`,                                                section: 'servizi',    ts: s.created_at })),
-        ...(recentReviews   ?? []).map(r => ({ id: 'r-' + r.id, icon: '⭐',  desc: `Recensione da ${r.author_name}${r.rating ? ` (${r.rating}★)` : ''}`, section: 'recensioni', ts: r.created_at })),
-        ...(recentReminders ?? []).map(r => ({ id: 'm-' + r.id, icon: '🔔', desc: `Promemoria: ${r.title}`,                                              section: 'promemoria', ts: r.created_at })),
+        ...(doneApts ?? []).map(a => ({ id: 'a-' + a.id, icon: '📅', desc: `Appuntamento: ${a.client_name}`, section: 'agenda',     ts: a.updated_at })),
+        ...(doneRems ?? []).map(r => ({ id: 'r-' + r.id, icon: '🔔', desc: `Promemoria: ${r.title}`,         section: 'promemoria', ts: r.updated_at })),
       ]
       merged.sort((a, b) => (b.ts > a.ts ? 1 : -1))
       setActivity(merged.slice(0, 5))
@@ -155,13 +152,13 @@ export default function Panoramica({ business, onNavigate }) {
 
       <div className="pn-cards-row">
 
-        {/* Card 1 — Attività recenti */}
+        {/* Card 1 — Attività completate */}
         <div className="db-card">
-          <h3 className="db-card-title">Attività recenti</h3>
+          <h3 className="db-card-title">Attività completate</h3>
           {cardsLoading ? (
             <p className="db-card-empty">…</p>
           ) : activity.length === 0 ? (
-            <p className="db-card-empty">Nessuna attività recente.</p>
+            <p className="db-card-empty">Nessuna attività completata.</p>
           ) : (
             <ul className="pn-activity-list">
               {activity.map(ev => (
