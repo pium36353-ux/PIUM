@@ -3,17 +3,6 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 
-function generateCode(name) {
-  const base = name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]/g, '')
-    .slice(0, 5)
-  const rand = Math.random().toString(36).slice(2, 6)
-  return (base || 'aff') + rand
-}
-
 const PLAN_META = {
   trial:   { label: 'Trial',    bg: '#fef3c7', color: '#92400e' },
   free:    { label: 'Gratuito', bg: '#f1f5f9', color: '#475569' },
@@ -26,15 +15,11 @@ export default function Affiliates() {
   const [affiliate, setAffiliate] = useState(null)
   const [clients,   setClients]   = useState([])
   const [loading,   setLoading]   = useState(true)
-  const [form,      setForm]      = useState({ name: '', email: '' })
-  const [saving,    setSaving]    = useState(false)
-  const [formError, setFormError] = useState(null)
   const [copied,    setCopied]    = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s ?? null)
-      if (s) setForm(f => ({ ...f, email: s.user.email ?? '' }))
     })
   }, [])
 
@@ -63,39 +48,6 @@ export default function Affiliates() {
     if (!session) { setLoading(false); return }
     loadData(session.user.id)
   }, [session, loadData])
-
-  const handleRegister = async (e) => {
-    e.preventDefault()
-    if (!form.name.trim())  { setFormError('Il nome è obbligatorio.');    return }
-    if (!form.email.trim()) { setFormError("L'email è obbligatoria."); return }
-    setSaving(true)
-    setFormError(null)
-
-    // Genera codice univoco (max 5 tentativi)
-    let code = ''
-    for (let i = 0; i < 5; i++) {
-      const candidate = generateCode(form.name)
-      const { data } = await supabase.from('affiliates').select('id').eq('code', candidate).maybeSingle()
-      if (!data) { code = candidate; break }
-    }
-    if (!code) code = generateCode(form.name)
-
-    const { data, error } = await supabase
-      .from('affiliates')
-      .insert({
-        user_id:  session.user.id,
-        code,
-        name:     form.name.trim(),
-        email:    form.email.trim(),
-        status:   'active',
-      })
-      .select()
-      .single()
-
-    if (error) { setFormError('Errore durante la registrazione. Riprova.') }
-    else       { setAffiliate(data); setClients([]) }
-    setSaving(false)
-  }
 
   const copyLink = () => {
     navigator.clipboard.writeText(`https://piumapp.com/auth?ref=${affiliate.code}`)
@@ -132,37 +84,16 @@ export default function Affiliates() {
           </div>
         ) : !affiliate ? (
           <div className="af-card">
-            <h1 className="af-title">Diventa affiliato PIUM</h1>
-            <p className="af-subtitle">
-              Ricevi un link unico da condividere. Ogni cliente che si registra tramite il tuo link viene associato al tuo account.
+            <h1 className="af-title">Account non trovato</h1>
+            <p className="af-subtitle">Non risulta un account affiliato per questo utente. Contattaci a <a href="mailto:info@piumapp.com" style={{ color: 'var(--accent)' }}>info@piumapp.com</a> per assistenza.</p>
+          </div>
+        ) : affiliate.status === 'pending' ? (
+          <div className="af-card">
+            <div style={{ fontSize: 40, marginBottom: 12, textAlign: 'center' }}>⏳</div>
+            <h1 className="af-title" style={{ textAlign: 'center' }}>Richiesta in attesa</h1>
+            <p className="af-subtitle" style={{ textAlign: 'center' }}>
+              La tua registrazione come affiliato è stata ricevuta. Ti contatteremo presto per attivare il tuo account.
             </p>
-            <form onSubmit={handleRegister} noValidate className="af-form">
-              <div className="af-field">
-                <label className="af-label">Nome e cognome</label>
-                <input
-                  className="af-input"
-                  type="text"
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Mario Rossi"
-                  autoFocus
-                />
-              </div>
-              <div className="af-field">
-                <label className="af-label">Email di riferimento</label>
-                <input
-                  className="af-input"
-                  type="email"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  placeholder="mario@esempio.it"
-                />
-              </div>
-              {formError && <p className="af-form-error">{formError}</p>}
-              <button className="af-submit-btn" type="submit" disabled={saving}>
-                {saving ? 'Registrazione…' : 'Registrati come affiliato →'}
-              </button>
-            </form>
           </div>
         ) : (
           <Dashboard affiliate={affiliate} clients={clients} copied={copied} onCopy={copyLink} />

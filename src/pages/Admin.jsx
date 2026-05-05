@@ -40,6 +40,11 @@ export default function Admin() {
 
   const [updatingId, setUpdatingId] = useState(null)
 
+  const [section,      setSection]      = useState('clienti')
+  const [affiliates,   setAffiliates]   = useState([])
+  const [affLoading,   setAffLoading]   = useState(false)
+  const [activatingId, setActivatingId] = useState(null)
+
   /* ── Auth + role check ── */
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -79,6 +84,24 @@ export default function Admin() {
     await supabase.from('businesses').update({ is_active: next }).eq('id', biz.id)
     setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, is_active: next } : b))
     setUpdatingId(null)
+  }
+
+  const loadAffiliates = useCallback(async () => {
+    if (!user) return
+    setAffLoading(true)
+    const { data } = await supabase
+      .from('affiliates')
+      .select('id, name, email, code, status, total_clients, total_earned, created_at')
+      .order('created_at', { ascending: false })
+    setAffiliates(data ?? [])
+    setAffLoading(false)
+  }, [user])
+
+  const activateAffiliate = async (id) => {
+    setActivatingId(id)
+    await supabase.from('affiliates').update({ status: 'active' }).eq('id', id)
+    setAffiliates(prev => prev.map(a => a.id === id ? { ...a, status: 'active' } : a))
+    setActivatingId(null)
   }
 
   const handleSignOut = async () => {
@@ -151,99 +174,183 @@ export default function Admin() {
         <div className="adm-page-header">
           <div>
             <h1 className="adm-page-title">Pannello Admin</h1>
-            <p className="adm-page-sub">Gestisci tutti i clienti e i loro abbonamenti.</p>
+            <p className="adm-page-sub">Gestisci clienti e affiliati.</p>
           </div>
-          <button className="adm-btn-refresh" onClick={load} disabled={loading} title="Aggiorna">
-            <IconRefresh spin={loading} />
+          <button className="adm-btn-refresh" onClick={section === 'clienti' ? load : loadAffiliates} disabled={loading || affLoading} title="Aggiorna">
+            <IconRefresh spin={loading || affLoading} />
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="adm-stats">
-          <StatCard label="Clienti totali"  value={total}    icon={<IconUsers />}  color="accent" />
-          <StatCard label="Attivi"           value={attivi}   icon={<IconCheck />}  color="green"  />
-          <StatCard label="In trial"         value={trial}    icon={<IconClock />}  color="yellow" />
-          <StatCard label="Inattivi"         value={inattivi} icon={<IconPause />}  color="gray"   />
+        {/* Section tabs */}
+        <div className="adm-section-tabs">
+          <button
+            className={`adm-section-tab ${section === 'clienti' ? 'adm-section-tab--active' : ''}`}
+            onClick={() => setSection('clienti')}
+          >Clienti</button>
+          <button
+            className={`adm-section-tab ${section === 'affiliati' ? 'adm-section-tab--active' : ''}`}
+            onClick={() => { setSection('affiliati'); loadAffiliates() }}
+          >Affiliati</button>
         </div>
 
-        {/* Toolbar */}
-        <div className="adm-toolbar">
-          <div className="adm-search-wrap">
-            <IconSearch />
-            <input
-              className="adm-search"
-              type="text"
-              placeholder="Cerca per nome, email, città…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-            {search && (
-              <button className="adm-search-clear" onClick={() => setSearch('')}>
-                <IconX />
-              </button>
-            )}
-          </div>
-          <div className="adm-filter-row">
-            {STATUS_FILTERS.map(s => (
-              <button
-                key={s}
-                className={`adm-filter-btn ${statusFilter === s ? 'adm-filter-btn--active' : ''}`}
-                onClick={() => setStatusFilter(s)}
-              >
-                {s === 'tutti' ? `Tutti (${total})` : s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Table */}
-        {loading ? (
-          <div className="adm-loading"><AdminSpinner /></div>
-        ) : visible.length === 0 ? (
-          <div className="adm-empty">
-            <IconUsers />
-            <p>{businesses.length === 0 ? 'Nessun cliente ancora.' : 'Nessun risultato per i filtri applicati.'}</p>
-          </div>
-        ) : (
+        {section === 'clienti' ? (
           <>
-            {/* Desktop table */}
-            <div className="adm-table-wrap">
-              <table className="adm-table">
-                <thead>
-                  <tr>
-                    <th>Attività</th>
-                    <th>Email</th>
-                    <th>Città</th>
-                    <th>Piano</th>
-                    <th>Stato</th>
-                    <th>Registrato</th>
-                    <th>Azioni</th>
-                  </tr>
-                </thead>
-                <tbody>
+            {/* Stats */}
+            <div className="adm-stats">
+              <StatCard label="Clienti totali"  value={total}    icon={<IconUsers />}  color="accent" />
+              <StatCard label="Attivi"           value={attivi}   icon={<IconCheck />}  color="green"  />
+              <StatCard label="In trial"         value={trial}    icon={<IconClock />}  color="yellow" />
+              <StatCard label="Inattivi"         value={inattivi} icon={<IconPause />}  color="gray"   />
+            </div>
+
+            {/* Toolbar */}
+            <div className="adm-toolbar">
+              <div className="adm-search-wrap">
+                <IconSearch />
+                <input
+                  className="adm-search"
+                  type="text"
+                  placeholder="Cerca per nome, email, città…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+                {search && (
+                  <button className="adm-search-clear" onClick={() => setSearch('')}>
+                    <IconX />
+                  </button>
+                )}
+              </div>
+              <div className="adm-filter-row">
+                {STATUS_FILTERS.map(s => (
+                  <button
+                    key={s}
+                    className={`adm-filter-btn ${statusFilter === s ? 'adm-filter-btn--active' : ''}`}
+                    onClick={() => setStatusFilter(s)}
+                  >
+                    {s === 'tutti' ? `Tutti (${total})` : s.charAt(0).toUpperCase() + s.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Table */}
+            {loading ? (
+              <div className="adm-loading"><AdminSpinner /></div>
+            ) : visible.length === 0 ? (
+              <div className="adm-empty">
+                <IconUsers />
+                <p>{businesses.length === 0 ? 'Nessun cliente ancora.' : 'Nessun risultato per i filtri applicati.'}</p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop table */}
+                <div className="adm-table-wrap">
+                  <table className="adm-table">
+                    <thead>
+                      <tr>
+                        <th>Attività</th>
+                        <th>Email</th>
+                        <th>Città</th>
+                        <th>Piano</th>
+                        <th>Stato</th>
+                        <th>Registrato</th>
+                        <th>Azioni</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visible.map(b => {
+                        const status = getStatus(b)
+                        const busy   = updatingId === b.id
+                        return (
+                          <tr key={b.id} className={busy ? 'adm-row--busy' : ''}>
+                            <td>
+                              <div className="adm-biz-cell">
+                                <div className="adm-biz-avatar">
+                                  {b.name?.[0]?.toUpperCase() ?? '?'}
+                                </div>
+                                <div className="adm-biz-info">
+                                  <span className="adm-biz-name">{b.name}</span>
+                                  {b.category && <span className="adm-biz-cat">{b.category}</span>}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="adm-cell-email">{b.email ?? '—'}</span>
+                            </td>
+                            <td>
+                              <span className="adm-cell-text">{b.city ?? '—'}</span>
+                            </td>
+                            <td>
+                              <select
+                                className="adm-plan-select"
+                                value={b.plan}
+                                disabled={busy}
+                                onChange={e => updatePlan(b.id, e.target.value)}
+                              >
+                                {PLANS.map(p => (
+                                  <option key={p.value} value={p.value}>{p.label}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <StatusBadge status={status} />
+                            </td>
+                            <td>
+                              <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
+                            </td>
+                            <td>
+                              <div className="adm-row-actions">
+                                <button
+                                  className={`adm-toggle-btn ${b.is_active ? 'adm-toggle-btn--active' : 'adm-toggle-btn--inactive'}`}
+                                  disabled={busy}
+                                  onClick={() => toggleActive(b)}
+                                  title={b.is_active ? 'Disattiva cliente' : 'Attiva cliente'}
+                                >
+                                  {busy ? <AdminSpinner small /> : b.is_active ? <IconPause /> : <IconPlay />}
+                                </button>
+                                {b.slug && (
+                                  <a
+                                    className="adm-link-btn"
+                                    href={`/site/${b.slug}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title="Vedi sito pubblico"
+                                  >
+                                    <IconExternalLink />
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="adm-cards">
                   {visible.map(b => {
                     const status = getStatus(b)
                     const busy   = updatingId === b.id
                     return (
-                      <tr key={b.id} className={busy ? 'adm-row--busy' : ''}>
-                        <td>
+                      <div key={b.id} className="adm-card">
+                        <div className="adm-card-head">
                           <div className="adm-biz-cell">
-                            <div className="adm-biz-avatar">
-                              {b.name?.[0]?.toUpperCase() ?? '?'}
-                            </div>
+                            <div className="adm-biz-avatar">{b.name?.[0]?.toUpperCase() ?? '?'}</div>
                             <div className="adm-biz-info">
                               <span className="adm-biz-name">{b.name}</span>
                               {b.category && <span className="adm-biz-cat">{b.category}</span>}
                             </div>
                           </div>
-                        </td>
-                        <td>
-                          <span className="adm-cell-email">{b.email ?? '—'}</span>
-                        </td>
-                        <td>
-                          <span className="adm-cell-text">{b.city ?? '—'}</span>
-                        </td>
-                        <td>
+                          <StatusBadge status={status} />
+                        </div>
+                        <div className="adm-card-meta">
+                          {b.email && <span className="adm-cell-email">{b.email}</span>}
+                          {b.city  && <span className="adm-cell-text">{b.city}</span>}
+                          <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
+                        </div>
+                        <div className="adm-card-footer">
                           <select
                             className="adm-plan-select"
                             value={b.plan}
@@ -254,20 +361,12 @@ export default function Admin() {
                               <option key={p.value} value={p.value}>{p.label}</option>
                             ))}
                           </select>
-                        </td>
-                        <td>
-                          <StatusBadge status={status} />
-                        </td>
-                        <td>
-                          <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
-                        </td>
-                        <td>
                           <div className="adm-row-actions">
                             <button
                               className={`adm-toggle-btn ${b.is_active ? 'adm-toggle-btn--active' : 'adm-toggle-btn--inactive'}`}
                               disabled={busy}
                               onClick={() => toggleActive(b)}
-                              title={b.is_active ? 'Disattiva cliente' : 'Attiva cliente'}
+                              title={b.is_active ? 'Disattiva' : 'Attiva'}
                             >
                               {busy ? <AdminSpinner small /> : b.is_active ? <IconPause /> : <IconPlay />}
                             </button>
@@ -283,78 +382,84 @@ export default function Admin() {
                               </a>
                             )}
                           </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile cards */}
-            <div className="adm-cards">
-              {visible.map(b => {
-                const status = getStatus(b)
-                const busy   = updatingId === b.id
-                return (
-                  <div key={b.id} className="adm-card">
-                    <div className="adm-card-head">
-                      <div className="adm-biz-cell">
-                        <div className="adm-biz-avatar">{b.name?.[0]?.toUpperCase() ?? '?'}</div>
-                        <div className="adm-biz-info">
-                          <span className="adm-biz-name">{b.name}</span>
-                          {b.category && <span className="adm-biz-cat">{b.category}</span>}
                         </div>
                       </div>
-                      <StatusBadge status={status} />
-                    </div>
-                    <div className="adm-card-meta">
-                      {b.email && <span className="adm-cell-email">{b.email}</span>}
-                      {b.city  && <span className="adm-cell-text">{b.city}</span>}
-                      <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
-                    </div>
-                    <div className="adm-card-footer">
-                      <select
-                        className="adm-plan-select"
-                        value={b.plan}
-                        disabled={busy}
-                        onChange={e => updatePlan(b.id, e.target.value)}
-                      >
-                        {PLANS.map(p => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
-                      </select>
-                      <div className="adm-row-actions">
-                        <button
-                          className={`adm-toggle-btn ${b.is_active ? 'adm-toggle-btn--active' : 'adm-toggle-btn--inactive'}`}
-                          disabled={busy}
-                          onClick={() => toggleActive(b)}
-                          title={b.is_active ? 'Disattiva' : 'Attiva'}
-                        >
-                          {busy ? <AdminSpinner small /> : b.is_active ? <IconPause /> : <IconPlay />}
-                        </button>
-                        {b.slug && (
-                          <a
-                            className="adm-link-btn"
-                            href={`/site/${b.slug}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="Vedi sito pubblico"
-                          >
-                            <IconExternalLink />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                    )
+                  })}
+                </div>
 
-            <p className="adm-count-label">
-              {visible.length} {visible.length === 1 ? 'cliente' : 'clienti'} mostrat{visible.length === 1 ? 'o' : 'i'}
-              {visible.length !== total && ` su ${total}`}
-            </p>
+                <p className="adm-count-label">
+                  {visible.length} {visible.length === 1 ? 'cliente' : 'clienti'} mostrat{visible.length === 1 ? 'o' : 'i'}
+                  {visible.length !== total && ` su ${total}`}
+                </p>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            {affLoading ? (
+              <div className="adm-loading"><AdminSpinner /></div>
+            ) : affiliates.length === 0 ? (
+              <div className="adm-empty">
+                <IconUsers />
+                <p>Nessun affiliato ancora.</p>
+              </div>
+            ) : (
+              <>
+                <div className="adm-table-wrap">
+                  <table className="adm-table">
+                    <thead>
+                      <tr>
+                        <th>Affiliato</th>
+                        <th>Email</th>
+                        <th>Codice</th>
+                        <th>Stato</th>
+                        <th>Clienti</th>
+                        <th>Guadagnato</th>
+                        <th>Registrato</th>
+                        <th>Azioni</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {affiliates.map(a => {
+                        const busy = activatingId === a.id
+                        return (
+                          <tr key={a.id} className={busy ? 'adm-row--busy' : ''}>
+                            <td>
+                              <div className="adm-biz-cell">
+                                <div className="adm-biz-avatar">{a.name?.[0]?.toUpperCase() ?? '?'}</div>
+                                <div className="adm-biz-info">
+                                  <span className="adm-biz-name">{a.name}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td><span className="adm-cell-email">{a.email ?? '—'}</span></td>
+                            <td><code style={{ fontSize: 12, background: 'var(--surface)', padding: '2px 6px', borderRadius: 4 }}>{a.code}</code></td>
+                            <td><AffStatusBadge status={a.status} /></td>
+                            <td><span className="adm-cell-text">{a.total_clients ?? 0}</span></td>
+                            <td><span className="adm-cell-text">€{Number(a.total_earned ?? 0).toFixed(2)}</span></td>
+                            <td><span className="adm-cell-text adm-cell-date">{formatDate(a.created_at)}</span></td>
+                            <td>
+                              {a.status === 'pending' && (
+                                <button
+                                  className="adm-toggle-btn adm-toggle-btn--inactive"
+                                  disabled={busy}
+                                  onClick={() => activateAffiliate(a.id)}
+                                  title="Attiva affiliato"
+                                >
+                                  {busy ? <AdminSpinner small /> : <IconPlay />}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="adm-count-label">{affiliates.length} affiliat{affiliates.length === 1 ? 'o' : 'i'}</p>
+              </>
+            )}
           </>
         )}
 
@@ -383,6 +488,15 @@ function StatusBadge({ status }) {
     inattivo: { label: 'Inattivo', cls: 'adm-badge--gray'   },
   }
   const { label, cls } = map[status] ?? map.inattivo
+  return <span className={`adm-badge ${cls}`}>{label}</span>
+}
+
+function AffStatusBadge({ status }) {
+  const map = {
+    active:  { label: 'Attivo',    cls: 'adm-badge--green'  },
+    pending: { label: 'In attesa', cls: 'adm-badge--yellow' },
+  }
+  const { label, cls } = map[status] ?? { label: status, cls: 'adm-badge--gray' }
   return <span className={`adm-badge ${cls}`}>{label}</span>
 }
 

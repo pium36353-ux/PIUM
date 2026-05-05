@@ -3,13 +3,25 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 
+function generateCode(name) {
+  const base = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 3)
+  const rand = Math.random().toString(36).slice(2, 6)
+  return (base || 'aff') + rand
+}
+
 export default function AffiliatesAuth() {
   const navigate = useNavigate()
   const [mode,    setMode]    = useState('login')
   const [values,  setValues]  = useState({ name: '', email: '', password: '' })
   const [showPwd, setShowPwd] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState(null)
+  const [error,      setError]      = useState(null)
+  const [registered, setRegistered] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -32,16 +44,45 @@ export default function AffiliatesAuth() {
       if (error) setError(translateError(error.message))
       else       navigate('/affiliates', { replace: true })
     } else {
-      const { error } = await supabase.auth.signUp({
+      const { data: authData, error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: { data: { full_name: values.name } },
       })
-      if (error) setError(translateError(error.message))
-      else       navigate('/affiliates', { replace: true })
+      if (error) {
+        setError(translateError(error.message))
+      } else {
+        const code = generateCode(values.name)
+        await supabase.from('affiliates').insert({
+          user_id: authData.user.id,
+          code,
+          name:    values.name.trim(),
+          email:   values.email.trim(),
+          status:  'pending',
+        })
+        setRegistered(true)
+      }
     }
 
     setLoading(false)
+  }
+
+  if (registered) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card">
+          <div className="auth-brand"><Logo className="auth-brand-name" /></div>
+          <div style={{ textAlign: 'center', padding: '16px 0 8px' }}>
+            <div style={{ fontSize: 44, marginBottom: 14 }}>✓</div>
+            <h1 className="auth-title">Registrazione ricevuta!</h1>
+            <p className="auth-subtitle">Ti contatteremo presto per attivare il tuo account affiliato.</p>
+            <Link to="/affiliates" style={{ display: 'inline-block', marginTop: 20, color: 'var(--accent)', textDecoration: 'underline', fontSize: 14 }}>
+              ← Torna alla pagina affiliati
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
