@@ -24,12 +24,13 @@ export default function Affiliates() {
   }, [])
 
   const loadData = useCallback(async (userId) => {
-    const { data: aff } = await supabase
+    const { data: aff, error: affErr } = await supabase
       .from('affiliates')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle()
 
+    console.log('[affiliates] userId:', userId, '| data:', aff, '| error:', affErr)
     setAffiliate(aff ?? null)
 
     if (aff) {

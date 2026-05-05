@@ -50,7 +50,7 @@ export default function AffiliatesAuth() {
         options: { data: { full_name: values.name } },
       })
       if (error) {
-        setError(translateError(error.message))
+        setError(error.status === 422 ? error.message : translateError(error.message))
       } else {
         const code = generateCode(values.name)
         await supabase.from('affiliates').insert({
