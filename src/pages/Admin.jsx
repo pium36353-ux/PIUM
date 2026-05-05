@@ -99,8 +99,8 @@ export default function Admin() {
 
   const activateAffiliate = async (id) => {
     setActivatingId(id)
-    await supabase.from('affiliates').update({ status: 'active' }).eq('id', id)
-    setAffiliates(prev => prev.map(a => a.id === id ? { ...a, status: 'active' } : a))
+    await supabase.from('affiliates').update({ status: 'approved' }).eq('id', id)
+    setAffiliates(prev => prev.map(a => a.id === id ? { ...a, status: 'approved' } : a))
     setActivatingId(null)
   }
 
@@ -493,7 +493,7 @@ function StatusBadge({ status }) {
 
 function AffStatusBadge({ status }) {
   const map = {
-    active:  { label: 'Attivo',    cls: 'adm-badge--green'  },
+    approved: { label: 'Attivo',    cls: 'adm-badge--green'  },
     pending: { label: 'In attesa', cls: 'adm-badge--yellow' },
   }
   const { label, cls } = map[status] ?? { label: status, cls: 'adm-badge--gray' }
