@@ -70,17 +70,19 @@ export default function Agenda({ business }) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
   // Init view/day from location state (set by Panoramica)
-  const [view,         setView]         = useState(() => location.state?.agendaView === 'day' ? 'day' : 'month')
+  const [view,         setView]         = useState(() => (location.state?.agendaView === 'day' || location.state?.selectedDate) ? 'day' : 'month')
   const [monthDate,    setMonthDate]    = useState(() => {
-    if (location.state?.agendaDate) {
-      const d = new Date(location.state.agendaDate + 'T00:00:00')
+    const dateStr = location.state?.selectedDate ?? location.state?.agendaDate
+    if (dateStr) {
+      const d = new Date(dateStr + 'T00:00:00')
       return new Date(d.getFullYear(), d.getMonth(), 1)
     }
     return new Date(today.getFullYear(), today.getMonth(), 1)
   })
   const [selectedDay,  setSelectedDay]  = useState(() => {
-    if (location.state?.agendaDate) {
-      const d = new Date(location.state.agendaDate + 'T00:00:00')
+    const dateStr = location.state?.selectedDate ?? location.state?.agendaDate
+    if (dateStr) {
+      const d = new Date(dateStr + 'T00:00:00')
       d.setHours(0, 0, 0, 0)
       return d
     }
@@ -106,7 +108,7 @@ export default function Agenda({ business }) {
 
   // Clear location state after reading so back-navigation doesn't re-trigger day view
   useEffect(() => {
-    if (location.state?.agendaView || location.state?.agendaDate) {
+    if (location.state?.agendaView || location.state?.agendaDate || location.state?.selectedDate) {
       rNav(location.pathname, { state: {}, replace: true })
     }
   }, []) // eslint-disable-line
@@ -300,7 +302,7 @@ export default function Agenda({ business }) {
                 const holiday     = getHoliday(day)
                 const apts        = aptsOnDay(day)
                 return (
-                  <button
+                  <div
                     key={di}
                     className={[
                       'ag-month-cell',
@@ -308,9 +310,16 @@ export default function Agenda({ business }) {
                       !isThisMonth ? 'ag-month-cell--other'   : '',
                       holiday      ? 'ag-month-cell--holiday' : '',
                     ].join(' ')}
-                    onClick={() => openModal(formatDate(day))}
+                    onClick={() => goToDay(day)}
                   >
-                    <span className="ag-month-cell-num">{day.getDate()}</span>
+                    <div className="ag-month-cell-top">
+                      <span className="ag-month-cell-num">{day.getDate()}</span>
+                      <button
+                        className="ag-month-cell-add"
+                        onClick={e => { e.stopPropagation(); openModal(formatDate(day)) }}
+                        title="Nuovo appuntamento"
+                      >+</button>
+                    </div>
                     {holiday && <span className="ag-month-holiday-name">{holiday.name}</span>}
                     {apts.length > 0 && (
                       <div className="ag-month-dots">
@@ -324,12 +333,12 @@ export default function Agenda({ business }) {
                         {apts.length > 3 && <span className="ag-month-dot-more">+{apts.length - 3}</span>}
                       </div>
                     )}
-                  </button>
+                  </div>
                 )
               })}
             </div>
           ))}
-          <p className="ag-month-hint">Clicca su un giorno per aggiungere un appuntamento</p>
+          <p className="ag-month-hint">Clicca su un giorno per aprire la vista giornaliera · usa + per aggiungere un appuntamento</p>
         </div>
       )}
 

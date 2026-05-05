@@ -186,7 +186,7 @@ export default function Panoramica({ business, onNavigate }) {
                   key={apt.id}
                   className="pn-activity-item pn-activity-item--link"
                   onClick={() => {
-                    rNav(window.location.pathname, { state: { agendaView: 'day', agendaDate: apt.date }, replace: true })
+                    rNav(window.location.pathname, { state: { selectedDate: apt.date }, replace: true })
                     onNavigate?.('agenda')
                   }}
                 >

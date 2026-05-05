@@ -6229,6 +6229,16 @@ code {
 .ag-month-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .ag-month-dot-more { font-size: 10px; color: var(--text); line-height: 7px; }
 .ag-month-hint { font-size: 12px; color: var(--text); text-align: center; padding: 8px; opacity: 0.6; }
+.ag-month-cell-top { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+.ag-month-cell-add {
+  width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border);
+  background: transparent; color: var(--text-h); font-size: 15px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.15s, background 0.12s, border-color 0.12s;
+  flex-shrink: 0; padding: 0; font-weight: 400;
+}
+.ag-month-cell:hover .ag-month-cell-add { opacity: 1; }
+.ag-month-cell-add:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 @media (max-width: 600px) {
   .ag-month-cell { min-height: 56px; padding: 4px 4px; }
   .ag-month-cell-num { font-size: 12px; }
