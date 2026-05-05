@@ -69,25 +69,9 @@ export default function Agenda({ business }) {
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
-  // Init view/day from location state (set by Panoramica)
-  const [view,         setView]         = useState(() => (location.state?.agendaView === 'day' || location.state?.selectedDate) ? 'day' : 'month')
-  const [monthDate,    setMonthDate]    = useState(() => {
-    const dateStr = location.state?.selectedDate ?? location.state?.agendaDate
-    if (dateStr) {
-      const d = new Date(dateStr + 'T00:00:00')
-      return new Date(d.getFullYear(), d.getMonth(), 1)
-    }
-    return new Date(today.getFullYear(), today.getMonth(), 1)
-  })
-  const [selectedDay,  setSelectedDay]  = useState(() => {
-    const dateStr = location.state?.selectedDate ?? location.state?.agendaDate
-    if (dateStr) {
-      const d = new Date(dateStr + 'T00:00:00')
-      d.setHours(0, 0, 0, 0)
-      return d
-    }
-    return today
-  })
+  const [view,         setView]         = useState('month')
+  const [monthDate,    setMonthDate]    = useState(new Date(today.getFullYear(), today.getMonth(), 1))
+  const [selectedDay,  setSelectedDay]  = useState(today)
 
   const [appointments, setAppointments] = useState([])
   const [employees,    setEmployees]    = useState([])
@@ -106,9 +90,21 @@ export default function Agenda({ business }) {
   const [confirmDelId,  setConfirmDelId]  = useState(null)
   const [taxRate,       setTaxRate]       = useState(22)
 
-  // Clear location state after reading so back-navigation doesn't re-trigger day view
+  // Read location state after mount: atomically set date + view, then clear state
   useEffect(() => {
-    if (location.state?.agendaView || location.state?.agendaDate || location.state?.selectedDate) {
+    const state   = location.state ?? {}
+    const dateStr = state.selectedDate ?? state.agendaDate
+    const forceDay = state.agendaView === 'day' || !!state.selectedDate
+
+    if (dateStr) {
+      const d = new Date(dateStr + 'T00:00:00')
+      d.setHours(0, 0, 0, 0)
+      setSelectedDay(d)
+      setMonthDate(new Date(d.getFullYear(), d.getMonth(), 1))
+    }
+    if (forceDay) setView('day')
+
+    if (state.agendaView || state.agendaDate || state.selectedDate) {
       rNav(location.pathname, { state: {}, replace: true })
     }
   }, []) // eslint-disable-line
