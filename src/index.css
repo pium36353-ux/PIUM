@@ -6384,3 +6384,222 @@ code {
 
 /* spin keyframe (reuse) */
 @keyframes ag-spin { to { transform: rotate(360deg); } }
+
+/* ── Affiliates ── */
+.af-shell {
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+.af-shell--center {
+  align-items: center;
+  justify-content: center;
+}
+.af-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.af-logout-btn {
+  font-size: 13px;
+  color: var(--text);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.af-logout-btn:hover { background: var(--accent-bg); }
+
+.af-body {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px 60px;
+}
+.af-card {
+  background: var(--card-bg, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-self: flex-start;
+  margin-top: 20px;
+}
+.af-dashboard {
+  width: 100%;
+  max-width: 780px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.af-dash-header { display: flex; align-items: flex-start; justify-content: space-between; }
+.af-title { font-size: 22px; font-weight: 700; color: var(--text-h); margin: 0; line-height: 1.2; }
+.af-subtitle { font-size: 14px; color: var(--text); margin: 0; line-height: 1.5; }
+
+/* Registration form */
+.af-form { display: flex; flex-direction: column; gap: 14px; }
+.af-field { display: flex; flex-direction: column; gap: 5px; }
+.af-label { font-size: 13px; font-weight: 600; color: var(--text-h); }
+.af-input {
+  padding: 10px 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+  transition: border-color 0.15s;
+}
+.af-input:focus { outline: none; border-color: var(--accent); }
+.af-form-error {
+  font-size: 13px; color: #dc2626;
+  background: rgba(239,68,68,0.06);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 7px; padding: 8px 12px; margin: 0;
+}
+.af-submit-btn {
+  padding: 11px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none; border-radius: 9px;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  margin-top: 4px;
+}
+.af-submit-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.af-cta-btn {
+  display: inline-block;
+  padding: 11px 24px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 9px;
+  font-size: 14px; font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+  transition: opacity 0.15s;
+}
+.af-cta-btn:hover { opacity: 0.88; }
+
+/* Stats */
+.af-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.af-stat-card {
+  background: var(--card-bg, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.af-stat-card--pending { border-color: #a78bfa44; background: #f5f3ff44; }
+.af-stat-value { font-size: 22px; font-weight: 700; color: var(--text-h); line-height: 1; }
+.af-stat-label { font-size: 12px; color: var(--text); }
+
+/* Referral link */
+.af-link-card {
+  background: var(--card-bg, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.af-link-label { font-size: 12px; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; }
+.af-link-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.af-link-code {
+  flex: 1;
+  min-width: 0;
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  padding: 8px 12px;
+  word-break: break-all;
+}
+.af-copy-btn {
+  flex-shrink: 0;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.af-copy-btn--done, .af-copy-btn:hover { background: var(--accent); color: #fff; }
+.af-link-hint { font-size: 12.5px; color: var(--text); margin: 0; }
+
+/* Clients list */
+.af-section { display: flex; flex-direction: column; gap: 10px; }
+.af-section-title { font-size: 15px; font-weight: 700; color: var(--text-h); margin: 0; }
+.af-empty { font-size: 13.5px; color: var(--text); padding: 18px 0; }
+.af-clients-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.af-client-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.af-client-row:last-child { border-bottom: none; }
+.af-client-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.af-client-name { font-size: 14px; font-weight: 600; color: var(--text-h); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.af-client-city { font-size: 12px; color: var(--text); }
+.af-client-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.af-client-date { font-size: 12px; color: var(--text); white-space: nowrap; }
+.af-plan-badge {
+  font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 20px;
+  white-space: nowrap;
+}
+.af-status-dot {
+  font-size: 11px; font-weight: 600;
+  padding: 3px 9px; border-radius: 20px;
+  white-space: nowrap;
+}
+.af-status-dot--active   { background: #dcfce7; color: #16a34a; }
+.af-status-dot--inactive { background: #f1f5f9; color: #64748b; }
+
+/* Spinner */
+@keyframes af-spin { to { transform: rotate(360deg); } }
+.af-spinner {
+  width: 32px; height: 32px;
+  animation: af-spin 0.8s linear infinite;
+}
+
+@media (max-width: 700px) {
+  .af-stats-row { grid-template-columns: 1fr 1fr; }
+  .af-topbar    { padding: 14px 18px; }
+  .af-card      { padding: 28px 20px; }
+}
+@media (max-width: 420px) {
+  .af-stats-row { grid-template-columns: 1fr; }
+}

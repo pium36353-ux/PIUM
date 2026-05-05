@@ -103,18 +103,20 @@ export default function Onboarding() {
     if (!user) { navigate('/auth', { replace: true }); return }
 
     // 1. Insert business
+    const affiliateCode = localStorage.getItem('pium_ref') || null
     const { data: biz, error } = await supabase
       .from('businesses')
       .insert({
-        user_id:  user.id,
-        name:     form.name.trim(),
-        slug:     toSlug(form.name.trim()),
-        category: form.category,
-        phone:    form.phone.trim()    || null,
-        whatsapp: form.whatsapp.trim() || null,
-        email:    form.email.trim()    || null,
-        address:  form.address.trim()  || null,
-        city:     form.city.trim(),
+        user_id:        user.id,
+        name:           form.name.trim(),
+        slug:           toSlug(form.name.trim()),
+        category:       form.category,
+        phone:          form.phone.trim()    || null,
+        whatsapp:       form.whatsapp.trim() || null,
+        email:          form.email.trim()    || null,
+        address:        form.address.trim()  || null,
+        city:           form.city.trim(),
+        affiliate_code: affiliateCode,
       })
       .select('id')
       .single()
@@ -124,6 +126,8 @@ export default function Onboarding() {
       setLoading(false)
       return
     }
+
+    if (affiliateCode) localStorage.removeItem('pium_ref')
 
     // 2. Generate AI description
     setLoadingMsg('Generazione descrizione AI…')

@@ -24,6 +24,10 @@ export default function Auth() {
   const [error, setError]     = useState(null)
 
   useEffect(() => {
+    // Salva codice referral se presente nell'URL (?ref=CODICE)
+    const ref = new URLSearchParams(window.location.search).get('ref')
+    if (ref) localStorage.setItem('pium_ref', ref)
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) navigate('/dashboard', { replace: true })
     })
