@@ -97,10 +97,10 @@ export default function Admin() {
     setAffLoading(false)
   }, [user])
 
-  const activateAffiliate = async (id) => {
+  const setAffiliateStatus = async (id, status) => {
     setActivatingId(id)
-    await supabase.from('affiliates').update({ status: 'approved' }).eq('id', id)
-    setAffiliates(prev => prev.map(a => a.id === id ? { ...a, status: 'approved' } : a))
+    await supabase.from('affiliates').update({ status }).eq('id', id)
+    setAffiliates(prev => prev.map(a => a.id === id ? { ...a, status } : a))
     setActivatingId(null)
   }
 
@@ -440,16 +440,36 @@ export default function Admin() {
                             <td><span className="adm-cell-text">€{Number(a.total_earned ?? 0).toFixed(2)}</span></td>
                             <td><span className="adm-cell-text adm-cell-date">{formatDate(a.created_at)}</span></td>
                             <td>
-                              {a.status === 'pending' && (
-                                <button
-                                  className="adm-toggle-btn adm-toggle-btn--inactive"
-                                  disabled={busy}
-                                  onClick={() => activateAffiliate(a.id)}
-                                  title="Attiva affiliato"
-                                >
-                                  {busy ? <AdminSpinner small /> : <IconPlay />}
-                                </button>
-                              )}
+                              <div className="adm-row-actions">
+                                {busy ? (
+                                  <AdminSpinner small />
+                                ) : (
+                                  <>
+                                    {a.status !== 'approved' && (
+                                      <button
+                                        className="adm-toggle-btn adm-toggle-btn--active"
+                                        onClick={() => setAffiliateStatus(a.id, 'approved')}
+                                        title="Attiva affiliato"
+                                      ><IconPlay /></button>
+                                    )}
+                                    {a.status === 'approved' && (
+                                      <button
+                                        className="adm-toggle-btn adm-toggle-btn--inactive"
+                                        onClick={() => setAffiliateStatus(a.id, 'pending')}
+                                        title="Sospendi affiliato"
+                                      ><IconPause /></button>
+                                    )}
+                                    {a.status !== 'rejected' && (
+                                      <button
+                                        className="adm-toggle-btn adm-toggle-btn--inactive"
+                                        onClick={() => setAffiliateStatus(a.id, 'rejected')}
+                                        title="Rifiuta affiliato"
+                                        style={{ color: '#ef4444' }}
+                                      ><IconX /></button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )
@@ -494,7 +514,8 @@ function StatusBadge({ status }) {
 function AffStatusBadge({ status }) {
   const map = {
     approved: { label: 'Attivo',    cls: 'adm-badge--green'  },
-    pending: { label: 'In attesa', cls: 'adm-badge--yellow' },
+    pending:  { label: 'In attesa', cls: 'adm-badge--yellow' },
+    rejected: { label: 'Rifiutato', cls: 'adm-badge--gray'   },
   }
   const { label, cls } = map[status] ?? { label: status, cls: 'adm-badge--gray' }
   return <span className={`adm-badge ${cls}`}>{label}</span>
