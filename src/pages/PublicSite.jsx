@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
@@ -31,12 +31,16 @@ export default function PublicSite() {
       // Indicizza per block_key, poi estrae solo i campi rilevanti per blocco
       const byBlock = {}
       for (const row of sc ?? []) byBlock[row.block_key] = row
-const scFlat = {
-        hero_title:      byBlock.hero?.hero_title      ?? null,
-        hero_subtitle:   byBlock.hero?.hero_subtitle   ?? null,
-        hero_cta_text:   byBlock.hero?.hero_cta_text   ?? null,
-        about_text:      byBlock.about?.about_text     ?? null,
+      let gallery_images = []
+      try { if (byBlock.gallery?.body) gallery_images = JSON.parse(byBlock.gallery.body) } catch {}
+
+      const scFlat = {
+        hero_title:      byBlock.hero?.hero_title       ?? null,
+        hero_subtitle:   byBlock.hero?.hero_subtitle    ?? null,
+        hero_cta_text:   byBlock.hero?.hero_cta_text    ?? null,
+        about_text:      byBlock.about?.about_text      ?? null,
         cover_image_url: byBlock.cover?.cover_image_url ?? null,
+        gallery_images,
       }
       setBusiness(biz)
       setSiteContent(scFlat)
@@ -64,7 +68,7 @@ const scFlat = {
   if (status === 'notfound') return <NotFound />
 
   const { name, category, description, phone, whatsapp, email, address, city, logo_url } = business
-  const { hero_title, hero_subtitle, hero_cta_text, about_text, cover_image_url } = siteContent
+  const { hero_title, hero_subtitle, hero_cta_text, about_text, cover_image_url, gallery_images } = siteContent
 
   const displayName    = hero_title || name
   const displayAbout   = about_text || description
@@ -146,6 +150,9 @@ const scFlat = {
               <p className="ps-description">{displayAbout}</p>
             </section>
           )}
+
+          {/* Galleria */}
+          {gallery_images?.length > 0 && <Carousel images={gallery_images} />}
 
           {/* Services */}
           {services.length > 0 && (
@@ -315,6 +322,42 @@ function NotFound() {
   )
 }
 
+/* ── Carosello galleria ── */
+function Carousel({ images }) {
+  const [current, setCurrent] = useState(0)
+  const n = images.length
+  const prev = useCallback(() => setCurrent(i => (i - 1 + n) % n), [n])
+  const next = useCallback(() => setCurrent(i => (i + 1) % n), [n])
+
+  return (
+    <section className="ps-section">
+      <h2 className="ps-section-title">Galleria</h2>
+      <div className="ps-carousel">
+        <div className="ps-carousel-track-wrap">
+          <div className="ps-carousel-track" style={{ transform: `translateX(-${current * 100}%)` }}>
+            {images.map((url, i) => (
+              <div key={i} className="ps-carousel-slide">
+                <img src={url} alt={`Foto ${i + 1}`} className="ps-carousel-img" loading="lazy" />
+              </div>
+            ))}
+          </div>
+        </div>
+        {n > 1 && (
+          <>
+            <button className="ps-carousel-btn ps-carousel-btn--prev" onClick={prev} aria-label="Precedente"><IconChevLeft /></button>
+            <button className="ps-carousel-btn ps-carousel-btn--next" onClick={next} aria-label="Successivo"><IconChevRight /></button>
+            <div className="ps-carousel-dots">
+              {images.map((_, i) => (
+                <button key={i} className={`ps-carousel-dot ${i === current ? 'ps-carousel-dot--active' : ''}`} onClick={() => setCurrent(i)} aria-label={`Foto ${i + 1}`} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  )
+}
+
 /* ── Temi visivi per categoria ── */
 const THEMES = {
   default: {
@@ -441,4 +484,10 @@ function IconMap() {
 }
 function IconClock({ size = 14 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+}
+function IconChevLeft() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+}
+function IconChevRight() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
 }

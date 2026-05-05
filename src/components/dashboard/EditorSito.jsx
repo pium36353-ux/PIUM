@@ -3,14 +3,17 @@ import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 
 const BLOCKS = [
-  { id: 'hero',  label: 'Intestazione principale' },
-  { id: 'about', label: 'Chi siamo' },
-  { id: 'cover', label: 'Immagine di copertina' },
+  { id: 'hero',    label: 'Intestazione principale' },
+  { id: 'about',   label: 'Chi siamo' },
+  { id: 'cover',   label: 'Immagine di copertina' },
+  { id: 'gallery', label: 'Galleria fotografica' },
 ]
 
-const ABOUT_MAX    = 500
-const COVER_MAX_MB = 5
-const COVER_ACCEPT = ['image/jpeg', 'image/png', 'image/webp']
+const ABOUT_MAX      = 500
+const COVER_MAX_MB   = 5
+const COVER_ACCEPT   = ['image/jpeg', 'image/png', 'image/webp']
+const GALLERY_MAX    = 5
+const GALLERY_MAX_MB = 5
 
 export default function EditorSito({ business }) {
   const [active,  setActive]  = useState('hero')
@@ -83,9 +86,11 @@ export default function EditorSito({ business }) {
           ) : active === 'hero' ? (
             <HeroBlock  business={business} row={content?.hero  ?? null} onSaved={row => mergeBlock('hero',  row)} />
           ) : active === 'about' ? (
-            <AboutBlock business={business} row={content?.about ?? null} onSaved={row => mergeBlock('about', row)} />
+            <AboutBlock   business={business} row={content?.about   ?? null} onSaved={row => mergeBlock('about',   row)} />
+          ) : active === 'cover' ? (
+            <CoverBlock   business={business} row={content?.cover   ?? null} onSaved={row => mergeBlock('cover',   row)} />
           ) : (
-            <CoverBlock business={business} row={content?.cover ?? null} onSaved={row => mergeBlock('cover', row)} />
+            <GalleryBlock business={business} row={content?.gallery ?? null} onSaved={row => mergeBlock('gallery', row)} />
           )}
         </div>
       </div>
@@ -352,6 +357,111 @@ function CoverBlock({ business, row, onSaved }) {
           style={{ display: 'none' }}
         />
 
+        {fileError && <p className="ed-file-error">{fileError}</p>}
+      </div>
+    </div>
+  )
+}
+
+/* ── Galleria fotografica ── */
+function GalleryBlock({ business, row, onSaved }) {
+  const rowRef = useRef(row)
+  const [images,   setImages]   = useState(() => {
+    try { return JSON.parse(row?.body ?? '[]') } catch { return [] }
+  })
+  const [uploading, setUploading] = useState(false)
+  const [fileError, setFileError] = useState(null)
+  const inputRef = useRef(null)
+
+  const persist = async (newImages) => {
+    const { data, error } = await saveBlock(business, rowRef.current, 'gallery', {
+      body: JSON.stringify(newImages),
+    })
+    if (!error) { rowRef.current = data; onSaved(data) }
+    return error
+  }
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setFileError(null)
+
+    if (!COVER_ACCEPT.includes(file.type)) { setFileError('Formato non supportato. Usa JPG, PNG o WebP.'); return }
+    if (file.size > GALLERY_MAX_MB * 1024 * 1024) { setFileError(`Il file supera i ${GALLERY_MAX_MB} MB.`); return }
+    if (images.length >= GALLERY_MAX) { setFileError(`Puoi caricare al massimo ${GALLERY_MAX} immagini.`); return }
+
+    setUploading(true)
+    const ext  = file.name.split('.').pop().toLowerCase()
+    const path = `${business.id}/gallery_${Date.now()}.${ext}`
+
+    const { error: upErr } = await supabase.storage
+      .from('site-images')
+      .upload(path, file, { contentType: file.type })
+
+    if (upErr) { setFileError('Errore durante il caricamento. Riprova.'); setUploading(false); return }
+
+    const { data: { publicUrl } } = supabase.storage.from('site-images').getPublicUrl(path)
+    const newImages = [...images, publicUrl]
+    setImages(newImages)
+    await persist(newImages)
+    setUploading(false)
+  }
+
+  const handleDelete = async (url) => {
+    const newImages = images.filter(u => u !== url)
+    setImages(newImages)
+    await persist(newImages)
+  }
+
+  return (
+    <div className="db-card">
+      <div className="ed-block-header">
+        <h3 className="db-card-title">Galleria fotografica</h3>
+        <p className="ed-block-desc">
+          Aggiungi fino a {GALLERY_MAX} foto. Appaiono come carosello nel sito pubblico.
+          Formati: JPG, PNG, WebP — max {GALLERY_MAX_MB} MB ciascuna.
+        </p>
+      </div>
+
+      <div className="ed-fields">
+        {images.length > 0 && (
+          <div className="ed-gallery-grid">
+            {images.map((url, i) => (
+              <div key={url} className="ed-gallery-thumb">
+                <img src={url} alt={`Foto ${i + 1}`} className="ed-gallery-thumb-img" />
+                <button
+                  className="ed-gallery-thumb-del"
+                  onClick={() => handleDelete(url)}
+                  title="Elimina foto"
+                >
+                  <IconTrash />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {images.length < GALLERY_MAX && (
+          <button
+            className="ed-cover-dropzone ed-gallery-add-zone"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            type="button"
+          >
+            {uploading ? (
+              <><EdSpinner /><span>Caricamento in corso…</span></>
+            ) : (
+              <>
+                <div className="ed-cover-dropzone-icon"><IconUpload /></div>
+                <span className="ed-cover-dropzone-text">Aggiungi foto</span>
+                <span className="ed-cover-dropzone-hint">{images.length}/{GALLERY_MAX} caricate</span>
+              </>
+            )}
+          </button>
+        )}
+
+        <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} style={{ display: 'none' }} />
         {fileError && <p className="ed-file-error">{fileError}</p>}
       </div>
     </div>
