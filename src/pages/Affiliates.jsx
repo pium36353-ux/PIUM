@@ -82,11 +82,17 @@ export default function Affiliates() {
 
     const { data, error } = await supabase
       .from('affiliates')
-      .insert({ user_id: session.user.id, code, name: form.name.trim(), email: form.email.trim() })
+      .insert({
+        user_id:  session.user.id,
+        code,
+        name:     form.name.trim(),
+        email:    form.email.trim(),
+        status:   'active',
+      })
       .select()
       .single()
 
-    if (error) { setFormError(`Errore: ${error.message} (code: ${error.code})`) }
+    if (error) { setFormError('Errore durante la registrazione. Riprova.') }
     else       { setAffiliate(data); setClients([]) }
     setSaving(false)
   }
