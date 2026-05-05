@@ -86,7 +86,7 @@ export default function Panoramica({ business, onNavigate }) {
         supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
         supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', business.id).gte('date', today),
         supabase.from('social_drafts').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'draft'),
-        supabase.from('appointments').select('id, client_name, date, start_time').eq('business_id', business.id).gte('date', today).order('date').order('start_time').limit(5),
+        supabase.from('appointments').select('id, client_name, date, start_time, employees(name, color)').eq('business_id', business.id).gte('date', today).order('date').order('start_time').limit(5),
         supabase.from('reminders').select('id, title, due_at, priority').eq('business_id', business.id).eq('status', 'pending').gte('due_at', today).order('due_at').limit(5),
         supabase.from('appointments').select('id, client_name, date, updated_at').eq('business_id', business.id).eq('completed', true).order('updated_at', { ascending: false }).limit(5),
         supabase.from('reminders').select('id, title, updated_at').eq('business_id', business.id).eq('status', 'done').order('updated_at', { ascending: false }).limit(5),
@@ -191,7 +191,14 @@ export default function Panoramica({ business, onNavigate }) {
                   }}
                 >
                   <span className="pn-activity-icon">📅</span>
-                  <span className="pn-activity-desc">{apt.client_name}</span>
+                  <span className="pn-activity-desc">
+                    {apt.client_name}
+                    {apt.employees && (
+                      <span className="pn-emp-badge" style={{ background: apt.employees.color }}>
+                        {apt.employees.name.slice(0, 3).toUpperCase()}
+                      </span>
+                    )}
+                  </span>
                   <span className="pn-activity-time">{formatAptDate(apt.date, apt.start_time)}</span>
                 </li>
               ))}

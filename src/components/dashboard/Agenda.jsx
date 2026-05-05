@@ -88,6 +88,7 @@ export default function Agenda({ business }) {
   const [deletingEmpId, setDeletingEmpId] = useState(null)
   const [togglingId,    setTogglingId]    = useState(null)
   const [confirmDelId,  setConfirmDelId]  = useState(null)
+  const [editingId,     setEditingId]     = useState(null)
   const [taxRate,       setTaxRate]       = useState(22)
 
   // Read location state after mount: atomically set date + view, then clear state
@@ -138,10 +139,26 @@ export default function Agenda({ business }) {
   const openModal = (date = formatDate(selectedDay), time = '09:00') => {
     loadEmployees()
     setForm({ ...EMPTY_FORM, date, start_time: time })
+    setEditingId(null)
     setErrors({})
     setShowModal(true)
   }
-  const closeModal = () => setShowModal(false)
+  const openEditModal = (apt) => {
+    loadEmployees()
+    setForm({
+      date:             apt.date,
+      client_name:      apt.client_name,
+      employee_id:      apt.employee_id ?? '',
+      start_time:       apt.start_time?.slice(0, 5) ?? '09:00',
+      duration_minutes: apt.duration_minutes ?? 60,
+      price:            apt.price != null ? String(apt.price) : '',
+      notes:            apt.notes ?? '',
+    })
+    setEditingId(apt.id)
+    setErrors({})
+    setShowModal(true)
+  }
+  const closeModal = () => { setShowModal(false); setEditingId(null) }
   const setField = (f) => (e) => { setForm(p => ({ ...p, [f]: e.target.value })); setErrors(p => ({ ...p, [f]: null })) }
 
   /* ── Validation ── */
@@ -158,8 +175,7 @@ export default function Agenda({ business }) {
   const handleSave = async () => {
     if (!validate()) return
     setSaving(true)
-    await supabase.from('appointments').insert({
-      business_id:      business.id,
+    const payload = {
       client_name:      form.client_name.trim(),
       employee_id:      form.employee_id || null,
       date:             form.date,
@@ -167,9 +183,13 @@ export default function Agenda({ business }) {
       duration_minutes: Number(form.duration_minutes),
       price:            form.price !== '' ? Number(form.price) : null,
       notes:            form.notes.trim() || null,
-      completed:        false,
-    })
-    logActivity(business.id, business.user_id, 'appointment_created', `Appuntamento creato: ${form.client_name.trim()} il ${form.date}`)
+    }
+    if (editingId) {
+      await supabase.from('appointments').update(payload).eq('id', editingId)
+    } else {
+      await supabase.from('appointments').insert({ ...payload, business_id: business.id, completed: false })
+      logActivity(business.id, business.user_id, 'appointment_created', `Appuntamento creato: ${form.client_name.trim()} il ${form.date}`)
+    }
     setSaving(false)
     closeModal()
     loadAppointments()
@@ -361,7 +381,7 @@ export default function Agenda({ business }) {
                       <span className="ag-day-time-text">{fmtTime(apt.start_time)}</span>
                       <span className="ag-day-color-bar" style={{ background: color }} />
                     </div>
-                    <div className="ag-day-item-body">
+                    <div className="ag-day-item-body ag-day-item-body--link" onClick={() => openEditModal(apt)}>
                       <span className="ag-day-client">{apt.client_name}</span>
                       <div className="ag-day-meta">
                         {apt.employees && <span>{apt.employees.name}</span>}
@@ -456,12 +476,12 @@ export default function Agenda({ business }) {
         </div>
       )}
 
-      {/* ── New appointment modal ── */}
+      {/* ── New / edit appointment modal ── */}
       {showModal && (
         <div className="sv-modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
           <div className="sv-modal">
             <div className="sv-modal-header">
-              <h2 className="sv-modal-title">Nuovo appuntamento</h2>
+              <h2 className="sv-modal-title">{editingId ? 'Modifica appuntamento' : 'Nuovo appuntamento'}</h2>
               <button className="sv-modal-close" onClick={closeModal}><IconX /></button>
             </div>
 
