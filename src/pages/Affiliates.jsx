@@ -86,7 +86,7 @@ export default function Affiliates() {
       .select()
       .single()
 
-    if (error) { setFormError('Errore durante la registrazione. Riprova.') }
+    if (error) { setFormError(`Errore: ${error.message} (code: ${error.code})`) }
     else       { setAffiliate(data); setClients([]) }
     setSaving(false)
   }
