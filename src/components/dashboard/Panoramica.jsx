@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
@@ -66,60 +66,59 @@ export default function Panoramica({ business, onNavigate }) {
   const [cardsLoading, setCardsLoading] = useState(true)
   const [completingId, setCompletingId] = useState(null)
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!business) return
-    async function load() {
-      setLoading(true)
-      setCardsLoading(true)
-      const today = new Date().toISOString().split('T')[0]
+    setLoading(true)
+    setCardsLoading(true)
+    const today = new Date().toISOString().split('T')[0]
 
-      const [
-        { count: cServizi },
-        { count: cRecensioni },
-        { count: cAppuntamenti },
-        { count: cSocial },
-        { data: apts },
-        { data: rems },
-        { data: doneApts },
-        { data: doneRems },
-      ] = await Promise.all([
-        supabase.from('services').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
-        supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
-        supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', business.id).gte('date', today),
-        supabase.from('social_drafts').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'draft'),
-        supabase.from('appointments').select('id, client_name, date, start_time, employees(name, color)').eq('business_id', business.id).gte('date', today).order('date').order('start_time').limit(5),
-        supabase.from('reminders').select('id, title, due_at, priority').eq('business_id', business.id).eq('status', 'pending').gte('due_at', today).order('due_at').limit(5),
-        supabase.from('appointments').select('id, client_name, date, updated_at').eq('business_id', business.id).eq('completed', true).order('updated_at', { ascending: false }).limit(5),
-        supabase.from('reminders').select('id, title, updated_at').eq('business_id', business.id).eq('status', 'done').order('updated_at', { ascending: false }).limit(5),
-      ])
+    const [
+      { count: cServizi },
+      { count: cRecensioni },
+      { count: cAppuntamenti },
+      { count: cSocial },
+      { data: apts },
+      { data: rems },
+      { data: doneApts },
+      { data: doneRems },
+    ] = await Promise.all([
+      supabase.from('services').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
+      supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
+      supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', business.id).gte('date', today),
+      supabase.from('social_drafts').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'draft'),
+      supabase.from('appointments').select('id, client_name, date, start_time, employees(name, color)').eq('business_id', business.id).gte('date', today).eq('completed', false).order('date').order('start_time').limit(5),
+      supabase.from('reminders').select('id, title, due_at, priority').eq('business_id', business.id).eq('status', 'pending').gte('due_at', today).order('due_at').limit(5),
+      supabase.from('appointments').select('id, client_name, date, updated_at').eq('business_id', business.id).eq('completed', true).order('updated_at', { ascending: false }).limit(5),
+      supabase.from('reminders').select('id, title, updated_at').eq('business_id', business.id).eq('status', 'done').order('updated_at', { ascending: false }).limit(5),
+    ])
 
-      setCounts({
-        servizi:      cServizi      ?? 0,
-        recensioni:   cRecensioni   ?? 0,
-        appuntamenti: cAppuntamenti ?? 0,
-        bozzeSocial:  cSocial       ?? 0,
-      })
-      setUpcoming(apts ?? [])
-      setReminders(rems ?? [])
+    setCounts({
+      servizi:      cServizi      ?? 0,
+      recensioni:   cRecensioni   ?? 0,
+      appuntamenti: cAppuntamenti ?? 0,
+      bozzeSocial:  cSocial       ?? 0,
+    })
+    setUpcoming(apts ?? [])
+    setReminders(rems ?? [])
 
-      const merged = [
-        ...(doneApts ?? []).map(a => ({ id: 'a-' + a.id, icon: '📅', desc: `Appuntamento: ${a.client_name}`, section: 'agenda',     ts: a.updated_at })),
-        ...(doneRems ?? []).map(r => ({ id: 'r-' + r.id, icon: '🔔', desc: `Promemoria: ${r.title}`,         section: 'promemoria', ts: r.updated_at })),
-      ]
-      merged.sort((a, b) => (b.ts > a.ts ? 1 : -1))
-      setActivity(merged.slice(0, 5))
+    const merged = [
+      ...(doneApts ?? []).map(a => ({ id: 'a-' + a.id, icon: '📅', desc: `Appuntamento: ${a.client_name}`, section: 'agenda',     ts: a.updated_at })),
+      ...(doneRems ?? []).map(r => ({ id: 'r-' + r.id, icon: '🔔', desc: `Promemoria: ${r.title}`,         section: 'promemoria', ts: r.updated_at })),
+    ]
+    merged.sort((a, b) => (b.ts > a.ts ? 1 : -1))
+    setActivity(merged.slice(0, 5))
 
-      setLoading(false)
-      setCardsLoading(false)
-    }
-    load()
-  }, [business?.id])
+    setLoading(false)
+    setCardsLoading(false)
+  }, [business]) // eslint-disable-line
+
+  useEffect(() => { load() }, [load])
 
   const markComplete = async (id) => {
     setCompletingId(id)
-    await supabase.from('appointments').update({ completed: true }).eq('id', id)
-    setUpcoming(prev => prev.filter(a => a.id !== id))
+    const { error } = await supabase.from('appointments').update({ completed: true }).eq('id', id)
     setCompletingId(null)
+    if (!error) load()
   }
 
   const stats = [
