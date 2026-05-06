@@ -12,6 +12,7 @@ import Settings   from './pages/Settings'
 import Affiliates     from './pages/Affiliates'
 import AffiliatesAuth from './pages/AffiliatesAuth'
 import PWABanner      from './components/PWABanner'
+import SupportBot     from './components/SupportBot'
 
 function RefRedirect() {
   const { code } = useParams()
@@ -37,6 +38,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <PWABanner />
+      <SupportBot />
       <Routes>
         <Route path="/"           element={<PublicRoute><Landing /></PublicRoute>} />
         <Route path="/auth"       element={<PublicRoute><Auth /></PublicRoute>} />
