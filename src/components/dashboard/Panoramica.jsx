@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { notifyNextAppointment } from '../../lib/notifications'
 
 /* ── Helpers ── */
 const MONTHS_SHORT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic']
@@ -118,7 +119,10 @@ export default function Panoramica({ business, onNavigate }) {
     setCompletingId(id)
     const { error } = await supabase.from('appointments').update({ completed: true }).eq('id', id)
     setCompletingId(null)
-    if (!error) load()
+    if (!error) {
+      notifyNextAppointment((upcoming ?? []).filter(a => a.id !== id).map(a => a.id === id ? { ...a, completed: true } : a))
+      load()
+    }
   }
 
   const stats = [

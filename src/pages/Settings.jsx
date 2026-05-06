@@ -1,7 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import { requestPermission } from '../lib/notifications'
+
+const NOTIF_KEY = 'pium_notification_settings'
+const DEFAULT_NOTIF = { appointmentMinutesBefore: 15, notifyNextOnComplete: false }
 
 export default function Settings() {
   const navigate = useNavigate()
@@ -12,12 +16,38 @@ export default function Settings() {
   const [pwdStatus, setPwdStatus] = useState('idle') // idle | saving | ok | error
   const [pwdError, setPwdError] = useState('')
 
+  // Notification settings
+  const [notifPerm, setNotifPerm] = useState(() =>
+    'Notification' in window ? Notification.permission : 'unsupported'
+  )
+  const [notifSettings, setNotifSettings] = useState(() => {
+    try { return { ...DEFAULT_NOTIF, ...JSON.parse(localStorage.getItem(NOTIF_KEY) ?? '{}') } }
+    catch { return DEFAULT_NOTIF }
+  })
+  const [notifSaved, setNotifSaved] = useState(false)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { navigate('/auth', { replace: true }); return }
       setUser(data.user)
     })
   }, [navigate])
+
+  const handleRequestPermission = async () => {
+    const result = await requestPermission()
+    setNotifPerm(result)
+  }
+
+  const setNotif = useCallback((k, v) => {
+    setNotifSettings(prev => ({ ...prev, [k]: v }))
+    setNotifSaved(false)
+  }, [])
+
+  const saveNotifSettings = () => {
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(notifSettings))
+    setNotifSaved(true)
+    setTimeout(() => setNotifSaved(false), 2000)
+  }
 
   const setP = (k, v) => { setPwd(p => ({ ...p, [k]: v })); setPwdError('') }
 
@@ -107,6 +137,60 @@ export default function Settings() {
           </form>
         </section>
 
+        {/* Notifications */}
+        <section className="sett-card">
+          <h2 className="sett-section-title">Notifiche</h2>
+
+          {notifPerm === 'unsupported' && (
+            <p className="sett-notif-hint">Le notifiche non sono supportate su questo browser.</p>
+          )}
+
+          {notifPerm !== 'unsupported' && notifPerm !== 'granted' && (
+            <div className="sett-field">
+              <p className="sett-notif-hint">Attiva le notifiche per ricevere promemoria appuntamenti.</p>
+              <button className="sett-btn-primary" onClick={handleRequestPermission}>
+                <IconBell /> Attiva notifiche
+              </button>
+            </div>
+          )}
+
+          {notifPerm === 'granted' && (
+            <>
+              <p className="sett-notif-hint sett-notif-granted">✓ Notifiche attive</p>
+
+              <div className="sett-field">
+                <label className="sett-label">Promemoria prima dell'appuntamento</label>
+                <select
+                  className="sett-select"
+                  value={notifSettings.appointmentMinutesBefore}
+                  onChange={e => setNotif('appointmentMinutesBefore', Number(e.target.value))}
+                >
+                  <option value={5}>5 minuti prima</option>
+                  <option value={10}>10 minuti prima</option>
+                  <option value={15}>15 minuti prima</option>
+                  <option value={30}>30 minuti prima</option>
+                  <option value={60}>1 ora prima</option>
+                </select>
+              </div>
+
+              <div className="sett-toggle-row">
+                <span className="sett-label">Notifica prossimo appuntamento dopo spunta</span>
+                <button
+                  className={`sett-toggle ${notifSettings.notifyNextOnComplete ? 'sett-toggle--on' : ''}`}
+                  onClick={() => setNotif('notifyNextOnComplete', !notifSettings.notifyNextOnComplete)}
+                  aria-pressed={notifSettings.notifyNextOnComplete}
+                >
+                  <span className="sett-toggle-thumb" />
+                </button>
+              </div>
+
+              <button className="sett-btn-primary" onClick={saveNotifSettings} style={{ marginTop: 12 }}>
+                {notifSaved ? <><IconCheck /> Salvato</> : 'Salva impostazioni'}
+              </button>
+            </>
+          )}
+        </section>
+
         {/* Logout */}
         <section className="sett-card sett-card--danger">
           <h2 className="sett-section-title">Esci</h2>
@@ -120,6 +204,9 @@ export default function Settings() {
   )
 }
 
+function IconBell() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+}
 function IconChevronLeft() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
 }

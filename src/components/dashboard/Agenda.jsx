@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
+import { notifyNextAppointment } from '../../lib/notifications'
 
 const COLORS    = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f43f5e','#84cc16','#a78bfa']
 const DURATIONS = [15, 30, 45, 60, 90, 120]
@@ -197,8 +198,11 @@ export default function Agenda({ business }) {
 
   const toggleCompleted = async (apt) => {
     setTogglingId(apt.id)
-    await supabase.from('appointments').update({ completed: !apt.completed }).eq('id', apt.id)
-    setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, completed: !a.completed } : a))
+    const newCompleted = !apt.completed
+    await supabase.from('appointments').update({ completed: newCompleted }).eq('id', apt.id)
+    const updated = appointments.map(a => a.id === apt.id ? { ...a, completed: newCompleted } : a)
+    setAppointments(updated)
+    if (newCompleted) notifyNextAppointment(updated)
     setTogglingId(null)
   }
 

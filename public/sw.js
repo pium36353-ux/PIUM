@@ -21,6 +21,48 @@ self.addEventListener('activate', (e) => {
   self.clients.claim()
 })
 
+self.addEventListener('push', (e) => {
+  const data = e.data?.json() ?? {}
+  const title = data.title ?? 'PIUM'
+  const body  = data.body  ?? ''
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      actions: [{ action: 'complete', title: '✓ Fatto' }],
+      data: data.data ?? {},
+      tag: data.data?.appointmentId ? `apt-${data.data.appointmentId}` : undefined,
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close()
+  if (e.action === 'complete') {
+    const { appointmentId } = e.notification.data ?? {}
+    if (appointmentId) {
+      e.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+          const client = list.find(c => c.url.includes('/dashboard'))
+          if (client) {
+            client.postMessage({ type: 'MARK_COMPLETE', appointmentId })
+            return client.focus()
+          }
+          return self.clients.openWindow('/dashboard')
+        })
+      )
+    }
+    return
+  }
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      if (list.length > 0) return list[0].focus()
+      return self.clients.openWindow('/dashboard')
+    })
+  )
+})
+
 self.addEventListener('fetch', (e) => {
   // Solo richieste GET, escludi Supabase e API esterne
   if (e.request.method !== 'GET') return
