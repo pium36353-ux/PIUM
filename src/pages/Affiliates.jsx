@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 
@@ -11,6 +11,7 @@ const PLAN_META = {
 }
 
 export default function Affiliates() {
+  const navigate = useNavigate()
   const [session,   setSession]   = useState(undefined)
   const [affiliate, setAffiliate] = useState(null)
   const [clients,   setClients]   = useState([])
@@ -19,9 +20,13 @@ export default function Affiliates() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (s?.user?.app_metadata?.role === 'admin') {
+        navigate('/admin', { replace: true })
+        return
+      }
       setSession(s ?? null)
     })
-  }, [])
+  }, [navigate])
 
   const loadData = useCallback(async (userId) => {
     const { data: aff, error: affErr } = await supabase
