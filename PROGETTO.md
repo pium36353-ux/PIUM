@@ -20,7 +20,7 @@
 | 16 | Admin panel | ✅ |
 | 17 | Agenda | ✅ |
 | 18 | Dashboard affiliati | ✅ Sistema affiliati completo (registrazione, dashboard, approvazione admin) |
-| 19 | Deploy + dominio | ⬜ |
+| 19 | Deploy + dominio | ✅ |
 
 ## Completati di recente
 
@@ -132,3 +132,8 @@ Prossimi step in ordine:
 Aggiunto pulsante "Copia testo" nelle bozze social con feedback visivo "Copiato ✓".  
 Fix panoramica dashboard: contatori aggiornati in tempo reale con query Supabase, card cliccabili che navigano alle sezioni, tasto "← Panoramica" ripristinato in tutte le sezioni.  
 **Prossimo step immediato: deploy su Vercel con dominio piumapp.com.**
+
+---
+
+Deploy completato su www.piumapp.com  
+Claude API spostata su Supabase Edge Function (claude-proxy), chiave non esposta nel frontend
