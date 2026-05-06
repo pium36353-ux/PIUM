@@ -27,6 +27,8 @@
 - ✅ Sistema affiliati (registrazione, dashboard, approvazione da admin)
 - ✅ Gestione piani clienti (trial/active/expired/suspended, prezzo personalizzabile, estensione trial)
 - ✅ Login admin separato su route nascosta /x-admin-login
+- ✅ Notifiche push con impostazioni personalizzabili (minuti pre-appuntamento, notifica dopo spunta, azione "✓ Fatto" dalla notifica)
+- ✅ Documenti GDPR generati (Privacy Policy, Termini di Servizio, DPA, Cookie Policy)
 - ✅ Email info@piumapp.com attiva con forwarding su Cloudflare
 - ✅ Galleria fotografica carosello nel sito pubblico
 - ✅ Card panoramica (attività completate, prossime attività, promemoria)
@@ -42,7 +44,7 @@
 - [ ] Calcolo automatico guadagni affiliati collegato a Stripe
 - [ ] Bot supporto clienti con FAQ PIUM
 - [ ] Sottodominio personalizzato per ogni attività
-- [ ] Sistema notifiche push
+- ✅ Notifiche push con impostazioni personalizzabili (minuti pre-appuntamento, notifica dopo spunta)
 
 ## Note sessione corrente
 
@@ -116,10 +118,10 @@ Prossimi step in ordine:
 - [ ] Deploy su Vercel + collegamento dominio piumapp.com
 - [ ] Verifica onboarding → sito pubblico funzionante end-to-end
 - [ ] Tabella activity_log nel database (usata da Panoramica.jsx ma non presente nello schema principale)
-- [ ] Sistema trial/blocco dopo 1 mese gratis
-- [ ] Notifiche push con azione "✓ Fatto" direttamente dalla notifica
+- ✅ Sistema trial/blocco dopo 1 mese gratis
+- ✅ Notifiche push con azione "✓ Fatto" direttamente dalla notifica
 - [ ] Limite chiamate AI bozze social (già presente come todo, confermare implementazione)
-- [ ] Dashboard affiliati + sistema retribuzione manuale
+- ✅ Dashboard affiliati + sistema retribuzione manuale
 - [ ] Bot supporto clienti con FAQ PIUM
 - [ ] Sottodominio personalizzato per ogni attività (es. nomeattivita.piumapp.com)
 - [ ] Icona PWA da correggere (appare nera su alcuni dispositivi)
