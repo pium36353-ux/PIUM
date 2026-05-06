@@ -19,8 +19,18 @@
 | 15 | Promemoria | ✅ |
 | 16 | Admin panel | ✅ |
 | 17 | Agenda | ✅ |
-| 18 | Dashboard affiliati | ⬜ |
+| 18 | Dashboard affiliati | ✅ Sistema affiliati completo (registrazione, dashboard, approvazione admin) |
 | 19 | Deploy + dominio | ⬜ |
+
+## Completati di recente
+
+- ✅ Sistema affiliati (registrazione, dashboard, approvazione da admin)
+- ✅ Gestione piani clienti (trial/active/expired/suspended, prezzo personalizzabile, estensione trial)
+- ✅ Login admin separato su route nascosta /x-admin-login
+- ✅ Email info@piumapp.com attiva con forwarding su Cloudflare
+- ✅ Galleria fotografica carosello nel sito pubblico
+- ✅ Card panoramica (attività completate, prossime attività, promemoria)
+- ✅ PWA installabile con icone
 
 ## Prima del lancio
 
@@ -28,6 +38,11 @@
 - [ ] Aggiungere dati di fatturazione completi su Anthropic
 - [ ] Descrivere il progetto nel profilo Anthropic
 - [ ] Spostare le chiamate Claude API su Supabase Edge Functions per sicurezza e gestione rate limit
+- [ ] Integrazione Stripe per pagamenti e gestione abbonamenti
+- [ ] Calcolo automatico guadagni affiliati collegato a Stripe
+- [ ] Bot supporto clienti con FAQ PIUM
+- [ ] Sottodominio personalizzato per ogni attività
+- [ ] Sistema notifiche push
 
 ## Note sessione corrente
 
