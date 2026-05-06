@@ -137,3 +137,15 @@ Fix panoramica dashboard: contatori aggiornati in tempo reale con query Supabase
 
 Deploy completato su www.piumapp.com  
 Claude API spostata su Supabase Edge Function (claude-proxy), chiave non esposta nel frontend
+
+---
+
+## Aggiornamenti sessione corrente
+
+- Banner PWA "Installa l'app" implementato in alto, come elemento statico nel flusso (non più fixed, non si sovrappone alla navbar)
+- Bot di supporto FAQ implementato con deep link diretti alle sezioni dashboard via `?s=`
+- Aggiunto deep linking sezioni dashboard tramite parametro query `?s=` (es. `/dashboard?s=agenda`)
+- Fix accesso pagina /affiliates da account admin: aggiunto redirect automatico a /admin se l'utente è amministratore
+- Fix lista affiliati nel pannello admin: aggiunte le card mobile mancanti nella sezione affiliati
+- Aggiornate icone PWA con badge AI integrato nel logo (icon-192.png, icon-512.png, favicon.ico)
+- Risolto problema cache CDN Vercel sui file statici tramite headers no-cache nel vercel.json
