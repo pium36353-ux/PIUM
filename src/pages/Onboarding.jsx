@@ -56,6 +56,7 @@ export default function Onboarding() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) navigate('/auth', { replace: true })
+      else if (data.user.app_metadata?.role === 'admin') navigate('/admin', { replace: true })
     })
   }, [navigate])
 

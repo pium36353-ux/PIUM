@@ -29,7 +29,9 @@ export default function Auth() {
     if (ref) localStorage.setItem('pium_ref', ref)
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate('/dashboard', { replace: true })
+      if (!session) return
+      const role = session.user?.app_metadata?.role
+      navigate(role === 'admin' ? '/admin' : '/dashboard', { replace: true })
     })
   }, [navigate])
 
@@ -46,14 +48,15 @@ export default function Auth() {
     setError(null)
 
     if (mode === 'login') {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: values.email,
         password: values.password,
       })
       if (error) {
         setError(translateError(error.message))
       } else {
-        navigate('/dashboard', { replace: true })
+        const role = data.user?.app_metadata?.role
+        navigate(role === 'admin' ? '/admin' : '/dashboard', { replace: true })
       }
     } else {
       const { error } = await supabase.auth.signUp({

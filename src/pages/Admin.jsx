@@ -48,7 +48,7 @@ export default function Admin() {
   /* ── Auth + role check ── */
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { navigate('/auth'); return }
+      if (!data.user) { navigate('/x-admin-login'); return }
       const role = data.user.app_metadata?.role
       if (role !== 'admin') { setDenied(true); setLoading(false); return }
       setUser(data.user)

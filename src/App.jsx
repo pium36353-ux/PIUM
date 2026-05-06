@@ -7,6 +7,7 @@ import Onboarding from './pages/Onboarding'
 import Dashboard  from './pages/Dashboard'
 import PublicSite from './pages/PublicSite'
 import Admin      from './pages/Admin'
+import AdminLogin from './pages/AdminLogin'
 import Settings   from './pages/Settings'
 import Affiliates     from './pages/Affiliates'
 import AffiliatesAuth from './pages/AffiliatesAuth'
@@ -39,7 +40,8 @@ export default function App() {
         <Route path="/auth"       element={<PublicRoute><Auth /></PublicRoute>} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/dashboard"  element={<Dashboard />} />
-        <Route path="/admin"      element={<Admin />} />
+        <Route path="/admin"           element={<Admin />} />
+        <Route path="/x-admin-login"   element={<AdminLogin />} />
         <Route path="/settings"   element={<Settings />} />
         <Route path="/site/:slug"   element={<PublicSite />} />
         <Route path="/affiliates"      element={<Affiliates />} />
