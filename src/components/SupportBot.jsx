@@ -1,17 +1,20 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 const CATEGORIE = [
-  { label: 'Sito',      icon: '🌐' },
-  { label: 'Agenda',    icon: '📅' },
-  { label: 'Social',    icon: '✍️' },
-  { label: 'Account',   icon: '👤' },
-  { label: 'Affiliati', icon: '🤝' },
+  { label: 'Sito',        icon: '🌐' },
+  { label: 'Agenda',      icon: '📅' },
+  { label: 'Social',      icon: '📱' },
+  { label: 'Recensioni',  icon: '⭐' },
+  { label: 'Account',     icon: '👤' },
+  { label: 'Affiliati',   icon: '🤝' },
 ]
 
 export default function SupportBot() {
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
+  const cacheRef  = useRef(null) // tutte le FAQ caricate una sola volta
+
   const [open,      setOpen]      = useState(false)
   const [screen,    setScreen]    = useState('categorie') // categorie | domande | risposta
   const [categoria, setCategoria] = useState(null)
@@ -19,17 +22,28 @@ export default function SupportBot() {
   const [selected,  setSelected]  = useState(null)
   const [loading,   setLoading]   = useState(false)
 
-  const selectCategoria = async (cat) => {
-    setCategoria(cat)
-    setScreen('domande')
+  const loadAllFaq = async () => {
+    if (cacheRef.current) return cacheRef.current
     setLoading(true)
     const { data } = await supabase
       .from('faq')
-      .select('id, domanda, risposta, link, ordine')
-      .eq('categoria', cat)
+      .select('id, categoria, domanda, risposta, link, ordine')
       .order('ordine', { ascending: true })
-    setDomande(data ?? [])
+    cacheRef.current = data ?? []
     setLoading(false)
+    return cacheRef.current
+  }
+
+  const handleOpen = async () => {
+    setOpen(true)
+    await loadAllFaq()
+  }
+
+  const selectCategoria = async (cat) => {
+    const all = await loadAllFaq()
+    setCategoria(cat)
+    setDomande(all.filter(f => f.categoria === cat))
+    setScreen('domande')
   }
 
   const selectDomanda = (faq) => {
@@ -83,21 +97,23 @@ export default function SupportBot() {
           <div className="bot-body">
             {screen === 'categorie' && (
               <div className="bot-list">
-                {CATEGORIE.map(({ label, icon }) => (
-                  <button key={label} className="bot-list-item" onClick={() => selectCategoria(label)}>
-                    <span className="bot-item-icon">{icon}</span>
-                    <span className="bot-item-label">{label}</span>
-                    <IconChevronRight />
-                  </button>
-                ))}
+                {loading ? (
+                  <div className="bot-loading"><BotSpinner /></div>
+                ) : (
+                  CATEGORIE.map(({ label, icon }) => (
+                    <button key={label} className="bot-list-item" onClick={() => selectCategoria(label)}>
+                      <span className="bot-item-icon">{icon}</span>
+                      <span className="bot-item-label">{label}</span>
+                      <IconChevronRight />
+                    </button>
+                  ))
+                )}
               </div>
             )}
 
             {screen === 'domande' && (
               <div className="bot-list">
-                {loading ? (
-                  <div className="bot-loading"><BotSpinner /></div>
-                ) : domande.length === 0 ? (
+                {domande.length === 0 ? (
                   <p className="bot-empty">Nessuna domanda disponibile per questa categoria.</p>
                 ) : (
                   domande.map(faq => (
@@ -122,15 +138,13 @@ export default function SupportBot() {
             )}
           </div>
 
-          <div className="bot-footer">
-            Supporto PIUM
-          </div>
+          <div className="bot-footer">Supporto PIUM</div>
         </div>
       )}
 
       <button
         className={`bot-fab ${open ? 'bot-fab--open' : ''}`}
-        onClick={() => setOpen(o => !o)}
+        onClick={open ? close : handleOpen}
         aria-label="Supporto"
       >
         {open ? <IconX /> : '?'}
@@ -148,5 +162,5 @@ function BotSpinner() {
   )
 }
 function IconChevronLeft()  { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg> }
-function IconChevronRight() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0, opacity:0.4}}><polyline points="9 18 15 12 9 6"/></svg> }
+function IconChevronRight() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:0.4}}><polyline points="9 18 15 12 9 6"/></svg> }
 function IconX()            { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
