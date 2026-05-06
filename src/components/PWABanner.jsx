@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Logo from './Logo'
 
 const DISMISS_KEY = 'pium_pwa_banner_dismissed'
@@ -7,6 +7,19 @@ export default function PWABanner() {
   const [mode, setMode] = useState(null) // null | 'install' | 'open'
   const [installPrompt, setInstallPrompt] = useState(null)
   const [visible, setVisible] = useState(false)
+  const bannerRef = useRef(null)
+
+  // Imposta --pwa-banner-h sul root così le navbar possono compensare
+  useEffect(() => {
+    const root = document.documentElement
+    if (visible && mode) {
+      const h = bannerRef.current?.offsetHeight ?? 52
+      root.style.setProperty('--pwa-banner-h', `${h}px`)
+    } else {
+      root.style.removeProperty('--pwa-banner-h')
+    }
+    return () => root.style.removeProperty('--pwa-banner-h')
+  }, [visible, mode])
 
   useEffect(() => {
     if (window.matchMedia('(display-mode: standalone)').matches) return
@@ -54,7 +67,7 @@ export default function PWABanner() {
   if (!visible || !mode) return null
 
   return (
-    <div className="pwa-banner">
+    <div className="pwa-banner" ref={bannerRef}>
       <div className="pwa-banner-left">
         <Logo className="pwa-banner-logo" />
         <span className="pwa-banner-text">

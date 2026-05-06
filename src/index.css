@@ -663,7 +663,7 @@ body {
     padding: 12px 16px;
     border-bottom: 1px solid var(--border);
     position: sticky;
-    top: 0;
+    top: var(--pwa-banner-h, 0px);
     background: var(--bg);
     z-index: 10;
   }
