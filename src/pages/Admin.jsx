@@ -517,6 +517,51 @@ export default function Admin() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Mobile cards */}
+                <div className="adm-cards">
+                  {affiliates.map(a => {
+                    const busy = activatingId === a.id
+                    return (
+                      <div key={a.id} className="adm-card">
+                        <div className="adm-card-head">
+                          <div className="adm-biz-cell">
+                            <div className="adm-biz-avatar">{a.name?.[0]?.toUpperCase() ?? '?'}</div>
+                            <div className="adm-biz-info">
+                              <span className="adm-biz-name">{a.name}</span>
+                              {a.email && <span className="adm-biz-cat">{a.email}</span>}
+                            </div>
+                          </div>
+                          <AffStatusBadge status={a.status} />
+                        </div>
+                        <div className="adm-card-meta">
+                          <span className="adm-cell-text">Codice: <code style={{ fontSize: 12, background: 'var(--surface)', padding: '2px 6px', borderRadius: 4 }}>{a.code}</code></span>
+                          <span className="adm-cell-text">Clienti: {a.total_clients ?? 0}</span>
+                          <span className="adm-cell-text">Guadagnato: €{Number(a.total_earned ?? 0).toFixed(2)}</span>
+                          <span className="adm-cell-text adm-cell-date">{formatDate(a.created_at)}</span>
+                        </div>
+                        <div className="adm-card-footer">
+                          <div className="adm-row-actions">
+                            {busy ? <AdminSpinner small /> : (
+                              <>
+                                {a.status !== 'approved' && (
+                                  <button className="adm-toggle-btn adm-toggle-btn--active" onClick={() => setAffiliateStatus(a.id, 'approved')} title="Attiva affiliato"><IconPlay /></button>
+                                )}
+                                {a.status === 'approved' && (
+                                  <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'pending')} title="Sospendi affiliato"><IconPause /></button>
+                                )}
+                                {a.status !== 'rejected' && (
+                                  <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'rejected')} title="Rifiuta affiliato" style={{ color: '#ef4444' }}><IconX /></button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
                 <p className="adm-count-label">{affiliates.length} affiliat{affiliates.length === 1 ? 'o' : 'i'}</p>
               </>
             )}
