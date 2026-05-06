@@ -11,13 +11,12 @@ const PLANS = [
   { value: 'pro',     label: 'Pro'     },
 ]
 
-const STATUS_FILTERS = ['tutti', 'attivo', 'trial', 'inattivo']
+const STATUS_FILTERS = ['tutti', 'active', 'trial', 'expired', 'suspended']
+const STATUS_FILTER_LABELS = { tutti: 'Tutti', active: 'Attivi', trial: 'Trial', expired: 'Scaduti', suspended: 'Sospesi' }
 
 /* ── Helpers ── */
 function getStatus(biz) {
-  if (!biz.is_active) return 'inattivo'
-  if (biz.plan === 'trial') return 'trial'
-  return 'attivo'
+  return biz.status ?? 'trial'
 }
 
 function formatDate(iso) {
@@ -61,7 +60,7 @@ export default function Admin() {
     setLoading(true)
     const { data } = await supabase
       .from('businesses')
-      .select('id, name, email, city, category, slug, plan, is_active, created_at')
+      .select('id, name, email, city, category, slug, plan, plan_price, is_active, status, trial_ends_at, created_at')
       .order('created_at', { ascending: false })
     setBusinesses(data ?? [])
     setLoading(false)
@@ -77,12 +76,28 @@ export default function Admin() {
     setUpdatingId(null)
   }
 
-  /* ── Toggle is_active ── */
-  const toggleActive = async (biz) => {
-    const next = !biz.is_active
+  /* ── Plan status ── */
+  const setBizStatus = async (id, status) => {
+    setUpdatingId(id)
+    await supabase.from('businesses').update({ status }).eq('id', id)
+    setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status } : b))
+    setUpdatingId(null)
+  }
+
+  const updatePlanPrice = async (id, plan_price) => {
+    await supabase.from('businesses').update({ plan_price }).eq('id', id)
+    setBusinesses(prev => prev.map(b => b.id === id ? { ...b, plan_price } : b))
+  }
+
+  const extendTrial = async (biz) => {
+    const base = biz.trial_ends_at && new Date(biz.trial_ends_at) > new Date()
+      ? new Date(biz.trial_ends_at)
+      : new Date()
+    base.setDate(base.getDate() + 30)
+    const trial_ends_at = base.toISOString()
     setUpdatingId(biz.id)
-    await supabase.from('businesses').update({ is_active: next }).eq('id', biz.id)
-    setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, is_active: next } : b))
+    await supabase.from('businesses').update({ trial_ends_at, status: 'trial' }).eq('id', biz.id)
+    setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, trial_ends_at, status: 'trial' } : b))
     setUpdatingId(null)
   }
 
@@ -125,9 +140,9 @@ export default function Admin() {
 
   /* ── Stats ── */
   const total    = businesses.length
-  const attivi   = businesses.filter(b => getStatus(b) === 'attivo').length
+  const attivi   = businesses.filter(b => getStatus(b) === 'active').length
   const trial    = businesses.filter(b => getStatus(b) === 'trial').length
-  const inattivi = businesses.filter(b => getStatus(b) === 'inattivo').length
+  const scaduti  = businesses.filter(b => getStatus(b) === 'expired').length
 
   /* ── Access denied ── */
   if (denied) {
@@ -197,10 +212,10 @@ export default function Admin() {
           <>
             {/* Stats */}
             <div className="adm-stats">
-              <StatCard label="Clienti totali"  value={total}    icon={<IconUsers />}  color="accent" />
-              <StatCard label="Attivi"           value={attivi}   icon={<IconCheck />}  color="green"  />
-              <StatCard label="In trial"         value={trial}    icon={<IconClock />}  color="yellow" />
-              <StatCard label="Inattivi"         value={inattivi} icon={<IconPause />}  color="gray"   />
+              <StatCard label="Clienti totali"  value={total}   icon={<IconUsers />}  color="accent" />
+              <StatCard label="Attivi"          value={attivi}  icon={<IconCheck />}  color="green"  />
+              <StatCard label="In trial"        value={trial}   icon={<IconClock />}  color="yellow" />
+              <StatCard label="Scaduti"         value={scaduti} icon={<IconPause />}  color="gray"   />
             </div>
 
             {/* Toolbar */}
@@ -227,7 +242,7 @@ export default function Admin() {
                     className={`adm-filter-btn ${statusFilter === s ? 'adm-filter-btn--active' : ''}`}
                     onClick={() => setStatusFilter(s)}
                   >
-                    {s === 'tutti' ? `Tutti (${total})` : s.charAt(0).toUpperCase() + s.slice(1)}
+                    {s === 'tutti' ? `Tutti (${total})` : STATUS_FILTER_LABELS[s]}
                   </button>
                 ))}
               </div>
@@ -253,6 +268,8 @@ export default function Admin() {
                         <th>Città</th>
                         <th>Piano</th>
                         <th>Stato</th>
+                        <th>Prezzo</th>
+                        <th>Trial scade</th>
                         <th>Registrato</th>
                         <th>Azioni</th>
                       </tr>
@@ -296,28 +313,42 @@ export default function Admin() {
                               <StatusBadge status={status} />
                             </td>
                             <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <input
+                                  className="adm-price-input"
+                                  type="number"
+                                  defaultValue={b.plan_price ?? 99}
+                                  onBlur={e => { const v = Number(e.target.value); if (v > 0 && v !== b.plan_price) updatePlanPrice(b.id, v) }}
+                                  disabled={busy}
+                                  min={0}
+                                />
+                                <span style={{ fontSize: 11, color: 'var(--text)' }}>€/m</span>
+                              </div>
+                            </td>
+                            <td>
+                              {b.status === 'trial'
+                                ? <span className="adm-cell-text adm-cell-date">{formatDate(b.trial_ends_at)}</span>
+                                : <span className="adm-cell-text">—</span>
+                              }
+                            </td>
+                            <td>
                               <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
                             </td>
                             <td>
                               <div className="adm-row-actions">
-                                <button
-                                  className={`adm-toggle-btn ${b.is_active ? 'adm-toggle-btn--active' : 'adm-toggle-btn--inactive'}`}
-                                  disabled={busy}
-                                  onClick={() => toggleActive(b)}
-                                  title={b.is_active ? 'Disattiva cliente' : 'Attiva cliente'}
-                                >
-                                  {busy ? <AdminSpinner small /> : b.is_active ? <IconPause /> : <IconPlay />}
-                                </button>
-                                {b.slug && (
-                                  <a
-                                    className="adm-link-btn"
-                                    href={`/site/${b.slug}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    title="Vedi sito pubblico"
-                                  >
-                                    <IconExternalLink />
-                                  </a>
+                                {busy ? <AdminSpinner small /> : (
+                                  <>
+                                    {b.status !== 'active' && (
+                                      <button className="adm-toggle-btn adm-toggle-btn--active" onClick={() => setBizStatus(b.id, 'active')} title="Attiva piano"><IconPlay /></button>
+                                    )}
+                                    {b.status !== 'suspended' && (
+                                      <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setBizStatus(b.id, 'suspended')} title="Sospendi"><IconPause /></button>
+                                    )}
+                                    <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => extendTrial(b)} title="Estendi trial +30gg" style={{ fontSize: 11, fontWeight: 700 }}>+30</button>
+                                    {b.slug && (
+                                      <a className="adm-link-btn" href={`/site/${b.slug}`} target="_blank" rel="noreferrer" title="Vedi sito pubblico"><IconExternalLink /></a>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </td>
@@ -348,38 +379,47 @@ export default function Admin() {
                         <div className="adm-card-meta">
                           {b.email && <span className="adm-cell-email">{b.email}</span>}
                           {b.city  && <span className="adm-cell-text">{b.city}</span>}
+                          {b.status === 'trial' && <span className="adm-cell-text adm-cell-date">Trial scade: {formatDate(b.trial_ends_at)}</span>}
                           <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
                         </div>
                         <div className="adm-card-footer">
-                          <select
-                            className="adm-plan-select"
-                            value={b.plan}
-                            disabled={busy}
-                            onChange={e => updatePlan(b.id, e.target.value)}
-                          >
-                            {PLANS.map(p => (
-                              <option key={p.value} value={p.value}>{p.label}</option>
-                            ))}
-                          </select>
-                          <div className="adm-row-actions">
-                            <button
-                              className={`adm-toggle-btn ${b.is_active ? 'adm-toggle-btn--active' : 'adm-toggle-btn--inactive'}`}
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <select
+                              className="adm-plan-select"
+                              value={b.plan}
                               disabled={busy}
-                              onClick={() => toggleActive(b)}
-                              title={b.is_active ? 'Disattiva' : 'Attiva'}
+                              onChange={e => updatePlan(b.id, e.target.value)}
                             >
-                              {busy ? <AdminSpinner small /> : b.is_active ? <IconPause /> : <IconPlay />}
-                            </button>
-                            {b.slug && (
-                              <a
-                                className="adm-link-btn"
-                                href={`/site/${b.slug}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                title="Vedi sito pubblico"
-                              >
-                                <IconExternalLink />
-                              </a>
+                              {PLANS.map(p => (
+                                <option key={p.value} value={p.value}>{p.label}</option>
+                              ))}
+                            </select>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <input
+                                className="adm-price-input"
+                                type="number"
+                                defaultValue={b.plan_price ?? 99}
+                                onBlur={e => { const v = Number(e.target.value); if (v > 0 && v !== b.plan_price) updatePlanPrice(b.id, v) }}
+                                disabled={busy}
+                                min={0}
+                              />
+                              <span style={{ fontSize: 11, color: 'var(--text)' }}>€/m</span>
+                            </div>
+                          </div>
+                          <div className="adm-row-actions">
+                            {busy ? <AdminSpinner small /> : (
+                              <>
+                                {b.status !== 'active' && (
+                                  <button className="adm-toggle-btn adm-toggle-btn--active" onClick={() => setBizStatus(b.id, 'active')} title="Attiva"><IconPlay /></button>
+                                )}
+                                {b.status !== 'suspended' && (
+                                  <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setBizStatus(b.id, 'suspended')} title="Sospendi"><IconPause /></button>
+                                )}
+                                <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => extendTrial(b)} title="+30gg trial" style={{ fontSize: 11, fontWeight: 700 }}>+30</button>
+                                {b.slug && (
+                                  <a className="adm-link-btn" href={`/site/${b.slug}`} target="_blank" rel="noreferrer" title="Vedi sito pubblico"><IconExternalLink /></a>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -503,11 +543,12 @@ function StatCard({ label, value, icon, color }) {
 
 function StatusBadge({ status }) {
   const map = {
-    attivo:   { label: 'Attivo',   cls: 'adm-badge--green'  },
-    trial:    { label: 'Trial',    cls: 'adm-badge--yellow' },
-    inattivo: { label: 'Inattivo', cls: 'adm-badge--gray'   },
+    active:    { label: 'Attivo',   cls: 'adm-badge--green'  },
+    trial:     { label: 'Trial',    cls: 'adm-badge--yellow' },
+    expired:   { label: 'Scaduto',  cls: 'adm-badge--red'    },
+    suspended: { label: 'Sospeso',  cls: 'adm-badge--gray'   },
   }
-  const { label, cls } = map[status] ?? map.inattivo
+  const { label, cls } = map[status] ?? { label: status, cls: 'adm-badge--gray' }
   return <span className={`adm-badge ${cls}`}>{label}</span>
 }
 
