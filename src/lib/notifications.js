@@ -58,6 +58,16 @@ export function scheduleAppointmentNotification(appointment, minutesBefore) {
   scheduled.set(String(appointment.id), tid)
 }
 
+export async function testNotification() {
+  if (Notification.permission !== 'granted') return false
+  await showViaServiceWorker(
+    'PIUM — Notifica di prova ✓',
+    'Le notifiche funzionano correttamente.',
+    {}
+  )
+  return true
+}
+
 export function notifyNextAppointment(appointments) {
   const raw = localStorage.getItem('pium_notification_settings')
   const settings = raw ? JSON.parse(raw) : {}

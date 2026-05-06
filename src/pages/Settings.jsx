@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
-import { requestPermission } from '../lib/notifications'
+import { requestPermission, testNotification } from '../lib/notifications'
 
 const NOTIF_KEY = 'pium_notification_settings'
 const DEFAULT_NOTIF = { appointmentMinutesBefore: 15, notifyNextOnComplete: false }
@@ -25,6 +25,7 @@ export default function Settings() {
     catch { return DEFAULT_NOTIF }
   })
   const [notifSaved, setNotifSaved] = useState(false)
+  const [testStatus, setTestStatus] = useState('idle') // idle | sent | error
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -39,14 +40,20 @@ export default function Settings() {
   }
 
   const setNotif = useCallback((k, v) => {
-    setNotifSettings(prev => ({ ...prev, [k]: v }))
-    setNotifSaved(false)
+    setNotifSettings(prev => {
+      const next = { ...prev, [k]: v }
+      localStorage.setItem(NOTIF_KEY, JSON.stringify(next))
+      return next
+    })
+    setNotifSaved(true)
+    setTimeout(() => setNotifSaved(false), 1500)
   }, [])
 
-  const saveNotifSettings = () => {
-    localStorage.setItem(NOTIF_KEY, JSON.stringify(notifSettings))
-    setNotifSaved(true)
-    setTimeout(() => setNotifSaved(false), 2000)
+  const handleTestNotification = async () => {
+    setTestStatus('idle')
+    const ok = await testNotification()
+    setTestStatus(ok ? 'sent' : 'error')
+    setTimeout(() => setTestStatus('idle'), 3000)
   }
 
   const setP = (k, v) => { setPwd(p => ({ ...p, [k]: v })); setPwdError('') }
@@ -165,11 +172,10 @@ export default function Settings() {
                   value={notifSettings.appointmentMinutesBefore}
                   onChange={e => setNotif('appointmentMinutesBefore', Number(e.target.value))}
                 >
-                  <option value={5}>5 minuti prima</option>
-                  <option value={10}>10 minuti prima</option>
                   <option value={15}>15 minuti prima</option>
                   <option value={30}>30 minuti prima</option>
                   <option value={60}>1 ora prima</option>
+                  <option value={120}>2 ore prima</option>
                 </select>
               </div>
 
@@ -184,8 +190,18 @@ export default function Settings() {
                 </button>
               </div>
 
-              <button className="sett-btn-primary" onClick={saveNotifSettings} style={{ marginTop: 12 }}>
-                {notifSaved ? <><IconCheck /> Salvato</> : 'Salva impostazioni'}
+              {notifSaved && (
+                <p className="sett-success" style={{ marginTop: 8 }}><IconCheck /> Impostazioni salvate</p>
+              )}
+
+              <button
+                className="sett-btn-primary"
+                onClick={handleTestNotification}
+                style={{ marginTop: 12 }}
+                disabled={testStatus === 'sent'}
+              >
+                <IconBell />
+                {testStatus === 'sent' ? 'Notifica inviata ✓' : testStatus === 'error' ? 'Abilita notifiche prima' : 'Invia notifica di prova'}
               </button>
             </>
           )}
