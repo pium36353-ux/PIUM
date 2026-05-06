@@ -17,8 +17,8 @@ async function showViaServiceWorker(title, body, data = {}) {
     const reg = await navigator.serviceWorker.ready
     await reg.showNotification(title, {
       body,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
       actions: [{ action: 'complete', title: '✓ Fatto' }],
       data,
       tag: data.appointmentId ? `apt-${data.appointmentId}` : undefined,
@@ -26,7 +26,7 @@ async function showViaServiceWorker(title, body, data = {}) {
   } catch {
     // fallback se SW non supporta showNotification
     if (Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/icons/icon-192.png' })
+      new Notification(title, { body, icon: '/icon-192.png' })
     }
   }
 }

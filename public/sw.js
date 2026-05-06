@@ -28,8 +28,8 @@ self.addEventListener('push', (e) => {
   e.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
       actions: [{ action: 'complete', title: '✓ Fatto' }],
       data: data.data ?? {},
       tag: data.data?.appointmentId ? `apt-${data.data.appointmentId}` : undefined,
