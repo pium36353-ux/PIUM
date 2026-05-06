@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 const CATEGORIE = [
@@ -13,7 +13,13 @@ const CATEGORIE = [
 
 export default function SupportBot() {
   const navigate  = useNavigate()
+  const location  = useLocation()
   const cacheRef  = useRef(null) // tutte le FAQ caricate una sola volta
+
+  const isAffiliatePage = location.pathname.startsWith('/affiliates')
+  const categorieVisibili = CATEGORIE.filter(c =>
+    isAffiliatePage ? c.label === 'Affiliati' : c.label !== 'Affiliati'
+  )
 
   const [open,      setOpen]      = useState(false)
   const [screen,    setScreen]    = useState('categorie') // categorie | domande | risposta
@@ -100,7 +106,7 @@ export default function SupportBot() {
                 {loading ? (
                   <div className="bot-loading"><BotSpinner /></div>
                 ) : (
-                  CATEGORIE.map(({ label, icon }) => (
+                  categorieVisibili.map(({ label, icon }) => (
                     <button key={label} className="bot-list-item" onClick={() => selectCategoria(label)}>
                       <span className="bot-item-icon">{icon}</span>
                       <span className="bot-item-label">{label}</span>
