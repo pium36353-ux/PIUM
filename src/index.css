@@ -6493,10 +6493,10 @@ code {
   max-height: 460px;
   display: flex;
   flex-direction: column;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+  background: white;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
   overflow: hidden;
   animation: bot-pop 0.18s ease;
 }
