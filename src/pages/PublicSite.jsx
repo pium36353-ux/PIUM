@@ -225,6 +225,29 @@ export default function PublicSite() {
             </div>
           )}
 
+          {/* Opening hours */}
+          {business.opening_hours && (
+            <div className="ps-card">
+              <h2 className="ps-card-title">Orari di apertura</h2>
+              <div className="ps-hours-list">
+                {['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => {
+                  const d = business.opening_hours[day]
+                  if (!d) return null
+                  const label = { monday:'Lunedì', tuesday:'Martedì', wednesday:'Mercoledì', thursday:'Giovedì', friday:'Venerdì', saturday:'Sabato', sunday:'Domenica' }[day]
+                  return (
+                    <div key={day} className="ps-hours-row">
+                      <span className="ps-hours-day">{label}</span>
+                      {d.closed
+                        ? <span className="ps-hours-closed">Chiuso</span>
+                        : <span className="ps-hours-time">{d.open} – {d.close}</span>
+                      }
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Location */}
           {hasLocation && (
             <div className="ps-card">

@@ -381,6 +381,7 @@ export default function Agenda({ business }) {
             deleteAppointment={deleteAppointment}
             setConfirmDelId={setConfirmDelId}
             selectedDay={selectedDay}
+            openingHours={business?.opening_hours}
           />
 
           {/* Daily summary */}
@@ -581,16 +582,31 @@ function buildAptBlocks(apts) {
   return items
 }
 
-function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay }) {
+const DAY_KEYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday']
+
+function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours }) {
   const wrapRef = useRef(null)
 
   useEffect(() => {
     if (loading || !wrapRef.current) return
     const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0)
     const isToday = selectedDay.getTime() === todayMidnight.getTime()
-    const targetHour = isToday ? Math.max(0, new Date().getHours() - 1) : 8
-    wrapRef.current.scrollTop = targetHour * 60 * SLOT_H / 5
-  }, [selectedDay, loading])
+
+    let scrollPx
+    if (isToday) {
+      scrollPx = Math.max(0, new Date().getHours() - 1) * 60 * SLOT_H / 5
+    } else {
+      const dayKey = DAY_KEYS[selectedDay.getDay()]
+      const dayH   = openingHours?.[dayKey]
+      if (dayH && !dayH.closed && dayH.open) {
+        const [h, m] = dayH.open.split(':').map(Number)
+        scrollPx = ((h * 60 + m) / 5) * SLOT_H
+      } else {
+        scrollPx = 8 * 60 * SLOT_H / 5
+      }
+    }
+    wrapRef.current.scrollTop = scrollPx
+  }, [selectedDay, loading, openingHours])
 
   const blocks = buildAptBlocks(dayApts)
 

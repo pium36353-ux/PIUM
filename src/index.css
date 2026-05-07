@@ -3180,6 +3180,39 @@ body {
   &:hover { text-decoration: underline; }
 }
 
+/* ── Opening hours (public site) ── */
+.ps-hours-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ps-hours-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.ps-hours-day {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.ps-hours-time {
+  color: var(--text-h);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ps-hours-closed {
+  color: var(--text);
+  opacity: 0.5;
+  font-style: italic;
+}
+
 /* ── Footer ── */
 /* ── Carosello galleria ── */
 .ps-carousel {
@@ -5943,6 +5976,99 @@ code {
 }
 
 .ag-emp-add-btn { align-self: flex-start; }
+
+/* ── Opening hours (dashboard) ── */
+.oh-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.oh-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  transition: background 0.15s;
+}
+
+.oh-row:last-child { border-bottom: none; }
+
+.oh-row--closed { background: var(--surface); }
+
+.oh-day-label {
+  width: 92px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+  flex-shrink: 0;
+}
+
+.oh-times {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.oh-time-input {
+  font-size: 13px;
+  color: var(--text-h);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-family: var(--sans);
+  font-variant-numeric: tabular-nums;
+  width: 92px;
+  outline: none;
+  cursor: pointer;
+
+  &:focus { border-color: var(--accent); }
+}
+
+.oh-sep {
+  font-size: 13px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.oh-closed-text {
+  font-size: 13px;
+  color: var(--text);
+  font-style: italic;
+}
+
+.oh-row-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.oh-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.oh-toggle-text {
+  font-size: 12px;
+  color: var(--text);
+  user-select: none;
+}
+
+@media (max-width: 500px) {
+  .oh-row { flex-wrap: wrap; gap: 8px; }
+  .oh-day-label { width: auto; }
+  .oh-row-end { margin-left: auto; }
+}
 
 .ag-add-another-btn {
   width: 100%;
