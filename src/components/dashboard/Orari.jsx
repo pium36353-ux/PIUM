@@ -18,6 +18,8 @@ const DEFAULT_HOURS = {
   sunday:    { open:'09:00', close:'13:00', closed:true  },
 }
 
+export { DAY_ORDER, DAY_LABELS, DEFAULT_HOURS }
+
 export default function Orari({ business }) {
   const [hours, setHours] = useState(() => {
     const saved = business?.opening_hours ?? {}
@@ -37,7 +39,11 @@ export default function Orari({ business }) {
     const next = { ...hours, [day]: { ...hours[day], [field]: value } }
     setHours(next)
     setSaving(day)
-    await supabase.from('businesses').update({ opening_hours: next }).eq('id', business.id)
+    const { error } = await supabase
+      .from('businesses')
+      .update({ opening_hours: next })
+      .eq('id', business.id)
+    if (error) console.error('Errore salvataggio orari:', error)
     setSaving(null)
   }
 
@@ -48,9 +54,10 @@ export default function Orari({ business }) {
           const d = hours[day]
           return (
             <div key={day} className={`oh-row ${d.closed ? 'oh-row--closed' : ''}`}>
-              <span className="oh-day-label">{DAY_LABELS[day]}</span>
-
-              <div className="oh-times">
+              <div className="oh-row-top">
+                <span className="oh-day-label">{DAY_LABELS[day]}</span>
+              </div>
+              <div className="oh-row-bottom">
                 {d.closed ? (
                   <span className="oh-closed-text">Chiuso</span>
                 ) : (
@@ -70,10 +77,6 @@ export default function Orari({ business }) {
                     />
                   </>
                 )}
-              </div>
-
-              <div className="oh-row-end">
-                {saving === day && <OhSpinner />}
                 <label className="oh-toggle-label">
                   <span className="oh-toggle-text">Chiuso</span>
                   <button
@@ -85,6 +88,7 @@ export default function Orari({ business }) {
                     <span className="sett-toggle-thumb" />
                   </button>
                 </label>
+                {saving === day && <OhSpinner />}
               </div>
             </div>
           )

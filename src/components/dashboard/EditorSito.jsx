@@ -94,6 +94,8 @@ export default function EditorSito({ business }) {
           )}
         </div>
       </div>
+
+      <OpeningHoursBlock business={business} />
     </div>
   )
 }
@@ -481,6 +483,98 @@ function SaveButton({ status, onClick }) {
       {status === 'error'  && 'Errore — riprova'}
       {status === 'idle'   && 'Salva'}
     </button>
+  )
+}
+
+/* ── Opening hours block ── */
+const OH_DAY_ORDER = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
+const OH_DAY_LABELS = {
+  monday:'Lunedì', tuesday:'Martedì', wednesday:'Mercoledì',
+  thursday:'Giovedì', friday:'Venerdì', saturday:'Sabato', sunday:'Domenica',
+}
+const OH_DEFAULT = {
+  monday:    { open:'09:00', close:'18:00', closed:false },
+  tuesday:   { open:'09:00', close:'18:00', closed:false },
+  wednesday: { open:'09:00', close:'18:00', closed:false },
+  thursday:  { open:'09:00', close:'18:00', closed:false },
+  friday:    { open:'09:00', close:'18:00', closed:false },
+  saturday:  { open:'09:00', close:'13:00', closed:false },
+  sunday:    { open:'09:00', close:'13:00', closed:true  },
+}
+
+function OpeningHoursBlock({ business }) {
+  const [hours, setHours] = useState(() => {
+    const saved = business?.opening_hours ?? {}
+    return Object.fromEntries(
+      OH_DAY_ORDER.map(day => [day, { ...OH_DEFAULT[day], ...(saved[day] ?? {}) }])
+    )
+  })
+  const [saving, setSaving] = useState(null)
+
+  const update = async (day, field, value) => {
+    const next = { ...hours, [day]: { ...hours[day], [field]: value } }
+    setHours(next)
+    setSaving(day)
+    const { error } = await supabase
+      .from('businesses')
+      .update({ opening_hours: next })
+      .eq('id', business.id)
+    if (error) console.error('Errore salvataggio orari:', error)
+    setSaving(null)
+  }
+
+  return (
+    <div className="db-card" style={{ marginTop: 20 }}>
+      <div className="ed-block-header">
+        <h3 className="db-card-title">Orari di apertura</h3>
+        <p className="ed-block-desc">Mostrati nel sito pubblico. Attiva il toggle per segnare un giorno come chiuso.</p>
+      </div>
+      <div className="oh-list">
+        {OH_DAY_ORDER.map(day => {
+          const d = hours[day]
+          return (
+            <div key={day} className={`oh-row ${d.closed ? 'oh-row--closed' : ''}`}>
+              <div className="oh-row-top">
+                <span className="oh-day-label">{OH_DAY_LABELS[day]}</span>
+              </div>
+              <div className="oh-row-bottom">
+                {d.closed ? (
+                  <span className="oh-closed-text">Chiuso</span>
+                ) : (
+                  <>
+                    <input
+                      type="time"
+                      className="oh-time-input"
+                      value={d.open}
+                      onChange={e => update(day, 'open', e.target.value)}
+                    />
+                    <span className="oh-sep">–</span>
+                    <input
+                      type="time"
+                      className="oh-time-input"
+                      value={d.close}
+                      onChange={e => update(day, 'close', e.target.value)}
+                    />
+                  </>
+                )}
+                <label className="oh-toggle-label">
+                  <span className="oh-toggle-text">Chiuso</span>
+                  <button
+                    className={`sett-toggle ${d.closed ? 'sett-toggle--on' : ''}`}
+                    onClick={() => update(day, 'closed', !d.closed)}
+                    aria-pressed={d.closed}
+                    type="button"
+                  >
+                    <span className="sett-toggle-thumb" />
+                  </button>
+                </label>
+                {saving === day && <EdSpinner />}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
