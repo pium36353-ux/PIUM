@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
+import imageCompression from 'browser-image-compression'
 
 const BLOCKS = [
   { id: 'hero',    label: 'Intestazione principale' },
@@ -12,8 +13,8 @@ const BLOCKS = [
 const ABOUT_MAX      = 500
 const COVER_MAX_MB   = 5
 const COVER_ACCEPT   = ['image/jpeg', 'image/png', 'image/webp']
-const GALLERY_MAX    = 5
-const GALLERY_MAX_MB = 5
+const GALLERY_MAX    = 20
+const GALLERY_MAX_MB = 50 // pre-compression limit (generous); target output is 0.8 MB via compression
 
 export default function EditorSito({ business }) {
   const [active,  setActive]  = useState('hero')
@@ -102,6 +103,19 @@ export default function EditorSito({ business }) {
       <SocialBlock business={business} />
     </div>
   )
+}
+
+/* ── Image compression helper ── */
+async function compressImage(file) {
+  try {
+    return await imageCompression(file, {
+      maxSizeMB: 0.8,
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+    })
+  } catch {
+    return file // fallback to original if compression fails
+  }
 }
 
 /* ── Save helper: INSERT se non esiste, UPDATE se esiste ── */
@@ -272,12 +286,13 @@ function CoverBlock({ business, row, onSaved }) {
     }
 
     setUploading(true)
+    const compressed = await compressImage(file)
     const ext  = file.name.split('.').pop().toLowerCase()
     const path = `${business.id}/cover.${ext}`
 
     const { error: upErr } = await supabase.storage
       .from('site-images')
-      .upload(path, file, { upsert: true, contentType: file.type })
+      .upload(path, compressed, { upsert: true, contentType: file.type })
 
     if (upErr) {
       setFileError('Errore durante il caricamento. Riprova.')
@@ -372,11 +387,11 @@ function CoverBlock({ business, row, onSaved }) {
 /* ── Galleria fotografica ── */
 function GalleryBlock({ business, row, onSaved }) {
   const rowRef = useRef(row)
-  const [images,   setImages]   = useState(() => {
+  const [images,         setImages]         = useState(() => {
     try { return JSON.parse(row?.body ?? '[]') } catch { return [] }
   })
-  const [uploading, setUploading] = useState(false)
-  const [fileError, setFileError] = useState(null)
+  const [uploadProgress, setUploadProgress] = useState(null) // null | { done, total }
+  const [fileError,      setFileError]      = useState(null)
   const inputRef = useRef(null)
 
   const persist = async (newImages) => {
@@ -387,31 +402,50 @@ function GalleryBlock({ business, row, onSaved }) {
     return error
   }
 
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const handleFiles = async (e) => {
+    const fileList = Array.from(e.target.files ?? [])
+    if (!fileList.length) return
     e.target.value = ''
     setFileError(null)
 
-    if (!COVER_ACCEPT.includes(file.type)) { setFileError('Formato non supportato. Usa JPG, PNG o WebP.'); return }
-    if (file.size > GALLERY_MAX_MB * 1024 * 1024) { setFileError(`Il file supera i ${GALLERY_MAX_MB} MB.`); return }
-    if (images.length >= GALLERY_MAX) { setFileError(`Puoi caricare al massimo ${GALLERY_MAX} immagini.`); return }
+    const remaining = GALLERY_MAX - images.length
+    if (remaining <= 0) { setFileError(`Hai raggiunto il limite di ${GALLERY_MAX} foto.`); return }
 
-    setUploading(true)
-    const ext  = file.name.split('.').pop().toLowerCase()
-    const path = `${business.id}/gallery_${Date.now()}.${ext}`
+    const valid = fileList
+      .slice(0, remaining)
+      .filter(f => COVER_ACCEPT.includes(f.type))
 
-    const { error: upErr } = await supabase.storage
-      .from('site-images')
-      .upload(path, file, { contentType: file.type })
+    if (!valid.length) { setFileError('Nessun file valido. Usa JPG, PNG o WebP.'); return }
+    if (fileList.length > remaining) {
+      setFileError(`Puoi aggiungere solo ${remaining} foto. Le prime ${valid.length} verranno caricate.`)
+    }
 
-    if (upErr) { setFileError('Errore durante il caricamento. Riprova.'); setUploading(false); return }
+    setUploadProgress({ done: 0, total: valid.length })
+    let current = [...images]
 
-    const { data: { publicUrl } } = supabase.storage.from('site-images').getPublicUrl(path)
-    const newImages = [...images, publicUrl]
-    setImages(newImages)
-    await persist(newImages)
-    setUploading(false)
+    for (let i = 0; i < valid.length; i++) {
+      const file = valid[i]
+      const compressed = await compressImage(file)
+      const ext  = file.name.split('.').pop().toLowerCase()
+      const path = `${business.id}/gallery_${Date.now()}_${i}.${ext}`
+
+      const { error: upErr } = await supabase.storage
+        .from('site-images')
+        .upload(path, compressed, { contentType: file.type })
+
+      if (upErr) {
+        setFileError(`Errore nella foto ${i + 1}. Le precedenti sono state salvate.`)
+        break
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('site-images').getPublicUrl(path)
+      current = [...current, publicUrl]
+      setImages(current)
+      setUploadProgress({ done: i + 1, total: valid.length })
+    }
+
+    await persist(current)
+    setUploadProgress(null)
   }
 
   const handleDelete = async (url) => {
@@ -420,17 +454,39 @@ function GalleryBlock({ business, row, onSaved }) {
     await persist(newImages)
   }
 
+  const uploading = uploadProgress !== null
+
   return (
     <div className="db-card">
       <div className="ed-block-header">
         <h3 className="db-card-title">Galleria fotografica</h3>
         <p className="ed-block-desc">
           Aggiungi fino a {GALLERY_MAX} foto. Appaiono come carosello nel sito pubblico.
-          Formati: JPG, PNG, WebP — max {GALLERY_MAX_MB} MB ciascuna.
+          Formati: JPG, PNG, WebP. Puoi selezionare più file in una volta.
         </p>
       </div>
 
       <div className="ed-fields">
+        <div className="ed-gallery-counter">
+          <span className={images.length >= GALLERY_MAX ? 'ed-gallery-counter--full' : ''}>
+            {images.length} / {GALLERY_MAX} foto
+          </span>
+        </div>
+
+        {uploadProgress && (
+          <div className="ed-gallery-progress-wrap">
+            <div className="ed-gallery-progress-bar-track">
+              <div
+                className="ed-gallery-progress-bar-fill"
+                style={{ width: `${(uploadProgress.done / uploadProgress.total) * 100}%` }}
+              />
+            </div>
+            <span className="ed-gallery-progress-text">
+              {uploadProgress.done} / {uploadProgress.total} foto caricate…
+            </span>
+          </div>
+        )}
+
         {images.length > 0 && (
           <div className="ed-gallery-grid">
             {images.map((url, i) => (
@@ -440,6 +496,7 @@ function GalleryBlock({ business, row, onSaved }) {
                   className="ed-gallery-thumb-del"
                   onClick={() => handleDelete(url)}
                   title="Elimina foto"
+                  disabled={uploading}
                 >
                   <IconTrash />
                 </button>
@@ -456,18 +513,25 @@ function GalleryBlock({ business, row, onSaved }) {
             type="button"
           >
             {uploading ? (
-              <><EdSpinner /><span>Caricamento in corso…</span></>
+              <><EdSpinner /><span>Compressione e caricamento…</span></>
             ) : (
               <>
                 <div className="ed-cover-dropzone-icon"><IconUpload /></div>
-                <span className="ed-cover-dropzone-text">Aggiungi foto</span>
-                <span className="ed-cover-dropzone-hint">{images.length}/{GALLERY_MAX} caricate</span>
+                <span className="ed-cover-dropzone-text">Clicca per aggiungere foto</span>
+                <span className="ed-cover-dropzone-hint">Puoi selezionare più file — JPG, PNG, WebP</span>
               </>
             )}
           </button>
         )}
 
-        <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} style={{ display: 'none' }} />
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          onChange={handleFiles}
+          style={{ display: 'none' }}
+        />
         {fileError && <p className="ed-file-error">{fileError}</p>}
       </div>
     </div>
@@ -605,12 +669,13 @@ function ProfileImageBlock({ business }) {
     }
 
     setUploading(true)
+    const compressed = await compressImage(file)
     const ext  = file.name.split('.').pop().toLowerCase()
     const path = `${business.id}/profile.${ext}`
 
     const { error: upErr } = await supabase.storage
       .from('site-images')
-      .upload(path, file, { upsert: true, contentType: file.type })
+      .upload(path, compressed, { upsert: true, contentType: file.type })
 
     if (upErr) {
       setFileError('Errore durante il caricamento. Riprova.')

@@ -6437,6 +6437,39 @@ code {
 .ed-gallery-thumb:hover .ed-gallery-thumb-del { opacity: 1; }
 .ed-gallery-add-zone { min-height: 100px; padding: 20px 16px; }
 
+.ed-gallery-counter {
+  font-size: 13px;
+  color: var(--text-s);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.ed-gallery-counter--full {
+  color: var(--accent);
+  font-weight: 700;
+}
+.ed-gallery-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.ed-gallery-progress-bar-track {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--border);
+  overflow: hidden;
+}
+.ed-gallery-progress-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.ed-gallery-progress-text {
+  font-size: 12px;
+  color: var(--text-s);
+}
+
 /* Profile image */
 .ed-profile-card { margin-bottom: 20px; }
 .ed-profile-area { display: flex; flex-direction: column; gap: 12px; }
