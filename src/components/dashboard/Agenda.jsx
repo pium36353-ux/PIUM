@@ -92,6 +92,7 @@ export default function Agenda({ business }) {
   const [togglingId,    setTogglingId]    = useState(null)
   const [confirmDelId,  setConfirmDelId]  = useState(null)
   const [editingId,     setEditingId]     = useState(null)
+  const [addAnotherTime, setAddAnotherTime] = useState(null)
   const [taxRate,       setTaxRate]       = useState(22)
 
   // Read location state after mount: atomically set date + view, then clear state
@@ -147,7 +148,7 @@ export default function Agenda({ business }) {
     setErrors({})
     setShowModal(true)
   }
-  const openEditModal = (apt) => {
+  const openEditModal = (apt, tappedTime = null) => {
     loadEmployees()
     setForm({
       date:             apt.date,
@@ -159,10 +160,11 @@ export default function Agenda({ business }) {
       notes:            apt.notes ?? '',
     })
     setEditingId(apt.id)
+    setAddAnotherTime(tappedTime ?? apt.start_time?.slice(0, 5) ?? '09:00')
     setErrors({})
     setShowModal(true)
   }
-  const closeModal = () => { setShowModal(false); setEditingId(null) }
+  const closeModal = () => { setShowModal(false); setEditingId(null); setAddAnotherTime(null) }
   const setField = (f) => (e) => { setForm(p => ({ ...p, [f]: e.target.value })); setErrors(p => ({ ...p, [f]: null })) }
 
   /* ── Validation ── */
@@ -459,13 +461,14 @@ export default function Agenda({ business }) {
                   className="ag-add-another-btn"
                   onClick={() => {
                     const date = form.date
-                    const time = form.start_time
+                    const time = addAnotherTime ?? form.start_time
                     setEditingId(null)
+                    setAddAnotherTime(null)
                     setForm({ ...EMPTY_FORM, date, start_time: time })
                     setErrors({})
                   }}
                 >
-                  + Aggiungi altro appuntamento alle {form.start_time?.slice(0, 5)}
+                  + Aggiungi altro appuntamento alle {addAnotherTime ?? form.start_time?.slice(0, 5)}
                 </button>
               )}
 
@@ -664,7 +667,13 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                     zIndex: 1,
                     boxSizing: 'border-box',
                   }}
-                  onClick={() => openEditModal(apt)}
+                  onClick={(e) => {
+                    const offsetY = e.clientY - e.currentTarget.getBoundingClientRect().top
+                    const tappedMin = apt.startMin + Math.floor(offsetY / SLOT_H) * 5
+                    const th = Math.floor(tappedMin / 60)
+                    const tm = tappedMin % 60
+                    openEditModal(apt, `${String(th).padStart(2,'0')}:${String(tm).padStart(2,'0')}`)
+                  }}
                 >
                   <div className="ag-apt-inner">
                     <div className="ag-apt-top-row">
