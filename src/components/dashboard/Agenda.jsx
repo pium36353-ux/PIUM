@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
-import { notifyNextAppointment } from '../../lib/notifications'
+import { notifyNextAppointment, scheduleAllTodayNotifications } from '../../lib/notifications'
 
 const COLORS    = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f43f5e','#84cc16','#a78bfa']
 const DURATIONS = [15, 30, 45, 60, 90, 120]
@@ -130,6 +130,7 @@ export default function Agenda({ business }) {
     }
     const { data } = await q.order('date').order('start_time')
     setAppointments(data ?? [])
+    scheduleAllTodayNotifications(data ?? [])
     setLoading(false)
   }, [business, view, monthDate, selectedDay])
 

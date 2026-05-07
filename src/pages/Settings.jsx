@@ -172,6 +172,9 @@ export default function Settings() {
                   value={notifSettings.appointmentMinutesBefore}
                   onChange={e => setNotif('appointmentMinutesBefore', Number(e.target.value))}
                 >
+                  <option value={0}>Al momento esatto</option>
+                  <option value={1}>1 minuto prima</option>
+                  <option value={5}>5 minuti prima</option>
                   <option value={15}>15 minuti prima</option>
                   <option value={30}>30 minuti prima</option>
                   <option value={60}>1 ora prima</option>

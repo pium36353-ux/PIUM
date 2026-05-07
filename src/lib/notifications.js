@@ -58,6 +58,18 @@ export function scheduleAppointmentNotification(appointment, minutesBefore) {
   scheduled.set(String(appointment.id), tid)
 }
 
+export function scheduleAllTodayNotifications(appointments) {
+  if (Notification.permission !== 'granted') return
+  const raw = localStorage.getItem('pium_notification_settings')
+  const settings = raw ? JSON.parse(raw) : {}
+  const minutesBefore = Number(settings.appointmentMinutesBefore ?? 15)
+  const today   = new Date().toISOString().slice(0, 10)
+  const timeNow = new Date().toTimeString().slice(0, 5)
+  ;(appointments ?? [])
+    .filter(a => !a.completed && a.date === today && a.start_time > timeNow)
+    .forEach(a => scheduleAppointmentNotification(a, minutesBefore))
+}
+
 export async function testNotification() {
   if (Notification.permission !== 'granted') return false
   await showViaServiceWorker(

@@ -13,6 +13,7 @@ import Affiliates     from './pages/Affiliates'
 import AffiliatesAuth from './pages/AffiliatesAuth'
 import PWABanner      from './components/PWABanner'
 import SupportBot     from './components/SupportBot'
+import { scheduleAllTodayNotifications } from './lib/notifications'
 
 function RefRedirect() {
   const { code } = useParams()
@@ -34,9 +35,28 @@ function PublicRoute({ children }) {
   return children
 }
 
+function NotificationScheduler() {
+  useEffect(() => {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data: biz } = await supabase
+        .from('businesses').select('id').eq('user_id', session.user.id).maybeSingle()
+      if (!biz) return
+      const today = new Date().toISOString().slice(0, 10)
+      const { data: apts } = await supabase
+        .from('appointments').select('*')
+        .eq('business_id', biz.id).eq('date', today).eq('completed', false)
+      scheduleAllTodayNotifications(apts ?? [])
+    })
+  }, [])
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <NotificationScheduler />
       <PWABanner />
       <SupportBot />
       <Routes>
