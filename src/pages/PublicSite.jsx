@@ -10,6 +10,7 @@ export default function PublicSite() {
   const [services,    setServices]    = useState([])
   const [reviews,     setReviews]     = useState([])
   const [status,      setStatus]      = useState('loading') // loading | found | notfound
+  const [isOwner,     setIsOwner]     = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -52,6 +53,13 @@ export default function PublicSite() {
     load()
     return () => { document.title = 'PIUM' }
   }, [slug])
+
+  useEffect(() => {
+    if (!business) return
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.id === business.user_id) setIsOwner(true)
+    })
+  }, [business])
 
   useEffect(() => {
     if (status !== 'found' || !business) return
@@ -102,7 +110,15 @@ export default function PublicSite() {
   const ctaBg     = hasImgBg ? 'rgba(255,255,255,0.22)' : theme.accent
 
   return (
-    <div className="ps-shell">
+    <div className={`ps-shell${isOwner ? ' ps-shell--preview' : ''}`}>
+
+      {/* ── Owner preview banner ── */}
+      {isOwner && (
+        <div className="ps-owner-banner">
+          <span className="ps-owner-banner-text">Stai visualizzando il tuo sito</span>
+          <Link to="/dashboard?s=editor" className="ps-owner-banner-btn">Torna all'editor</Link>
+        </div>
+      )}
 
       {/* ── Hero ── */}
       <header className="ps-hero" style={heroStyle}>
