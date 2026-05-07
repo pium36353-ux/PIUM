@@ -23,14 +23,15 @@ const CATEGORIES = [
 const STEPS = ['La tua attività', 'Contatti', 'Sede']
 
 const EMPTY = {
-  name:        '',
-  category:    '',
-  description: '',
-  phone:       '',
-  whatsapp:    '',
-  email:       '',
-  address:     '',
-  city:        '',
+  name:                '',
+  category:            '',
+  business_type_custom:'',
+  description:         '',
+  phone:               '',
+  whatsapp:            '',
+  email:               '',
+  address:             '',
+  city:                '',
 }
 
 function toSlug(name) {
@@ -108,16 +109,17 @@ export default function Onboarding() {
     const { data: biz, error } = await supabase
       .from('businesses')
       .insert({
-        user_id:        user.id,
-        name:           form.name.trim(),
-        slug:           toSlug(form.name.trim()),
-        category:       form.category,
-        phone:          form.phone.trim()    || null,
-        whatsapp:       form.whatsapp.trim() || null,
-        email:          form.email.trim()    || null,
-        address:        form.address.trim()  || null,
-        city:           form.city.trim(),
-        affiliate_code: affiliateCode,
+        user_id:             user.id,
+        name:                form.name.trim(),
+        slug:                toSlug(form.name.trim()),
+        category:            form.category,
+        business_type_custom:form.business_type_custom.trim() || null,
+        phone:               form.phone.trim()    || null,
+        whatsapp:            form.whatsapp.trim() || null,
+        email:               form.email.trim()    || null,
+        address:             form.address.trim()  || null,
+        city:                form.city.trim(),
+        affiliate_code:      affiliateCode,
       })
       .select('id')
       .single()
@@ -224,6 +226,20 @@ export default function Onboarding() {
                 ))}
               </div>
             </div>
+            {form.category === 'Altro' && (
+              <div className="ob-field" style={{ marginTop: 12 }}>
+                <label className="ob-label" htmlFor="business_type_custom">Descrivi la tua attività <span className="ob-optional">(facoltativo)</span></label>
+                <input
+                  id="business_type_custom"
+                  className="ob-input"
+                  type="text"
+                  value={form.business_type_custom}
+                  onChange={set('business_type_custom')}
+                  placeholder="es. Agenzia immobiliare, Tatuatore…"
+                  maxLength={60}
+                />
+              </div>
+            )}
           </div>
         )}
 

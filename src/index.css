@@ -501,6 +501,13 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.db-biz-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .db-biz-info {
@@ -3158,6 +3165,16 @@ body {
   background: var(--accent-bg);
   color: var(--accent);
   border: 1px solid var(--accent-border);
+}
+.ps-contact-btn--instagram {
+  background: rgba(225,48,108,0.08);
+  color: #e1306c;
+  border: 1px solid rgba(225,48,108,0.25);
+}
+.ps-contact-btn--facebook {
+  background: rgba(24,119,242,0.08);
+  color: #1877f2;
+  border: 1px solid rgba(24,119,242,0.25);
 }
 
 /* ── Address ── */
@@ -6378,6 +6395,41 @@ code {
 }
 .ed-gallery-thumb:hover .ed-gallery-thumb-del { opacity: 1; }
 .ed-gallery-add-zone { min-height: 100px; padding: 20px 16px; }
+
+/* Profile image */
+.ed-profile-card { margin-bottom: 20px; }
+.ed-profile-area { display: flex; flex-direction: column; gap: 12px; }
+.ed-profile-preview { display: flex; align-items: center; gap: 20px; }
+.ed-profile-img {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  display: block;
+}
+.ed-profile-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 280px;
+  min-height: 110px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  cursor: pointer;
+  padding: 20px;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: center;
+}
+.ed-profile-dropzone:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
 
 /* ============================================================
    End EditorSito

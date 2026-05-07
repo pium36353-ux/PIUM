@@ -91,7 +91,10 @@ export default function Dashboard() {
           {business && (
             <div className="db-biz-pill">
               <div className="db-biz-avatar">
-                {business.name?.[0]?.toUpperCase() ?? '?'}
+                {business.profile_image
+                  ? <img src={business.profile_image} alt={business.name} className="db-biz-avatar-img" />
+                  : (business.name?.[0]?.toUpperCase() ?? '?')
+                }
               </div>
               <div className="db-biz-info">
                 <span className="db-biz-name">{business.name}</span>

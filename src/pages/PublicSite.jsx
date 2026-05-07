@@ -67,12 +67,12 @@ export default function PublicSite() {
   if (status === 'loading') return <LoadingScreen />
   if (status === 'notfound') return <NotFound />
 
-  const { name, category, description, phone, whatsapp, email, address, city, logo_url } = business
+  const { name, category, business_type_custom, description, phone, whatsapp, email, address, city, profile_image, instagram_url, facebook_url } = business
   const { hero_title, hero_subtitle, hero_cta_text, about_text, cover_image_url, gallery_images } = siteContent
 
   const displayName    = hero_title || name
   const displayAbout   = about_text || description
-  const hasContacts    = phone || whatsapp || email
+  const hasContacts    = phone || whatsapp || email || instagram_url || facebook_url
   const hasLocation    = address || city
 
   // Link per il pulsante contatto: telefono > whatsapp > email
@@ -109,15 +109,15 @@ export default function PublicSite() {
         {hasImgBg && <div className="ps-hero-overlay" />}
         <div className="ps-hero-inner" style={{ position: 'relative', zIndex: 1 }}>
           <div className="ps-avatar" style={{ background: avatarBg, borderColor: avatarBdr }}>
-            {logo_url
-              ? <img src={logo_url} alt={name} className="ps-avatar-img" />
+            {profile_image
+              ? <img src={profile_image} alt={name} className="ps-avatar-img" />
               : <span className="ps-avatar-letter" style={{ color: avatarFg }}>{name[0].toUpperCase()}</span>
             }
           </div>
           <div className="ps-hero-text">
             {category && (
               <span className="ps-category-badge" style={{ background: badgeBg, color: badgeFg, borderColor: badgeBdr }}>
-                {theme.emoji && <span style={{ marginRight: 4 }}>{theme.emoji}</span>}{category}
+                {theme.emoji && <span style={{ marginRight: 4 }}>{theme.emoji}</span>}{business_type_custom || category}
               </span>
             )}
             <h1 className="ps-name" style={{ fontWeight: theme.titleWeight, color: txtColor }}>
@@ -219,6 +219,16 @@ export default function PublicSite() {
                 {email && (
                   <a href={`mailto:${email}`} className="ps-contact-btn ps-contact-btn--email">
                     <IconMail /> <span>{email}</span>
+                  </a>
+                )}
+                {instagram_url && (
+                  <a href={instagram_url} target="_blank" rel="noopener noreferrer" className="ps-contact-btn ps-contact-btn--instagram">
+                    <IconInstagram /> <span>Instagram</span>
+                  </a>
+                )}
+                {facebook_url && (
+                  <a href={facebook_url} target="_blank" rel="noopener noreferrer" className="ps-contact-btn ps-contact-btn--facebook">
+                    <IconFacebook /> <span>Facebook</span>
                   </a>
                 )}
               </div>
@@ -513,4 +523,10 @@ function IconChevLeft() {
 }
 function IconChevRight() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+}
+function IconInstagram() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+}
+function IconFacebook() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
 }

@@ -67,6 +67,8 @@ export default function EditorSito({ business }) {
         )}
       </div>
 
+      <ProfileImageBlock business={business} />
+
       <div className="db-editor-layout">
         <div className="db-editor-sidebar">
           {BLOCKS.map(b => (
@@ -96,6 +98,8 @@ export default function EditorSito({ business }) {
       </div>
 
       <OpeningHoursBlock business={business} />
+      <ContactsBlock business={business} />
+      <SocialBlock business={business} />
     </div>
   )
 }
@@ -573,6 +577,179 @@ function OpeningHoursBlock({ business }) {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+/* ── Foto profilo ── */
+function ProfileImageBlock({ business }) {
+  const [preview,   setPreview]   = useState(business?.profile_image ?? null)
+  const [uploading, setUploading] = useState(false)
+  const [fileError, setFileError] = useState(null)
+  const inputRef = useRef(null)
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setFileError(null)
+
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
+      setFileError('Formato non supportato. Usa JPG, PNG o WebP.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setFileError('Il file supera i 5 MB.')
+      return
+    }
+
+    setUploading(true)
+    const ext  = file.name.split('.').pop().toLowerCase()
+    const path = `${business.id}/profile.${ext}`
+
+    const { error: upErr } = await supabase.storage
+      .from('site-images')
+      .upload(path, file, { upsert: true, contentType: file.type })
+
+    if (upErr) {
+      setFileError('Errore durante il caricamento. Riprova.')
+      setUploading(false)
+      return
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('site-images').getPublicUrl(path)
+
+    const { error: dbErr } = await supabase
+      .from('businesses')
+      .update({ profile_image: publicUrl })
+      .eq('id', business.id)
+
+    setUploading(false)
+    if (dbErr) { setFileError('Immagine caricata, ma errore nel salvataggio. Riprova.'); return }
+    setPreview(`${publicUrl}?t=${Date.now()}`)
+  }
+
+  const handleRemove = async () => {
+    const { error } = await supabase.from('businesses').update({ profile_image: null }).eq('id', business.id)
+    if (!error) setPreview(null)
+  }
+
+  return (
+    <div className="db-card ed-profile-card">
+      <div className="ed-block-header">
+        <h3 className="db-card-title">Foto profilo</h3>
+        <p className="ed-block-desc">Avatar mostrato nel sito pubblico e nella dashboard. JPG, PNG, WebP — max 5 MB.</p>
+      </div>
+      <div className="ed-fields">
+        <div className="ed-profile-area">
+          {preview ? (
+            <div className="ed-profile-preview">
+              <img src={preview} alt="Foto profilo" className="ed-profile-img" />
+              <div className="ed-cover-actions">
+                <button className="ed-cover-change-btn" onClick={() => inputRef.current?.click()} disabled={uploading}>
+                  {uploading ? <><EdSpinner /> Caricamento…</> : <><IconUpload /> Cambia foto</>}
+                </button>
+                <button className="ed-cover-remove-btn" onClick={handleRemove} disabled={uploading}>
+                  <IconTrash /> Rimuovi
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button className="ed-profile-dropzone" onClick={() => inputRef.current?.click()} disabled={uploading} type="button">
+              {uploading ? (
+                <><EdSpinner /><span>Caricamento in corso…</span></>
+              ) : (
+                <>
+                  <div className="ed-cover-dropzone-icon"><IconUpload /></div>
+                  <span className="ed-cover-dropzone-text">Clicca per caricare una foto</span>
+                  <span className="ed-cover-dropzone-hint">JPG, PNG o WebP — max 5 MB</span>
+                </>
+              )}
+            </button>
+          )}
+          <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} style={{ display: 'none' }} />
+          {fileError && <p className="ed-file-error">{fileError}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Contatti ── */
+function ContactsBlock({ business }) {
+  const [phone,    setPhone]    = useState(business?.phone    ?? '')
+  const [whatsapp, setWhatsapp] = useState(business?.whatsapp ?? '')
+  const [email,    setEmail]    = useState(business?.email    ?? '')
+  const [status, triggerSave]   = useSaveStatus()
+
+  const save = () => triggerSave(async () => {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ phone: phone.trim() || null, whatsapp: whatsapp.trim() || null, email: email.trim() || null })
+      .eq('id', business.id)
+    if (error) throw error
+  })
+
+  return (
+    <div className="db-card" style={{ marginTop: 20 }}>
+      <div className="ed-block-header">
+        <h3 className="db-card-title">Contatti</h3>
+        <p className="ed-block-desc">Numeri e indirizzi mostrati come pulsanti nel sito pubblico.</p>
+      </div>
+      <div className="ed-fields">
+        <div className="ed-field">
+          <label className="ed-label">Telefono</label>
+          <input className="ed-input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+39 333 123 4567" />
+        </div>
+        <div className="ed-field">
+          <label className="ed-label">WhatsApp</label>
+          <input className="ed-input" type="tel" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="+39 333 123 4567" />
+        </div>
+        <div className="ed-field">
+          <label className="ed-label">Email</label>
+          <input className="ed-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="info@latuaattivita.it" />
+        </div>
+      </div>
+      <div className="ed-footer">
+        <SaveButton status={status} onClick={save} />
+      </div>
+    </div>
+  )
+}
+
+/* ── Social ── */
+function SocialBlock({ business }) {
+  const [instagram, setInstagram] = useState(business?.instagram_url ?? '')
+  const [facebook,  setFacebook]  = useState(business?.facebook_url  ?? '')
+  const [status, triggerSave]     = useSaveStatus()
+
+  const save = () => triggerSave(async () => {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ instagram_url: instagram.trim() || null, facebook_url: facebook.trim() || null })
+      .eq('id', business.id)
+    if (error) throw error
+  })
+
+  return (
+    <div className="db-card" style={{ marginTop: 20 }}>
+      <div className="ed-block-header">
+        <h3 className="db-card-title">Social</h3>
+        <p className="ed-block-desc">I tuoi profili social. Verranno mostrati come pulsanti nel sito pubblico.</p>
+      </div>
+      <div className="ed-fields">
+        <div className="ed-field">
+          <label className="ed-label">Instagram</label>
+          <input className="ed-input" type="url" value={instagram} onChange={e => setInstagram(e.target.value)} placeholder="https://instagram.com/tuoprofilo" />
+        </div>
+        <div className="ed-field">
+          <label className="ed-label">Facebook</label>
+          <input className="ed-input" type="url" value={facebook} onChange={e => setFacebook(e.target.value)} placeholder="https://facebook.com/tuapagina" />
+        </div>
+      </div>
+      <div className="ed-footer">
+        <SaveButton status={status} onClick={save} />
       </div>
     </div>
   )
