@@ -499,7 +499,6 @@ export default function Agenda({ business }) {
                   value={form.client_name}
                   onChange={setField('client_name')}
                   placeholder="es. Mario Rossi"
-                  autoFocus
                   enterKeyHint="next"
                 />
                 {errors.client_name && <p className="sv-field-error">{errors.client_name}</p>}
