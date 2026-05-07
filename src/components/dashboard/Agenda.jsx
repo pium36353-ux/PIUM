@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
@@ -27,6 +27,8 @@ const DAY_LETTER  = ['L','M','M','G','V','S','D']
 
 const EMPTY_FORM = { date: '', client_name: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '' }
 const EMPTY_EMP  = { name: '', color: COLORS[0] }
+
+const SLOT_H = 12 // px per 5-minute slot
 
 /* ── Date utilities ── */
 function formatDate(date) {
@@ -366,58 +368,18 @@ export default function Agenda({ business }) {
       {/* ── Day view ── */}
       {view === 'day' && (
         <>
-          {loading ? (
-            <div className="ag-day-loading"><AgSpinner /></div>
-          ) : dayApts.length === 0 ? (
-            <div className="ag-day-empty">
-              <p>Nessun appuntamento per oggi.</p>
-              <button className="db-btn-primary" onClick={() => openModal(formatDate(selectedDay))}>
-                + Aggiungi appuntamento
-              </button>
-            </div>
-          ) : (
-            <div className="ag-day-list">
-              {dayApts.map(apt => {
-                const color  = apt.employees?.color ?? '#94a3b8'
-                const isDone = apt.completed
-                return (
-                  <div key={apt.id} className={`ag-day-item ${isDone ? 'ag-day-item--done' : ''}`}>
-                    <div className="ag-day-item-time">
-                      <span className="ag-day-time-text">{fmtTime(apt.start_time)}</span>
-                      <span className="ag-day-color-bar" style={{ background: color }} />
-                    </div>
-                    <div className="ag-day-item-body ag-day-item-body--link" onClick={() => openEditModal(apt)}>
-                      <span className="ag-day-client">{apt.client_name}</span>
-                      <div className="ag-day-meta">
-                        {apt.employees && <span>{apt.employees.name}</span>}
-                        <span>{fmtDuration(apt.duration_minutes)}</span>
-                        {apt.price != null && <span>{fmtCurrency(apt.price)}</span>}
-                      </div>
-                      {apt.notes && <p className="ag-day-notes">{apt.notes}</p>}
-                    </div>
-                    <div className="ag-day-item-actions">
-                      <button
-                        className={`ag-apt-btn-check ${isDone ? 'ag-apt-btn-check--on' : ''}`}
-                        onClick={() => toggleCompleted(apt)}
-                        disabled={togglingId === apt.id}
-                        title={isDone ? 'Annulla completamento' : 'Segna completato'}
-                      >
-                        <IconCheck />
-                      </button>
-                      {confirmDelId === apt.id ? (
-                        <>
-                          <button className="ag-apt-btn-del ag-apt-btn-del--confirm" onClick={() => deleteAppointment(apt.id)} title="Conferma"><IconCheck /></button>
-                          <button className="ag-apt-btn" onClick={() => setConfirmDelId(null)}><IconX /></button>
-                        </>
-                      ) : (
-                        <button className="ag-apt-btn-del" onClick={() => setConfirmDelId(apt.id)} title="Elimina"><IconTrash /></button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          <DayTimeline
+            dayApts={dayApts}
+            loading={loading}
+            togglingId={togglingId}
+            confirmDelId={confirmDelId}
+            openModal={openModal}
+            openEditModal={openEditModal}
+            toggleCompleted={toggleCompleted}
+            deleteAppointment={deleteAppointment}
+            setConfirmDelId={setConfirmDelId}
+            selectedDay={selectedDay}
+          />
 
           {/* Daily summary */}
           <div className="ag-summary">
@@ -492,6 +454,21 @@ export default function Agenda({ business }) {
 
             <div className="sv-modal-body">
 
+              {editingId && (
+                <button
+                  className="ag-add-another-btn"
+                  onClick={() => {
+                    const date = form.date
+                    const time = form.start_time
+                    setEditingId(null)
+                    setForm({ ...EMPTY_FORM, date, start_time: time })
+                    setErrors({})
+                  }}
+                >
+                  + Aggiungi altro appuntamento alle {form.start_time?.slice(0, 5)}
+                </button>
+              )}
+
               {/* Date */}
               <div className="sv-fields-row">
                 <div className="sv-field">
@@ -520,6 +497,7 @@ export default function Agenda({ business }) {
                   onChange={setField('client_name')}
                   placeholder="es. Mario Rossi"
                   autoFocus
+                  enterKeyHint="next"
                 />
                 {errors.client_name && <p className="sv-field-error">{errors.client_name}</p>}
               </div>
@@ -557,7 +535,7 @@ export default function Agenda({ business }) {
               {/* Notes */}
               <div className="sv-field">
                 <label className="sv-label">Note <span className="sv-optional">(facoltativo)</span></label>
-                <textarea className="sv-textarea" value={form.notes} onChange={setField('notes')} placeholder="Note sull'appuntamento…" rows={2} />
+                <textarea className="sv-textarea" value={form.notes} onChange={setField('notes')} placeholder="Note sull'appuntamento…" rows={2} enterKeyHint="done" />
               </div>
 
             </div>
@@ -572,6 +550,162 @@ export default function Agenda({ business }) {
         </div>
       )}
 
+    </div>
+  )
+}
+
+/* ── Timeline helpers ── */
+function buildAptBlocks(apts) {
+  const items = [...apts].map(a => {
+    const [h, m] = (a.start_time ?? '00:00').split(':').map(Number)
+    const startMin = h * 60 + m
+    const endMin   = startMin + (Number(a.duration_minutes) || 60)
+    return { ...a, startMin, endMin, col: 0, maxCols: 1 }
+  }).sort((a, b) => a.startMin - b.startMin)
+
+  const colEnds = []
+  items.forEach(apt => {
+    let c = colEnds.findIndex(end => end <= apt.startMin)
+    if (c === -1) c = colEnds.length
+    apt.col = c
+    colEnds[c] = apt.endMin
+  })
+
+  items.forEach(apt => {
+    const overlapping = items.filter(o => o.startMin < apt.endMin && o.endMin > apt.startMin)
+    apt.maxCols = overlapping.reduce((max, o) => Math.max(max, o.col + 1), 0)
+  })
+
+  return items
+}
+
+function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay }) {
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!wrapRef.current) return
+    const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0)
+    const isToday = selectedDay.getTime() === todayMidnight.getTime()
+    const targetHour = isToday ? Math.max(0, new Date().getHours() - 1) : 8
+    wrapRef.current.scrollTop = targetHour * 60 * SLOT_H / 5
+  }, [selectedDay])
+
+  const blocks = buildAptBlocks(dayApts)
+
+  return (
+    <div className="ag-day-wrap" ref={wrapRef}>
+      {loading ? (
+        <div className="ag-day-loading"><AgSpinner /></div>
+      ) : (
+        <div className="ag-time-grid">
+
+          {/* Left: time labels (one per 30 min) */}
+          <div className="ag-time-labels">
+            {Array.from({ length: 48 }, (_, i) => {
+              const totalMin = i * 30
+              const h = Math.floor(totalMin / 60)
+              const m = totalMin % 60
+              const label = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+              return (
+                <div
+                  key={i}
+                  className={`ag-time-label ${m === 0 ? 'ag-time-label--hour' : 'ag-time-label--half'}`}
+                  style={{ height: SLOT_H * 6 }}
+                >
+                  {label}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Right: slot rows + absolute appointment blocks */}
+          <div className="ag-slots-col" style={{ position: 'relative' }}>
+            {Array.from({ length: 288 }, (_, i) => {
+              const h = Math.floor(i / 12)
+              const m = (i % 12) * 5
+              const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+              const posInHour = i % 12
+              let slotCls = 'ag-slot'
+              if (posInHour === 11)     slotCls += ' ag-slot--hour'
+              else if (posInHour === 5) slotCls += ' ag-slot--half'
+              return (
+                <div key={i} className={slotCls} style={{ height: SLOT_H }}>
+                  <button
+                    className="ag-slot-add"
+                    onClick={() => openModal(formatDate(selectedDay), timeStr)}
+                    aria-label={`Nuovo appuntamento alle ${timeStr}`}
+                    tabIndex={-1}
+                  >+ {timeStr}</button>
+                </div>
+              )
+            })}
+
+            {blocks.map(apt => {
+              const top    = (apt.startMin / 5) * SLOT_H
+              const height = Math.max((Number(apt.duration_minutes) / 5) * SLOT_H, SLOT_H * 2)
+              const color  = apt.employees?.color ?? '#94a3b8'
+              const pct    = 100 / apt.maxCols
+              const isDone = apt.completed
+              return (
+                <div
+                  key={apt.id}
+                  className={`ag-apt ${isDone ? 'ag-apt--done' : ''}`}
+                  style={{
+                    position: 'absolute',
+                    top,
+                    left: `${apt.col * pct}%`,
+                    width: `calc(${pct}% - 3px)`,
+                    height,
+                    background: isDone ? 'rgba(34,197,94,0.12)' : `${color}1e`,
+                    borderLeft: `3px solid ${isDone ? '#22c55e' : color}`,
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    zIndex: 1,
+                    boxSizing: 'border-box',
+                  }}
+                  onClick={() => openEditModal(apt)}
+                >
+                  <div className="ag-apt-inner">
+                    <div className="ag-apt-top-row">
+                      <span className="ag-apt-time">{apt.start_time?.slice(0, 5)}</span>
+                      <div className="ag-apt-btns" onClick={e => e.stopPropagation()}>
+                        <button
+                          className={`ag-apt-btn-check ${isDone ? 'ag-apt-btn-check--on' : ''}`}
+                          onClick={e => { e.stopPropagation(); toggleCompleted(apt) }}
+                          disabled={togglingId === apt.id}
+                          title={isDone ? 'Annulla completamento' : 'Segna completato'}
+                        ><IconCheck /></button>
+                        {confirmDelId === apt.id ? (
+                          <>
+                            <button className="ag-apt-btn-del ag-apt-btn-del--confirm" onClick={e => { e.stopPropagation(); deleteAppointment(apt.id) }} title="Conferma"><IconCheck /></button>
+                            <button className="ag-apt-btn" onClick={e => { e.stopPropagation(); setConfirmDelId(null) }}><IconX /></button>
+                          </>
+                        ) : (
+                          <button className="ag-apt-btn-del" onClick={e => { e.stopPropagation(); setConfirmDelId(apt.id) }} title="Elimina"><IconTrash /></button>
+                        )}
+                      </div>
+                    </div>
+                    <span className="ag-apt-client">{apt.client_name}</span>
+                    {apt.employees && (
+                      <span className="ag-apt-employee" style={{ color: isDone ? '#22c55e' : color }}>
+                        {apt.employees.name}
+                      </span>
+                    )}
+                    {(apt.price != null || apt.duration_minutes) && (
+                      <span className="ag-apt-detail">
+                        {fmtDuration(apt.duration_minutes)}{apt.price != null ? ` · ${fmtCurrency(apt.price)}` : ''}
+                      </span>
+                    )}
+                    {apt.notes && <span className="ag-apt-notes">{apt.notes}</span>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+        </div>
+      )}
     </div>
   )
 }

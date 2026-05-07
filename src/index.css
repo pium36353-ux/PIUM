@@ -5585,6 +5585,11 @@ code {
   border-bottom: 1px solid var(--border);
 }
 
+.ag-time-label--half {
+  font-size: 9px;
+  opacity: 0.45;
+}
+
 .ag-slots-col {
   flex: 1;
 }
@@ -5593,6 +5598,11 @@ code {
   box-sizing: border-box;
   display: flex;
   align-items: center;
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+
+  @media (prefers-color-scheme: dark) {
+    border-bottom-color: rgba(255,255,255,0.04);
+  }
 }
 
 .ag-slot--hour {
@@ -5600,10 +5610,10 @@ code {
 }
 
 .ag-slot--half {
-  border-bottom: 1px dashed rgba(0,0,0,0.07);
+  border-bottom: 1px dashed rgba(0,0,0,0.12);
 
   @media (prefers-color-scheme: dark) {
-    border-bottom-color: rgba(255,255,255,0.07);
+    border-bottom-color: rgba(255,255,255,0.12);
   }
 }
 
@@ -5913,6 +5923,24 @@ code {
 }
 
 .ag-emp-add-btn { align-self: flex-start; }
+
+.ag-add-another-btn {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  background: var(--accent-bg);
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--sans);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+
+  &:hover { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); }
+}
 
 /* ============================================================
    EditorSito  (ed-)
