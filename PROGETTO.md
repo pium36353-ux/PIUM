@@ -149,3 +149,11 @@ Claude API spostata su Supabase Edge Function (claude-proxy), chiave non esposta
 - Fix lista affiliati nel pannello admin: aggiunte le card mobile mancanti nella sezione affiliati
 - Aggiornate icone PWA con badge AI integrato nel logo (icon-192.png, icon-512.png, favicon.ico)
 - Risolto problema cache CDN Vercel sui file statici tramite headers no-cache nel vercel.json
+
+---
+
+## Note tecniche
+
+- **Galleria fotografica:** limite alzato a 20 foto, upload multiplo (attributo `multiple` sull'input), barra di progresso animata durante batch upload, counter "X / 20 foto" sempre visibile
+- **Compressione automatica immagini lato client:** libreria `browser-image-compression` applicata a galleria, immagine di copertina e foto profilo — impostazioni: `maxSizeMB: 0.8`, `maxWidthOrHeight: 1920`, `useWebWorker: true`
+- **Infrastruttura storage:** quando si raggiungono i primi clienti paganti, passare a Supabase Pro (25$/mese) per avere 100 GB di storage invece di 1 GB del piano gratuito
