@@ -60,7 +60,7 @@ export default function Admin() {
     setLoading(true)
     const { data } = await supabase
       .from('businesses')
-      .select('id, name, email, city, category, slug, plan, plan_price, is_active, status, trial_ends_at, created_at')
+      .select('id, name, email, city, category, slug, plan, plan_price, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total')
       .order('created_at', { ascending: false })
     setBusinesses(data ?? [])
     setLoading(false)
@@ -271,6 +271,7 @@ export default function Admin() {
                         <th>Prezzo</th>
                         <th>Trial scade</th>
                         <th>Registrato</th>
+                        <th>Chiamate AI</th>
                         <th>Azioni</th>
                       </tr>
                     </thead>
@@ -335,6 +336,12 @@ export default function Admin() {
                               <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
                             </td>
                             <td>
+                              <span className="adm-ai-calls-cell">
+                                <span className="adm-ai-month">{b.ai_calls_month ?? 0} mese</span>
+                                <span className="adm-ai-total">{b.ai_calls_total ?? 0} tot</span>
+                              </span>
+                            </td>
+                            <td>
                               <div className="adm-row-actions">
                                 {busy ? <AdminSpinner small /> : (
                                   <>
@@ -381,6 +388,10 @@ export default function Admin() {
                           {b.city  && <span className="adm-cell-text">{b.city}</span>}
                           {b.status === 'trial' && <span className="adm-cell-text adm-cell-date">Trial scade: {formatDate(b.trial_ends_at)}</span>}
                           <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
+                          <span className="adm-ai-calls-cell">
+                            <span className="adm-ai-month">{b.ai_calls_month ?? 0} mese</span>
+                            <span className="adm-ai-total">{b.ai_calls_total ?? 0} tot</span>
+                          </span>
                         </div>
                         <div className="adm-card-footer">
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>

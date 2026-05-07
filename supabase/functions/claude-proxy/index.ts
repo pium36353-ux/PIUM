@@ -77,6 +77,21 @@ Deno.serve(async (req) => {
     const data = await response.json()
     const text = data.content?.[0]?.text ?? ''
 
+    // Increment AI call counters (fire-and-forget — don't block the response)
+    supabase
+      .from('businesses')
+      .select('ai_calls_month, ai_calls_total')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data: biz }: { data: { ai_calls_month: number | null; ai_calls_total: number | null } | null }) => {
+        if (!biz) return
+        return supabase.from('businesses').update({
+          ai_calls_month: (biz.ai_calls_month ?? 0) + 1,
+          ai_calls_total: (biz.ai_calls_total ?? 0) + 1,
+        }).eq('user_id', user.id)
+      })
+      .catch(() => {})
+
     return new Response(JSON.stringify({ text }), {
       status: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },

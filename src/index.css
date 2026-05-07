@@ -4611,6 +4611,26 @@ code {
   border-top: 1px solid var(--border);
 }
 
+/* AI calls counter */
+.adm-ai-calls-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.adm-ai-month {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-ai-total {
+  font-size: 11px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Count label */
 .adm-count-label {
   font-size: 13px;
