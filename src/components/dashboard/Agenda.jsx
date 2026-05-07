@@ -585,12 +585,12 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
   const wrapRef = useRef(null)
 
   useEffect(() => {
-    if (!wrapRef.current) return
+    if (loading || !wrapRef.current) return
     const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0)
     const isToday = selectedDay.getTime() === todayMidnight.getTime()
     const targetHour = isToday ? Math.max(0, new Date().getHours() - 1) : 8
     wrapRef.current.scrollTop = targetHour * 60 * SLOT_H / 5
-  }, [selectedDay])
+  }, [selectedDay, loading])
 
   const blocks = buildAptBlocks(dayApts)
 
