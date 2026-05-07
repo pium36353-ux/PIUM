@@ -626,7 +626,7 @@ function ProfileImageBlock({ business }) {
       .eq('id', business.id)
 
     setUploading(false)
-    if (dbErr) { setFileError('Immagine caricata, ma errore nel salvataggio. Riprova.'); return }
+    if (dbErr) { console.error('profile_image save error:', dbErr); setFileError('Immagine caricata, ma errore nel salvataggio. Riprova.'); return }
     setPreview(`${publicUrl}?t=${Date.now()}`)
   }
 
