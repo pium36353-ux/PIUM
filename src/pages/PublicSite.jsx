@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import BookingSection from '../components/public/BookingSection'
 
 export default function PublicSite() {
   const { slug } = useParams()
@@ -197,6 +198,8 @@ export default function PublicSite() {
               </div>
             </section>
           )}
+
+          <BookingSection business={business} services={services} />
 
           {/* Reviews */}
           {reviews.length > 0 && (

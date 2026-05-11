@@ -7222,3 +7222,161 @@ code {
 @media (max-width: 420px) {
   .af-stats-row { grid-template-columns: 1fr; }
 }
+
+/* ================================================================
+   BookingSection (bk-)
+   ================================================================ */
+.bk-section {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 32px 20px 40px;
+}
+.bk-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 24px;
+  color: #111;
+}
+.bk-step {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.bk-step-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+.bk-back {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6366f1;
+  font-size: 0.85rem;
+  padding: 0;
+  text-align: left;
+  font-weight: 500;
+  align-self: flex-start;
+}
+.bk-service-list { display: flex; flex-direction: column; gap: 10px; }
+.bk-service-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  gap: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.bk-service-btn:hover { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+.bk-service-name { font-size: 0.97rem; font-weight: 600; color: #111; }
+.bk-service-meta { font-size: 0.82rem; color: #888; white-space: nowrap; }
+.bk-date-input {
+  padding: 12px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1rem;
+  color: #111;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+.bk-date-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+.bk-next-btn, .bk-submit-btn {
+  padding: 13px 20px;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.97rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.bk-next-btn:disabled, .bk-submit-btn:disabled { opacity: 0.5; cursor: default; }
+.bk-next-btn:not(:disabled):hover, .bk-submit-btn:not(:disabled):hover { background: #4f46e5; }
+.bk-slots-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 360px) { .bk-slots-grid { grid-template-columns: repeat(3, 1fr); } }
+.bk-slot-btn {
+  padding: 10px 6px;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: #111;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.bk-slot-btn:hover { border-color: #6366f1; background: #eef2ff; color: #4f46e5; }
+.bk-no-slots { font-size: 0.9rem; color: #888; padding: 12px 0; }
+.bk-form { display: flex; flex-direction: column; gap: 14px; }
+.bk-label { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; font-weight: 600; color: #444; }
+.bk-input {
+  padding: 11px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.97rem;
+  color: #111;
+  background: #fff;
+  transition: border-color 0.15s;
+}
+.bk-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+.bk-otp-hint { font-size: 0.9rem; color: #555; line-height: 1.55; }
+.bk-otp-input {
+  padding: 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-align: center;
+  color: #111;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+.bk-otp-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+.bk-resend {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888;
+  font-size: 0.82rem;
+  padding: 0;
+  text-decoration: underline;
+  text-align: center;
+  align-self: center;
+}
+.bk-step--success { align-items: center; text-align: center; padding: 20px 0; gap: 12px; }
+.bk-success-icon {
+  width: 56px;
+  height: 56px;
+  background: #dcfce7;
+  color: #16a34a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.bk-success-title { font-size: 1.15rem; font-weight: 700; color: #111; margin: 0; }
+.bk-success-detail { font-size: 0.93rem; color: #555; line-height: 1.6; margin: 0; }
+.bk-back--reset { margin-top: 8px; }
+.bk-error {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 0.87rem;
+}
