@@ -68,6 +68,7 @@ export default function App() {
         <Route path="/x-admin-login"   element={<AdminLogin />} />
         <Route path="/settings"   element={<Settings />} />
         <Route path="/site/:slug"   element={<PublicSite />} />
+        <Route path="/:slug"        element={<PublicSite />} />
         <Route path="/affiliates"      element={<Affiliates />} />
         <Route path="/affiliates/auth" element={<AffiliatesAuth />} />
         <Route path="/ref/:code"    element={<RefRedirect />} />
