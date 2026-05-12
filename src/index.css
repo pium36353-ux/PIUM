@@ -7380,3 +7380,103 @@ code {
   color: #dc2626;
   font-size: 0.87rem;
 }
+
+/* ── Agenda: pending bookings panel ── */
+.ag-pending-panel {
+  margin: 12px 0 0;
+  border: 1.5px solid #fcd34d;
+  border-radius: 10px;
+  background: #fffbeb;
+  overflow: hidden;
+}
+.ag-pending-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fef3c7;
+  border-bottom: 1px solid #fcd34d;
+}
+.ag-pending-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ag-pending-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  background: #f59e0b;
+  color: #fff;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.ag-pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.ag-pending-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #fde68a;
+}
+.ag-pending-card:last-child { border-bottom: none; }
+.ag-pending-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ag-pending-name {
+  font-size: 0.93rem;
+  font-weight: 600;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ag-pending-detail {
+  font-size: 0.82rem;
+  color: #78350f;
+}
+.ag-pending-contact {
+  font-size: 0.78rem;
+  color: #92400e;
+  opacity: 0.75;
+}
+.ag-pending-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ag-pending-btn {
+  padding: 5px 13px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.ag-pending-btn:disabled { opacity: 0.5; cursor: default; }
+.ag-pending-btn--confirm {
+  background: #22c55e;
+  color: #fff;
+}
+.ag-pending-btn--confirm:hover:not(:disabled) { background: #16a34a; }
+.ag-pending-btn--reject {
+  background: #fff;
+  color: #dc2626;
+  border: 1.5px solid #fca5a5;
+}
+.ag-pending-btn--reject:hover:not(:disabled) { background: #fef2f2; }

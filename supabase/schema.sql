@@ -417,56 +417,96 @@ $$;
 
 grant execute on function get_taken_slots(uuid, date) to anon, authenticated;
 
-create or replace function confirm_booking(
-  p_business_id uuid, p_service_id uuid,
-  p_customer_name text, p_customer_email text, p_customer_phone text,
-  p_date date, p_time time
+-- create_booking: public, no auth session required, saves as 'pending'
+create or replace function create_booking(
+  p_business_id    uuid,
+  p_service_id     uuid,
+  p_customer_name  text,
+  p_customer_email text,
+  p_customer_phone text,
+  p_date           date,
+  p_time           time
 ) returns uuid
 language plpgsql security definer set search_path = public
 as $$
 declare
-  v_booking_id   uuid;
-  v_duration_min int;
-  v_price        numeric;
+  v_booking_id uuid;
 begin
-  if auth.email() is null or lower(auth.email()) <> lower(p_customer_email) then
-    raise exception 'Verifica email non valida';
+  if not exists (
+    select 1 from services
+    where id = p_service_id
+      and business_id = p_business_id
+      and is_available = true
+  ) then
+    raise exception 'Servizio non disponibile';
   end if;
 
+  -- Antiabuse: 1 pending per email per business
   if exists (
     select 1 from bookings
     where business_id = p_business_id
       and lower(customer_email) = lower(p_customer_email)
-      and status in ('pending', 'confirmed')
+      and status = 'pending'
   ) then
-    raise exception 'Hai già una prenotazione attiva per questa attività';
+    raise exception 'Hai già una prenotazione in attesa per questa attività';
   end if;
-
-  select duration_min, price into v_duration_min, v_price
-  from services
-  where id = p_service_id and business_id = p_business_id and is_available = true;
-
-  if not found then raise exception 'Servizio non disponibile'; end if;
 
   insert into bookings (
     business_id, service_id, customer_name, customer_email,
     customer_phone, appointment_date, appointment_time, status
   ) values (
     p_business_id, p_service_id, p_customer_name, lower(p_customer_email),
-    p_customer_phone, p_date, p_time, 'confirmed'
+    p_customer_phone, p_date, p_time, 'pending'
   ) returning id into v_booking_id;
-
-  insert into appointments (
-    business_id, client_name, date, start_time, duration_minutes, price, notes
-  ) values (
-    p_business_id, p_customer_name, p_date, p_time,
-    coalesce(v_duration_min, 60), v_price,
-    'Prenotazione online – ' || lower(p_customer_email)
-    || case when p_customer_phone is not null then ' · ' || p_customer_phone else '' end
-  );
 
   return v_booking_id;
 end;
 $$;
 
-grant execute on function confirm_booking(uuid, uuid, text, text, text, date, time) to authenticated;
+grant execute on function create_booking(uuid, uuid, text, text, text, date, time) to anon, authenticated;
+
+-- owner_confirm_booking: authenticated owner only, confirms booking + creates appointment
+create or replace function owner_confirm_booking(p_booking_id uuid)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_booking bookings%rowtype;
+  v_dur     int;
+  v_price   numeric;
+begin
+  select b.* into v_booking
+  from bookings b
+  join businesses biz on biz.id = b.business_id
+  where b.id = p_booking_id
+    and biz.user_id = auth.uid();
+
+  if not found then
+    raise exception 'Prenotazione non trovata';
+  end if;
+
+  if v_booking.status <> 'pending' then
+    raise exception 'La prenotazione non è in attesa';
+  end if;
+
+  select duration_min, price into v_dur, v_price
+  from services where id = v_booking.service_id;
+
+  update bookings set status = 'confirmed' where id = p_booking_id;
+
+  insert into appointments (
+    business_id, client_name, date, start_time, duration_minutes, price, notes
+  ) values (
+    v_booking.business_id,
+    v_booking.customer_name,
+    v_booking.appointment_date,
+    v_booking.appointment_time,
+    coalesce(v_dur, 60),
+    v_price,
+    'Prenotazione confermata – ' || v_booking.customer_email
+    || case when v_booking.customer_phone is not null then ' · ' || v_booking.customer_phone else '' end
+  );
+end;
+$$;
+
+grant execute on function owner_confirm_booking(uuid) to authenticated;

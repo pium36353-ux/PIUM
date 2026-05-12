@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
-const STEPS = { SERVICE: 0, DATE: 1, SLOT: 2, FORM: 3, OTP: 4, SUCCESS: 5 }
+const STEPS = { SERVICE: 0, DATE: 1, SLOT: 2, FORM: 3, SUCCESS: 4 }
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
 function todayStr() {
@@ -68,9 +68,7 @@ export default function BookingSection({ business, services }) {
   const [takenSlots, setTakenSlots] = useState([])
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
-  const [otp, setOtp] = useState('')
-  const [otpSending, setOtpSending] = useState(false)
-  const [confirming, setConfirming] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
   function reset() {
@@ -80,7 +78,6 @@ export default function BookingSection({ business, services }) {
     setSlot(null)
     setTakenSlots([])
     setForm({ name: '', email: '', phone: '' })
-    setOtp('')
     setError(null)
   }
 
@@ -110,52 +107,14 @@ export default function BookingSection({ business, services }) {
     setStep(STEPS.FORM)
   }
 
-  async function sendOtp() {
+  async function submitBooking() {
     if (!form.name.trim() || !form.email.trim()) {
       setError('Nome e email sono obbligatori')
       return
     }
-    // DEV BYPASS: skip OTP entirely, go straight to confirm
-    if (import.meta.env.DEV) {
-      setStep(STEPS.OTP)
-      return
-    }
-    setOtpSending(true)
+    setSubmitting(true)
     setError(null)
-    const { error: e } = await supabase.auth.signInWithOtp({
-      email: form.email.trim(),
-      options: { shouldCreateUser: true },
-    })
-    setOtpSending(false)
-    if (e) { setError("Errore nell'invio del codice. Controlla l'indirizzo email."); return }
-    setStep(STEPS.OTP)
-  }
-
-  async function confirmBooking() {
-    setConfirming(true)
-    setError(null)
-
-    // DEV BYPASS: simulate success without hitting the DB
-    if (import.meta.env.DEV) {
-      await new Promise(r => setTimeout(r, 900))
-      setConfirming(false)
-      setStep(STEPS.SUCCESS)
-      return
-    }
-
-    if (otp.length < 6) { setConfirming(false); setError('Inserisci il codice a 6 cifre'); return }
-    const { error: verifyErr } = await supabase.auth.verifyOtp({
-      email: form.email.trim(),
-      token: otp,
-      type: 'email',
-    })
-    if (verifyErr) {
-      setConfirming(false)
-      setError('Codice non valido o scaduto. Riprova.')
-      return
-    }
-
-    const { error: bookErr } = await supabase.rpc('confirm_booking', {
+    const { error: e } = await supabase.rpc('create_booking', {
       p_business_id:    business.id,
       p_service_id:     service.id,
       p_customer_name:  form.name.trim(),
@@ -164,11 +123,8 @@ export default function BookingSection({ business, services }) {
       p_date:           date,
       p_time:           slot,
     })
-
-    await supabase.auth.signOut()
-    setConfirming(false)
-
-    if (bookErr) { setError(bookErr.message); return }
+    setSubmitting(false)
+    if (e) { setError(e.message); return }
     setStep(STEPS.SUCCESS)
   }
 
@@ -272,53 +228,20 @@ export default function BookingSection({ business, services }) {
                 autoComplete="tel"
               />
             </label>
-            <button className="bk-submit-btn" onClick={sendOtp} disabled={otpSending}>
-              {otpSending ? 'Invio in corso...' : 'Invia codice di verifica'}
+            <button className="bk-submit-btn" onClick={submitBooking} disabled={submitting}>
+              {submitting ? 'Invio in corso...' : 'Invia prenotazione'}
             </button>
           </div>
-        </div>
-      )}
-
-      {step === STEPS.OTP && (
-        <div className="bk-step">
-          <p className="bk-step-label">Verifica email</p>
-          {import.meta.env.DEV
-            ? <p className="bk-otp-hint" style={{ color: '#b45309', background: '#fef3c7', padding: '10px 12px', borderRadius: 8 }}>
-                [DEV] OTP bypassato — clicca direttamente Conferma.<br />
-                Usa l'email del tuo account Supabase nel form.
-              </p>
-            : <p className="bk-otp-hint">
-                Abbiamo inviato un codice a <strong>{form.email}</strong>.<br />
-                Controlla anche la cartella spam.
-              </p>
-          }
-          {!import.meta.env.DEV && (
-            <input
-              className="bk-otp-input"
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={otp}
-              onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="000000"
-            />
-          )}
-          <button className="bk-submit-btn" onClick={confirmBooking} disabled={confirming}>
-            {confirming ? 'Conferma in corso...' : 'Conferma prenotazione'}
-          </button>
-          <button className="bk-resend" onClick={() => { setStep(STEPS.FORM); setOtp('') }}>
-            Non hai ricevuto il codice? Torna indietro
-          </button>
         </div>
       )}
 
       {step === STEPS.SUCCESS && (
         <div className="bk-step bk-step--success">
           <div className="bk-success-icon">✓</div>
-          <h3 className="bk-success-title">Prenotazione confermata!</h3>
+          <h3 className="bk-success-title">Prenotazione ricevuta!</h3>
           <p className="bk-success-detail">
-            <strong>{service?.name}</strong><br />
-            {formattedDate} alle {slot}
+            Il titolare la confermerà a breve.<br />
+            <strong>{service?.name}</strong> — {formattedDate} alle {slot}
           </p>
           <button className="bk-back bk-back--reset" onClick={reset}>
             Prenota un altro appuntamento

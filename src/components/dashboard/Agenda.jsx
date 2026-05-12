@@ -95,6 +95,9 @@ export default function Agenda({ business }) {
   const [addAnotherTime, setAddAnotherTime] = useState(null)
   const [taxRate,       setTaxRate]       = useState(22)
 
+  const [pendingBookings, setPendingBookings] = useState([])
+  const [processingId,    setProcessingId]    = useState(null)
+
   // Read location state after mount: atomically set date + view, then clear state
   useEffect(() => {
     const state   = location.state ?? {}
@@ -137,8 +140,20 @@ export default function Agenda({ business }) {
     setLoading(false)
   }, [business, view, monthDate, selectedDay])
 
-  useEffect(() => { loadEmployees() },    [loadEmployees])
-  useEffect(() => { loadAppointments() }, [loadAppointments])
+  const loadPendingBookings = useCallback(async () => {
+    if (!business) return
+    const { data } = await supabase.from('bookings')
+      .select('*, services(name)')
+      .eq('business_id', business.id)
+      .eq('status', 'pending')
+      .order('appointment_date')
+      .order('appointment_time')
+    setPendingBookings(data ?? [])
+  }, [business])
+
+  useEffect(() => { loadEmployees() },       [loadEmployees])
+  useEffect(() => { loadAppointments() },    [loadAppointments])
+  useEffect(() => { loadPendingBookings() }, [loadPendingBookings])
 
   /* ── Modal helpers ── */
   const openModal = (date = formatDate(selectedDay), time = '09:00') => {
@@ -215,6 +230,21 @@ export default function Agenda({ business }) {
     await supabase.from('appointments').delete().eq('id', id)
     setAppointments(prev => prev.filter(a => a.id !== id))
     setConfirmDelId(null)
+  }
+
+  const confirmPendingBooking = async (id) => {
+    setProcessingId(id)
+    await supabase.rpc('owner_confirm_booking', { p_booking_id: id })
+    setProcessingId(null)
+    loadPendingBookings()
+    loadAppointments()
+  }
+
+  const rejectPendingBooking = async (id) => {
+    setProcessingId(id)
+    await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id)
+    setProcessingId(null)
+    loadPendingBookings()
   }
 
   /* ── CRUD: employees ── */
@@ -308,6 +338,53 @@ export default function Agenda({ business }) {
           </button>
         </div>
       </div>
+
+      {/* ── Pending bookings panel ── */}
+      {pendingBookings.length > 0 && (
+        <div className="ag-pending-panel">
+          <div className="ag-pending-header">
+            <span className="ag-pending-title">Prenotazioni in attesa</span>
+            <span className="ag-pending-count">{pendingBookings.length}</span>
+          </div>
+          <div className="ag-pending-list">
+            {pendingBookings.map(b => {
+              const dateLabel = new Date(b.appointment_date + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })
+              return (
+                <div key={b.id} className="ag-pending-card">
+                  <div className="ag-pending-info">
+                    <span className="ag-pending-name">{b.customer_name}</span>
+                    <span className="ag-pending-detail">
+                      {b.services?.name && <>{b.services.name} · </>}
+                      {dateLabel} alle {b.appointment_time?.slice(0, 5)}
+                    </span>
+                    {(b.customer_email || b.customer_phone) && (
+                      <span className="ag-pending-contact">
+                        {b.customer_email}{b.customer_phone ? ` · ${b.customer_phone}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="ag-pending-actions">
+                    <button
+                      className="ag-pending-btn ag-pending-btn--confirm"
+                      onClick={() => confirmPendingBooking(b.id)}
+                      disabled={processingId === b.id}
+                    >
+                      {processingId === b.id ? '…' : 'Conferma'}
+                    </button>
+                    <button
+                      className="ag-pending-btn ag-pending-btn--reject"
+                      onClick={() => rejectPendingBooking(b.id)}
+                      disabled={processingId === b.id}
+                    >
+                      Rifiuta
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Month view ── */}
       {view === 'month' && (
