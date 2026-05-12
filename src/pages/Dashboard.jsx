@@ -80,6 +80,11 @@ export default function Dashboard() {
 
     fetchCount()
 
+    // Rifai il count ogni volta che il titolare torna sul tab
+    // (cattura eventi Realtime mancati durante tab in background)
+    const onFocus = () => fetchCount()
+    document.addEventListener('visibilitychange', onFocus)
+
     const channel = supabase.channel(`pending-bookings-${business.id}`)
       .on('postgres_changes', {
         event: 'INSERT',
@@ -87,7 +92,6 @@ export default function Dashboard() {
         table: 'bookings',
         filter: `business_id=eq.${business.id}`,
       }, async (payload) => {
-        console.log('[Realtime] INSERT bookings:', payload.new)
         if (payload.new?.status !== 'pending') return
         let serviceName = 'un servizio'
         if (payload.new.service_id) {
@@ -105,12 +109,13 @@ export default function Dashboard() {
         filter: `business_id=eq.${business.id}`,
       }, () => { fetchCount() })
       .subscribe((status, err) => {
-        if (status === 'SUBSCRIBED')    console.log('[Realtime] bookings: connesso')
-        if (status === 'CHANNEL_ERROR') console.error('[Realtime] bookings: errore', err)
-        if (status === 'TIMED_OUT')     console.warn('[Realtime] bookings: timeout')
+        if (status === 'CHANNEL_ERROR') console.error('[Realtime] bookings:', err)
       })
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      document.removeEventListener('visibilitychange', onFocus)
+      supabase.removeChannel(channel)
+    }
   }, [business])
 
   const navigate_section = (id) => {
