@@ -46,6 +46,18 @@
 - [ ] Sottodominio personalizzato per ogni attività
 - ✅ Notifiche push con impostazioni personalizzabili (minuti pre-appuntamento, notifica dopo spunta)
 
+## Booking system — stato attuale e prossimi step
+
+✅ V1 completata: prenotazione pubblica con sistema pending + conferma manuale titolare
+
+### Da implementare prossima sessione booking:
+1. Selezione multipla servizi — il cliente può scegliere più servizi nella stessa prenotazione
+2. Messaggio WhatsApp precompilato — quando il titolare conferma, appare un pulsante
+   "Invia conferma su WhatsApp" con messaggio già scritto e numero del cliente precompilato
+3. Promemoria appuntamento — il giorno prima o X ore prima, nella dashboard appare
+   un alert con pulsante "Invia promemoria WhatsApp" con messaggio precompilato
+   tipo "Ciao [nome], ti ricordiamo l'appuntamento di domani alle [ora] per [servizio]"
+
 ## Note sessione corrente
 
 **Fatto oggi:**

@@ -7480,3 +7480,74 @@ code {
   border: 1.5px solid #fca5a5;
 }
 .ag-pending-btn--reject:hover:not(:disabled) { background: #fef2f2; }
+
+/* ── Agenda: WhatsApp conferma banner ── */
+.ag-wa-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+.ag-wa-banner-text {
+  font-size: 0.88rem;
+  color: #166534;
+}
+.ag-wa-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ag-wa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #25d366;
+  color: #fff;
+  border-radius: 7px;
+  font-size: 0.83rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.ag-wa-btn:hover { background: #1da851; }
+.ag-wa-no-phone {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-style: italic;
+}
+.ag-wa-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #6b7280;
+  border-radius: 4px;
+  padding: 0;
+}
+.ag-wa-dismiss:hover { background: #e5e7eb; }
+
+/* ── Agenda: WhatsApp promemoria link su appuntamento ── */
+.ag-apt-wa {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 2px 7px;
+  background: #25d36622;
+  color: #15803d;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ag-apt-wa:hover { background: #25d36640; }

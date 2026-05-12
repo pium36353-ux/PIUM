@@ -97,6 +97,7 @@ export default function Agenda({ business }) {
 
   const [pendingBookings, setPendingBookings] = useState([])
   const [processingId,    setProcessingId]    = useState(null)
+  const [confirmedWa,     setConfirmedWa]     = useState(null)
 
   // Read location state after mount: atomically set date + view, then clear state
   useEffect(() => {
@@ -127,7 +128,7 @@ export default function Agenda({ business }) {
   const loadAppointments = useCallback(async () => {
     if (!business) return
     setLoading(true)
-    let q = supabase.from('appointments').select('*, employees(name, color)').eq('business_id', business.id)
+    let q = supabase.from('appointments').select('*, employees(name, color), bookings(customer_phone, services(name))').eq('business_id', business.id)
     if (view === 'month') {
       const lastOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0)
       q = q.gte('date', formatDate(monthDate)).lte('date', formatDate(lastOfMonth))
@@ -233,9 +234,11 @@ export default function Agenda({ business }) {
   }
 
   const confirmPendingBooking = async (id) => {
+    const booking = pendingBookings.find(b => b.id === id)
     setProcessingId(id)
     await supabase.rpc('owner_confirm_booking', { p_booking_id: id })
     setProcessingId(null)
+    if (booking) setConfirmedWa(booking)
     loadPendingBookings()
     loadAppointments()
   }
@@ -386,6 +389,28 @@ export default function Agenda({ business }) {
         </div>
       )}
 
+      {/* ── WhatsApp conferma banner ── */}
+      {confirmedWa && (() => {
+        const dateLabel = new Date(confirmedWa.appointment_date + 'T12:00:00')
+          .toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
+        const msg = `Ciao ${confirmedWa.customer_name}, la tua prenotazione per ${confirmedWa.services?.name ?? 'il servizio'} è confermata per ${dateLabel} alle ${confirmedWa.appointment_time?.slice(0, 5)}. A presto! — ${business.name}`
+        const waLink = buildWaLink(confirmedWa.customer_phone, msg)
+        return (
+          <div className="ag-wa-banner">
+            <span className="ag-wa-banner-text">
+              ✓ Prenotazione di <strong>{confirmedWa.customer_name}</strong> confermata
+            </span>
+            <div className="ag-wa-banner-actions">
+              {waLink
+                ? <a className="ag-wa-btn" href={waLink} target="_blank" rel="noopener noreferrer">Invia conferma su WhatsApp</a>
+                : <span className="ag-wa-no-phone">Nessun numero disponibile</span>
+              }
+              <button className="ag-wa-dismiss" onClick={() => setConfirmedWa(null)}><IconX /></button>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── Month view ── */}
       {view === 'month' && (
         <div className="ag-month">
@@ -459,6 +484,7 @@ export default function Agenda({ business }) {
             setConfirmDelId={setConfirmDelId}
             selectedDay={selectedDay}
             openingHours={business?.opening_hours}
+            businessName={business?.name ?? ''}
           />
 
           {/* Daily summary */}
@@ -634,6 +660,13 @@ export default function Agenda({ business }) {
   )
 }
 
+/* ── WhatsApp helper ── */
+function buildWaLink(phone, message) {
+  const clean = phone?.replace(/\D/g, '')
+  if (!clean) return null
+  return `https://wa.me/${clean}?text=${encodeURIComponent(message)}`
+}
+
 /* ── Timeline helpers ── */
 function buildAptBlocks(apts) {
   const items = [...apts].map(a => {
@@ -661,7 +694,7 @@ function buildAptBlocks(apts) {
 
 const DAY_KEYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday']
 
-function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours }) {
+function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName }) {
   const wrapRef = useRef(null)
 
   useEffect(() => {
@@ -741,6 +774,9 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
               const color  = apt.employees?.color ?? '#94a3b8'
               const pct    = 100 / apt.maxCols
               const isDone = apt.completed
+              const waReminderLink = apt.bookings?.customer_phone
+                ? buildWaLink(apt.bookings.customer_phone, `Ciao ${apt.client_name}, ti ricordiamo l'appuntamento di domani alle ${apt.start_time?.slice(0, 5)} per ${apt.bookings?.services?.name ?? 'il tuo appuntamento'}. A presto! — ${businessName}`)
+                : null
               return (
                 <div
                   key={apt.id}
@@ -799,6 +835,15 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                       </span>
                     )}
                     {apt.notes && <span className="ag-apt-notes">{apt.notes}</span>}
+                    {waReminderLink && (
+                      <a
+                        className="ag-apt-wa"
+                        href={waReminderLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                      >Promemoria</a>
+                    )}
                   </div>
                 </div>
               )

@@ -199,6 +199,7 @@ create table appointments (
   duration_minutes int  not null default 60,
   price            numeric(10, 2),
   notes            text,
+  booking_id       uuid references bookings(id) on delete set null,
   completed        boolean not null default false,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
@@ -206,6 +207,7 @@ create table appointments (
 
 create index idx_appointments_business_id on appointments(business_id);
 create index idx_appointments_date        on appointments(business_id, date);
+create index idx_appointments_booking_id  on appointments(booking_id);
 
 -- ============================================================
 -- UPDATED_AT TRIGGER (auto-aggiorna updated_at)
@@ -495,7 +497,7 @@ begin
   update bookings set status = 'confirmed' where id = p_booking_id;
 
   insert into appointments (
-    business_id, client_name, date, start_time, duration_minutes, price, notes
+    business_id, client_name, date, start_time, duration_minutes, price, notes, booking_id
   ) values (
     v_booking.business_id,
     v_booking.customer_name,
@@ -504,7 +506,8 @@ begin
     coalesce(v_dur, 60),
     v_price,
     'Prenotazione confermata – ' || v_booking.customer_email
-    || case when v_booking.customer_phone is not null then ' · ' || v_booking.customer_phone else '' end
+    || case when v_booking.customer_phone is not null then ' · ' || v_booking.customer_phone else '' end,
+    p_booking_id
   );
 end;
 $$;
