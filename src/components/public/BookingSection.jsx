@@ -115,6 +115,11 @@ export default function BookingSection({ business, services }) {
       setError('Nome e email sono obbligatori')
       return
     }
+    // DEV BYPASS: skip OTP entirely, go straight to confirm
+    if (import.meta.env.DEV) {
+      setStep(STEPS.OTP)
+      return
+    }
     setOtpSending(true)
     setError(null)
     const { error: e } = await supabase.auth.signInWithOtp({
@@ -127,10 +132,18 @@ export default function BookingSection({ business, services }) {
   }
 
   async function confirmBooking() {
-    if (otp.length < 6) { setError('Inserisci il codice a 6 cifre'); return }
     setConfirming(true)
     setError(null)
 
+    // DEV BYPASS: simulate success without hitting the DB
+    if (import.meta.env.DEV) {
+      await new Promise(r => setTimeout(r, 900))
+      setConfirming(false)
+      setStep(STEPS.SUCCESS)
+      return
+    }
+
+    if (otp.length < 6) { setConfirming(false); setError('Inserisci il codice a 6 cifre'); return }
     const { error: verifyErr } = await supabase.auth.verifyOtp({
       email: form.email.trim(),
       token: otp,
@@ -269,20 +282,28 @@ export default function BookingSection({ business, services }) {
       {step === STEPS.OTP && (
         <div className="bk-step">
           <p className="bk-step-label">Verifica email</p>
-          <p className="bk-otp-hint">
-            Abbiamo inviato un codice a <strong>{form.email}</strong>.<br />
-            Controlla anche la cartella spam.
-          </p>
-          <input
-            className="bk-otp-input"
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            value={otp}
-            onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="000000"
-          />
-          <button className="bk-submit-btn" onClick={confirmBooking} disabled={confirming || otp.length < 6}>
+          {import.meta.env.DEV
+            ? <p className="bk-otp-hint" style={{ color: '#b45309', background: '#fef3c7', padding: '10px 12px', borderRadius: 8 }}>
+                [DEV] OTP bypassato — clicca direttamente Conferma.<br />
+                Usa l'email del tuo account Supabase nel form.
+              </p>
+            : <p className="bk-otp-hint">
+                Abbiamo inviato un codice a <strong>{form.email}</strong>.<br />
+                Controlla anche la cartella spam.
+              </p>
+          }
+          {!import.meta.env.DEV && (
+            <input
+              className="bk-otp-input"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={otp}
+              onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+            />
+          )}
+          <button className="bk-submit-btn" onClick={confirmBooking} disabled={confirming}>
             {confirming ? 'Conferma in corso...' : 'Conferma prenotazione'}
           </button>
           <button className="bk-resend" onClick={() => { setStep(STEPS.FORM); setOtp('') }}>
