@@ -87,6 +87,7 @@ export default function Dashboard() {
         table: 'bookings',
         filter: `business_id=eq.${business.id}`,
       }, async (payload) => {
+        console.log('[Realtime] INSERT bookings:', payload.new)
         if (payload.new?.status !== 'pending') return
         let serviceName = 'un servizio'
         if (payload.new.service_id) {
@@ -103,7 +104,11 @@ export default function Dashboard() {
         table: 'bookings',
         filter: `business_id=eq.${business.id}`,
       }, () => { fetchCount() })
-      .subscribe()
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED')    console.log('[Realtime] bookings: connesso')
+        if (status === 'CHANNEL_ERROR') console.error('[Realtime] bookings: errore', err)
+        if (status === 'TIMED_OUT')     console.warn('[Realtime] bookings: timeout')
+      })
 
     return () => { supabase.removeChannel(channel) }
   }, [business])

@@ -81,6 +81,7 @@ export async function testNotification() {
 }
 
 export async function notifyNewBooking(customerName, serviceName, dateStr, timeStr) {
+  console.log('[notifyNewBooking] permission:', Notification.permission, { customerName, serviceName, dateStr, timeStr })
   if (Notification.permission !== 'granted') return
   const date = dateStr
     ? new Date(dateStr + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })

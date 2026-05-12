@@ -26,7 +26,7 @@ export default function PublicSite() {
 
       const [{ data: svcs }, { data: rvs }, { data: sc }] = await Promise.all([
         supabase.from('services').select('*').eq('business_id', biz.id).eq('is_available', true).order('sort_order'),
-        supabase.from('reviews').select('id,author_name,rating,body,reply,reviewed_at').eq('business_id', biz.id).eq('published', true).order('reviewed_at', { ascending: false }),
+        supabase.from('reviews').select('id,author_name,rating,body,reply,reviewed_at').eq('business_id', biz.id).eq('is_visible', true).order('reviewed_at', { ascending: false }),
         supabase.from('site_content').select('*').eq('business_id', biz.id),
       ])
 
@@ -128,7 +128,7 @@ export default function PublicSite() {
           <div className="ps-avatar" style={{ background: avatarBg, borderColor: avatarBdr }}>
             {profile_image
               ? <img src={profile_image} alt={name} className="ps-avatar-img" />
-              : <span className="ps-avatar-letter" style={{ color: avatarFg }}>{name[0].toUpperCase()}</span>
+              : <span className="ps-avatar-letter" style={{ color: avatarFg }}>{name?.[0]?.toUpperCase() ?? '?'}</span>
             }
           </div>
           <div className="ps-hero-text">
@@ -327,7 +327,7 @@ function PsReviewCard({ review: r }) {
   return (
     <div className="ps-review-card">
       <div className="ps-review-head">
-        <div className="ps-review-avatar">{r.author_name[0].toUpperCase()}</div>
+        <div className="ps-review-avatar">{r.author_name?.[0]?.toUpperCase() ?? '?'}</div>
         <div className="ps-review-author-info">
           <span className="ps-review-author-name">{r.author_name}</span>
           <div className="ps-review-meta">
