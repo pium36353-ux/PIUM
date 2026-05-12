@@ -7551,3 +7551,40 @@ code {
   white-space: nowrap;
 }
 .ag-apt-wa:hover { background: #25d36640; }
+
+/* ── Dashboard: badge prenotazioni pending ── */
+.db-nav-item { position: relative; }
+.db-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: auto;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.db-stat-card { position: relative; }
+.db-stat-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}

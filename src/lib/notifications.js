@@ -80,6 +80,19 @@ export async function testNotification() {
   return true
 }
 
+export async function notifyNewBooking(customerName, serviceName, dateStr, timeStr) {
+  if (Notification.permission !== 'granted') return
+  const date = dateStr
+    ? new Date(dateStr + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
+    : ''
+  const time = timeStr ? timeStr.slice(0, 5) : ''
+  await showViaServiceWorker(
+    'Nuova prenotazione ricevuta',
+    `${customerName} per ${serviceName} il ${date} alle ${time}`,
+    {}
+  )
+}
+
 export function notifyNextAppointment(appointments) {
   const raw = localStorage.getItem('pium_notification_settings')
   const settings = raw ? JSON.parse(raw) : {}

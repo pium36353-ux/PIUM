@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import { notifyNewBooking } from '../lib/notifications'
 import Panoramica  from '../components/dashboard/Panoramica'
 import EditorSito  from '../components/dashboard/EditorSito'
 import Servizi     from '../components/dashboard/Servizi'
@@ -26,7 +27,8 @@ export default function Dashboard() {
   const [section, setSection]   = useState('panoramica')
   const [user, setUser]         = useState(null)
   const [business, setBusiness] = useState(null)
-  const [sideOpen, setSideOpen] = useState(false)
+  const [sideOpen,      setSideOpen]      = useState(false)
+  const [pendingCount,  setPendingCount]  = useState(0)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -64,6 +66,47 @@ export default function Dashboard() {
     promemoria: Promemoria,
     agenda:     Agenda,
   }[section]
+
+  useEffect(() => {
+    if (!business) return
+
+    const fetchCount = () =>
+      supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('business_id', business.id)
+        .eq('status', 'pending')
+        .then(({ count }) => setPendingCount(count ?? 0))
+
+    fetchCount()
+
+    const channel = supabase.channel(`pending-bookings-${business.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'bookings',
+        filter: `business_id=eq.${business.id}`,
+      }, async (payload) => {
+        if (payload.new?.status !== 'pending') return
+        let serviceName = 'un servizio'
+        if (payload.new.service_id) {
+          const { data: svc } = await supabase
+            .from('services').select('name').eq('id', payload.new.service_id).maybeSingle()
+          if (svc?.name) serviceName = svc.name
+        }
+        notifyNewBooking(payload.new.customer_name, serviceName, payload.new.appointment_date, payload.new.appointment_time)
+        setPendingCount(c => c + 1)
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'bookings',
+        filter: `business_id=eq.${business.id}`,
+      }, () => { fetchCount() })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [business])
 
   const navigate_section = (id) => {
     setSection(id)
@@ -112,6 +155,9 @@ export default function Dashboard() {
               >
                 <Icon />
                 <span>{label}</span>
+                {id === 'agenda' && pendingCount > 0 && (
+                  <span className="db-nav-badge">{pendingCount}</span>
+                )}
               </button>
             ))}
           </nav>
@@ -174,7 +220,7 @@ export default function Dashboard() {
               <IconChevronLeft /> Panoramica
             </button>
           )}
-          {Section && <Section key={section} business={business} user={user} onNavigate={navigate_section} />}
+          {Section && <Section key={section} business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} />}
         </main>
       </div>
     </div>

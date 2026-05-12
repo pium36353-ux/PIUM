@@ -57,7 +57,7 @@ function formatReminderDue(due_at) {
 }
 
 /* ── Component ── */
-export default function Panoramica({ business, onNavigate }) {
+export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
   const rNav = useNavigate()
   const [counts,       setCounts]       = useState({ servizi: null, recensioni: null, appuntamenti: null, bozzeSocial: null })
   const [loading,      setLoading]      = useState(true)
@@ -152,6 +152,9 @@ export default function Panoramica({ business, onNavigate }) {
               onNavigate?.(s.section)
             }}
           >
+            {s.section === 'agenda' && pendingCount > 0 && (
+              <span className="db-stat-badge">{pendingCount}</span>
+            )}
             <span className="db-stat-icon">{s.icon}</span>
             <span className="db-stat-value">
               {loading ? <span className="db-stat-loading">…</span> : s.value}
