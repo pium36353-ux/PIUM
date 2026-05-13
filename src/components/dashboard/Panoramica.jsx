@@ -36,7 +36,7 @@ function formatActivityTime(isoStr) {
 function reminderUrgency(due_at) {
   if (!due_at) return 'normal'
   const today = new Date(); today.setHours(0, 0, 0, 0)
-  const due   = new Date(due_at + 'T00:00:00')
+  const due   = new Date(due_at); due.setHours(0, 0, 0, 0)
   const diff  = Math.round((due - today) / 86400000)
   if (diff <= 0) return 'red'
   if (diff <= 3) return 'orange'
@@ -46,7 +46,7 @@ function reminderUrgency(due_at) {
 function formatReminderDue(due_at) {
   if (!due_at) return null
   const today = new Date(); today.setHours(0, 0, 0, 0)
-  const due   = new Date(due_at + 'T00:00:00')
+  const due   = new Date(due_at); due.setHours(0, 0, 0, 0)
   const diff  = Math.round((due - today) / 86400000)
   if (diff < 0)  return `scaduto`
   if (diff === 0) return 'oggi'
