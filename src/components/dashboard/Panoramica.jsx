@@ -130,6 +130,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
     { label: 'Recensioni',          value: counts.recensioni,   icon: '⭐',  section: 'recensioni' },
     { label: 'Appuntamenti oggi',   value: counts.appuntamenti, icon: '📅', section: 'agenda'     },
     { label: 'Bozze social',        value: counts.bozzeSocial,  icon: '✍️', section: 'social'     },
+    { label: 'Calendario mensile',  value: null,                icon: '🗓️', section: 'agenda', viewMode: 'month', desc: 'Visualizza e pianifica gli appuntamenti del mese' },
   ]
 
   return (
@@ -147,19 +148,23 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
             className="db-stat-card db-stat-card--link"
             onClick={() => {
               if (s.section === 'agenda') {
-                rNav(window.location.pathname, { state: { agendaView: 'day' }, replace: true })
+                const navState = s.viewMode ? { viewMode: s.viewMode } : { agendaView: 'day' }
+                rNav(window.location.pathname, { state: navState, replace: true })
               }
               onNavigate?.(s.section)
             }}
           >
-            {s.section === 'agenda' && pendingCount > 0 && (
+            {s.section === 'agenda' && !s.viewMode && pendingCount > 0 && (
               <span className="db-stat-badge">{pendingCount}</span>
             )}
             <span className="db-stat-icon">{s.icon}</span>
-            <span className="db-stat-value">
-              {loading ? <span className="db-stat-loading">…</span> : s.value}
-            </span>
+            {s.value != null && (
+              <span className="db-stat-value">
+                {loading ? <span className="db-stat-loading">…</span> : s.value}
+              </span>
+            )}
             <span className="db-stat-label">{s.label}</span>
+            {s.desc && <span className="db-stat-desc">{s.desc}</span>}
           </button>
         ))}
       </div>

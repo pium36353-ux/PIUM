@@ -72,7 +72,7 @@ export default function Agenda({ business }) {
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
-  const [view,         setView]         = useState('month')
+  const [view,         setView]         = useState('day')
   const [monthDate,    setMonthDate]    = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedDay,  setSelectedDay]  = useState(today)
 
@@ -105,7 +105,6 @@ export default function Agenda({ business }) {
   useEffect(() => {
     const state   = location.state ?? {}
     const dateStr = state.selectedDate ?? state.agendaDate
-    const forceDay = state.agendaView === 'day' || !!state.selectedDate
 
     if (dateStr) {
       const d = new Date(dateStr + 'T00:00:00')
@@ -113,10 +112,16 @@ export default function Agenda({ business }) {
       setSelectedDay(d)
       setMonthDate(new Date(d.getFullYear(), d.getMonth(), 1))
     }
-    if (forceDay) setView('day')
+
+    if (state.viewMode) {
+      setView(state.viewMode)
+    } else if (state.agendaView === 'day' || !!state.selectedDate) {
+      setView('day')
+    }
+
     if (state.selectedTime) scrollToTimeRef.current = state.selectedTime
 
-    if (state.agendaView || state.agendaDate || state.selectedDate || state.selectedTime) {
+    if (state.viewMode || state.agendaView || state.agendaDate || state.selectedDate || state.selectedTime) {
       rNav(location.pathname, { state: {}, replace: true })
     }
   }, []) // eslint-disable-line
