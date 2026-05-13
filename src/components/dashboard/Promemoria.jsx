@@ -12,9 +12,33 @@ const PRIORITY_META = {
 const FILTER_STATUS   = ['tutti', 'pending', 'done']
 const FILTER_PRIORITY = ['tutti', 'high', 'medium', 'low']
 
-const EMPTY_FORM = { title: '', notes: '', due_at: '', priority: 'medium' }
+const EMPTY_FORM = {
+  title: '', notes: '', due_at: '', priority: 'medium',
+  dueDateMode: 'fixed', relativeAmount: '3', relativeUnit: 'days',
+}
+
+const RELATIVE_UNITS = [
+  { value: 'days',   label: 'giorni'    },
+  { value: 'weeks',  label: 'settimane' },
+  { value: 'months', label: 'mesi'      },
+]
 
 /* ── Helpers ── */
+function calcRelativeDate(amount, unit) {
+  const n = parseInt(amount, 10)
+  if (!n || n < 1) return null
+  const d = new Date()
+  if (unit === 'days')   d.setDate(d.getDate() + n)
+  if (unit === 'weeks')  d.setDate(d.getDate() + n * 7)
+  if (unit === 'months') d.setMonth(d.getMonth() + n)
+  return d
+}
+
+function formatPreviewDate(date) {
+  if (!date) return null
+  return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 function formatDueDate(iso) {
   if (!iso) return null
   const d    = new Date(iso)
@@ -83,10 +107,13 @@ export default function Promemoria({ business }) {
 
   const openEdit = (r) => {
     setForm({
-      title:    r.title,
-      notes:    r.notes ?? '',
-      due_at:   toLocalDateInput(r.due_at),
-      priority: r.priority,
+      title:         r.title,
+      notes:         r.notes ?? '',
+      due_at:        toLocalDateInput(r.due_at),
+      priority:      r.priority,
+      dueDateMode:   'fixed',
+      relativeAmount: '3',
+      relativeUnit:  'days',
     })
     setErrors({})
     setEditId(r.id)
@@ -115,10 +142,16 @@ export default function Promemoria({ business }) {
 
     const { data: { user } } = await supabase.auth.getUser()
 
+    let resolvedDueAt = form.due_at || null
+    if (form.dueDateMode === 'relative') {
+      const d = calcRelativeDate(form.relativeAmount, form.relativeUnit)
+      resolvedDueAt = d ? d.toISOString().slice(0, 10) : null
+    }
+
     const payload = {
       title:    form.title.trim(),
       notes:    form.notes.trim() || null,
-      due_at:   form.due_at || null,
+      due_at:   resolvedDueAt,
       priority: form.priority,
     }
 
@@ -319,12 +352,27 @@ export default function Promemoria({ business }) {
                 />
               </div>
 
-              {/* Data + Priorità */}
-              <div className="pr-fields-row">
-                <div className="pr-field">
-                  <label className="pr-label" htmlFor="pr-due">
+              {/* Scadenza */}
+              <div className="pr-field">
+                <div className="pr-due-header">
+                  <label className="pr-label">
                     Scadenza <span className="pr-optional">(facoltativo)</span>
                   </label>
+                  <div className="pr-due-mode-tabs">
+                    <button
+                      type="button"
+                      className={`pr-due-tab ${form.dueDateMode === 'fixed' ? 'pr-due-tab--active' : ''}`}
+                      onClick={() => setForm(f => ({ ...f, dueDateMode: 'fixed' }))}
+                    >Data fissa</button>
+                    <button
+                      type="button"
+                      className={`pr-due-tab ${form.dueDateMode === 'relative' ? 'pr-due-tab--active' : ''}`}
+                      onClick={() => setForm(f => ({ ...f, dueDateMode: 'relative' }))}
+                    >Scadenza relativa</button>
+                  </div>
+                </div>
+
+                {form.dueDateMode === 'fixed' ? (
                   <input
                     id="pr-due"
                     className="pr-input"
@@ -333,23 +381,52 @@ export default function Promemoria({ business }) {
                     onChange={set('due_at')}
                     min={new Date().toISOString().slice(0, 10)}
                   />
-                </div>
-
-                <div className="pr-field">
-                  <label className="pr-label">Priorità</label>
-                  <div className="pr-priority-row">
-                    {['high', 'medium', 'low'].map(p => (
-                      <button
-                        key={p}
-                        type="button"
-                        className={`pr-priority-btn pr-priority-btn--${p} ${form.priority === p ? 'pr-priority-btn--active' : ''}`}
-                        onClick={() => setForm(f => ({ ...f, priority: p }))}
-                      >
-                        <span className={`pr-dot ${PRIORITY_META[p].dot}`} />
-                        {PRIORITY_META[p].label}
-                      </button>
-                    ))}
+                ) : (
+                  <div className="pr-relative-row">
+                    <span className="pr-relative-prefix">tra</span>
+                    <input
+                      className="pr-input pr-relative-num"
+                      type="number"
+                      min="1"
+                      max="999"
+                      value={form.relativeAmount}
+                      onChange={e => setForm(f => ({ ...f, relativeAmount: e.target.value }))}
+                    />
+                    <select
+                      className="pr-input pr-relative-unit"
+                      value={form.relativeUnit}
+                      onChange={e => setForm(f => ({ ...f, relativeUnit: e.target.value }))}
+                    >
+                      {RELATIVE_UNITS.map(u => (
+                        <option key={u.value} value={u.value}>{u.label}</option>
+                      ))}
+                    </select>
+                    {(() => {
+                      const d = calcRelativeDate(form.relativeAmount, form.relativeUnit)
+                      const preview = formatPreviewDate(d)
+                      return preview
+                        ? <span className="pr-relative-preview">= {preview}</span>
+                        : null
+                    })()}
                   </div>
+                )}
+              </div>
+
+              {/* Priorità */}
+              <div className="pr-field">
+                <label className="pr-label">Priorità</label>
+                <div className="pr-priority-row">
+                  {['high', 'medium', 'low'].map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      className={`pr-priority-btn pr-priority-btn--${p} ${form.priority === p ? 'pr-priority-btn--active' : ''}`}
+                      onClick={() => setForm(f => ({ ...f, priority: p }))}
+                    >
+                      <span className={`pr-dot ${PRIORITY_META[p].dot}`} />
+                      {PRIORITY_META[p].label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
