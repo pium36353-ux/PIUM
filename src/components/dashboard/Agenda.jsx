@@ -28,7 +28,7 @@ const DAY_LETTER  = ['L','M','M','G','V','S','D']
 const EMPTY_FORM = { date: '', client_name: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '' }
 const EMPTY_EMP  = { name: '', color: COLORS[0] }
 
-const SLOT_H = 12 // px per 5-minute slot
+const SLOT_H = 40 // px per 30-minute slot
 
 /* ── Date utilities ── */
 function formatDate(date) {
@@ -707,7 +707,7 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
     if (scrollToTimeRef?.current) {
       const [h, m] = scrollToTimeRef.current.split(':').map(Number)
       const startMin = h * 60 + m
-      wrapRef.current.scrollTop = Math.max(0, startMin - 60) / 5 * SLOT_H
+      wrapRef.current.scrollTop = Math.max(0, startMin - 60) / 30 * SLOT_H
       scrollToTimeRef.current = null
       return
     }
@@ -717,15 +717,15 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
 
     let scrollPx
     if (isToday) {
-      scrollPx = Math.max(0, new Date().getHours() - 1) * 60 * SLOT_H / 5
+      scrollPx = Math.max(0, new Date().getHours() - 1) * 2 * SLOT_H
     } else {
       const dayKey = DAY_KEYS[selectedDay.getDay()]
       const dayH   = openingHours?.[dayKey]
       if (dayH && !dayH.closed && dayH.open) {
         const [h, m] = dayH.open.split(':').map(Number)
-        scrollPx = ((h * 60 + m) / 5) * SLOT_H
+        scrollPx = ((h * 60 + m) / 30) * SLOT_H
       } else {
-        scrollPx = 8 * 60 * SLOT_H / 5
+        scrollPx = 8 * 2 * SLOT_H
       }
     }
     wrapRef.current.scrollTop = scrollPx
@@ -740,37 +740,29 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
       ) : (
         <div className="ag-time-grid">
 
-          {/* Left: time labels (one per 30 min) */}
+          {/* Left: time labels (one per hour) */}
           <div className="ag-time-labels">
-            {Array.from({ length: 48 }, (_, i) => {
-              const totalMin = i * 30
-              const h = Math.floor(totalMin / 60)
-              const m = totalMin % 60
-              const label = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-              return (
-                <div
-                  key={i}
-                  className={`ag-time-label ${m === 0 ? 'ag-time-label--hour' : 'ag-time-label--half'}`}
-                  style={{ height: SLOT_H * 6 }}
-                >
-                  {label}
-                </div>
-              )
-            })}
+            {Array.from({ length: 24 }, (_, h) => (
+              <div
+                key={h}
+                className="ag-time-label ag-time-label--hour"
+                style={{ height: SLOT_H * 2 }}
+              >
+                {`${String(h).padStart(2, '0')}:00`}
+              </div>
+            ))}
           </div>
 
           {/* Right: slot rows + absolute appointment blocks */}
           <div className="ag-slots-col" style={{ position: 'relative' }}>
-            {Array.from({ length: 288 }, (_, i) => {
-              const h = Math.floor(i / 12)
-              const m = (i % 12) * 5
+            {Array.from({ length: 48 }, (_, i) => {
+              const totalMin = i * 30
+              const h       = Math.floor(totalMin / 60)
+              const m       = totalMin % 60
               const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-              const posInHour = i % 12
-              let slotCls = 'ag-slot'
-              if (posInHour === 11)     slotCls += ' ag-slot--hour'
-              else if (posInHour === 5) slotCls += ' ag-slot--half'
+              const isHour  = m === 0
               return (
-                <div key={i} className={slotCls} style={{ height: SLOT_H }}>
+                <div key={i} className={`ag-slot ${isHour ? 'ag-slot--hour' : 'ag-slot--half'}`} style={{ height: SLOT_H }}>
                   <button
                     className="ag-slot-add"
                     onClick={() => openModal(formatDate(selectedDay), timeStr)}
@@ -782,8 +774,8 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
             })}
 
             {blocks.map(apt => {
-              const top    = (apt.startMin / 5) * SLOT_H
-              const height = Math.max((Number(apt.duration_minutes) / 5) * SLOT_H, SLOT_H * 2)
+              const top    = (apt.startMin / 30) * SLOT_H
+              const height = Math.max((Number(apt.duration_minutes) / 30) * SLOT_H, SLOT_H * 0.9)
               const color  = apt.employees?.color ?? '#94a3b8'
               const pct    = 100 / apt.maxCols
               const isDone = apt.completed
@@ -810,7 +802,7 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                   }}
                   onClick={(e) => {
                     const offsetY = e.clientY - e.currentTarget.getBoundingClientRect().top
-                    const tappedMin = apt.startMin + Math.floor(offsetY / SLOT_H) * 5
+                    const tappedMin = apt.startMin + Math.round(offsetY / SLOT_H) * 30
                     const th = Math.floor(tappedMin / 60)
                     const tm = tappedMin % 60
                     openEditModal(apt, `${String(th).padStart(2,'0')}:${String(tm).padStart(2,'0')}`)
