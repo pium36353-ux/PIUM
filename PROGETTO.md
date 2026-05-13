@@ -60,21 +60,25 @@
 
 ## Note sessione corrente
 
-**Fatto oggi:**
-- Card panoramica: 3 card funzionanti (Attività recenti, Prossime attività, Promemoria) con navigazione cliccabile
-- Bottone "Accedi / Registrati" in landing
-- PWA installabile con icone del fulmine viola su sfondo bianco
-- Sicurezza: Claude API key spostata in Supabase Edge Function, non più esposta nel frontend
-
-**Da fare prima del lancio commerciale:**
-- Sostituire Claude API key temporanea con quella dell'account aziendale (solo variabile Supabase, nessun codice)
-- Icona PWA da migliorare (attualmente nera su alcuni dispositivi)
+**Fatto in questa sessione:**
+- Fix card "Appuntamenti oggi": ora mostra solo gli appuntamenti del giorno corrente non completati
+- Fix navigazione agenda: eliminata la race condition tra React Router e React state — la vista viene passata come prop diretta da Dashboard, non più letta da location.state
+- Agenda apre sempre in vista giornaliera per default
+- Nuova card "Calendario mensile" in Panoramica che apre sempre la vista mensile
+- Griglia agenda giornaliera: slot da 5 minuti → 30 minuti, appuntamenti proporzionali alla durata
+- Riordino menu laterale: Panoramica, Agenda, Promemoria, Social, Recensioni, Servizi, Editor Sito
+- Nuovo layout Panoramica: 2 card grandi (Appuntamenti oggi + Calendario mensile) + 4 righe compatte (Promemoria, Servizi, Bozze social, Recensioni)
+- Orari di apertura: supporto due fasce orarie per giorno (mattina + pomeriggio), retrocompatibile con vecchio formato
+- Fasce chiuse visibili nella griglia giornaliera dell'agenda con sfondo rigato
+- Disclaimer quando si salva un appuntamento fuori orario di lavoro
+- Scadenza relativa nei promemoria: "tra X giorni/settimane/mesi" con anteprima data calcolata
 
 **Da fare prossima sessione:**
 - Bot supporto clienti con FAQ di PIUM
 - Sottodominio personalizzato per ogni attività
 - Controllo analytics_events (rate limit insert pubblico)
 - Sottodominio personalizzato nomeattivita.piumapp.com
+- Booking system: selezione multipla servizi, messaggio WhatsApp precompilato alla conferma, promemoria WhatsApp il giorno prima
 
 ---
 
@@ -169,3 +173,5 @@ Claude API spostata su Supabase Edge Function (claude-proxy), chiave non esposta
 - **Galleria fotografica:** limite alzato a 20 foto, upload multiplo (attributo `multiple` sull'input), barra di progresso animata durante batch upload, counter "X / 20 foto" sempre visibile
 - **Compressione automatica immagini lato client:** libreria `browser-image-compression` applicata a galleria, immagine di copertina e foto profilo — impostazioni: `maxSizeMB: 0.8`, `maxWidthOrHeight: 1920`, `useWebWorker: true`
 - **Infrastruttura storage:** quando si raggiungono i primi clienti paganti, passare a Supabase Pro (25$/mese) per avere 100 GB di storage invece di 1 GB del piano gratuito
+
+

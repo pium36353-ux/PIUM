@@ -664,3 +664,86 @@ Click notifica → apre /dashboard?s=agenda
   - Click normale: apre `data.url` se presente, altrimenti `/dashboard`; focalizza tab esistente se disponibile
 
 **iOS:** La PWA deve essere installata tramite "Aggiungi a schermo Home" per ricevere Web Push su iOS 16.4+. La policy `userVisibleOnly: true` è obbligatoria per tutte le piattaforme.
+
+---
+
+## 10. Modifiche Architetturali — Sessione 2026-05-13
+
+### 10.1 Struttura `businesses.opening_hours` (nuovo formato)
+
+La colonna `opening_hours` (jsonb) su `businesses` supporta ora due fasce orarie per giorno.
+
+**Nuovo formato (da Orari.jsx v2):**
+```json
+{
+  "monday": {
+    "closed": false,
+    "morning":   { "open": "09:00", "close": "13:00", "active": true },
+    "afternoon": { "open": "15:00", "close": "19:00", "active": true }
+  },
+  "sunday": {
+    "closed": true,
+    "morning":   { "open": "09:00", "close": "13:00", "active": true },
+    "afternoon": { "open": "15:00", close": "19:00", "active": false }
+  }
+}
+```
+
+**Vecchio formato (ancora supportato — retrocompatibilità):**
+```json
+{
+  "monday": { "open": "09:00", "close": "18:00", "closed": false }
+}
+```
+
+**Migrazione lato client** (`Orari.jsx`, funzione `migrateDay`): se un giorno ha `open`/`close` al livello radice (vecchio formato), viene convertito automaticamente a `morning` attivo + `afternoon` inattivo. La conversione avviene solo in memoria al mount del componente; il DB viene aggiornato solo alla prima modifica del titolare.
+
+**Lettura in PublicSite.jsx** (`formatDayHours`): gestisce entrambi i formati. Mostra `09:00 – 13:00 · 15:00 – 19:00` se entrambe le fasce sono attive, fascia singola se solo una è attiva.
+
+**Lettura in Agenda.jsx** (`parseOpeningRanges`): converte il formato (vecchio o nuovo) in array `[[startMin, endMin], ...]` per il calcolo degli overlay di chiusura e per il check fuori-orario.
+
+---
+
+### 10.2 Prop `initialView` in `Agenda.jsx`
+
+**Problema risolto:** race condition tra `React Router navigate()` e `React setState()` nella stessa call-stack. Se `setSection('agenda')` e `navigate(pathname, {state: {viewMode}})` venivano chiamati insieme, il componente `Agenda` poteva montarsi prima che `location.state` fosse aggiornato, leggendo il viewMode sbagliato.
+
+**Soluzione:**
+- `Dashboard.jsx` mantiene lo stato `agendaInitialView` (default `'day'`)
+- La funzione `navigate_section(id, opts)` aggiorna `agendaInitialView` con `opts.view` **prima** di chiamare `setSection`
+- `Agenda` riceve `initialView` come prop e chiama `useState(initialView)` — il valore è già corretto al momento del primo render, nessuna dipendenza da `location.state` per la selezione della vista
+
+**File coinvolti:** `Dashboard.jsx` (stato + prop), `Agenda.jsx` (`function Agenda({ business, initialView = 'day' })`)
+
+---
+
+### 10.3 Griglia giornaliera `Agenda.jsx` — slot 30 minuti
+
+**Costante:** `SLOT_H = 40` (px per slot da 30 minuti, dichiarata a livello modulo)
+
+**Slot grid:**
+- 48 slot totali (24 ore × 2) — ciascuno `height: SLOT_H`
+- Label ore: 24 label, una ogni due slot (`height: SLOT_H * 2`)
+- Solo le righe d'ora piena hanno bordo marcato (`ag-slot--hour`); le mezze ore sono tratteggiati (`ag-slot--half`)
+
+**Posizionamento appuntamenti:**
+```js
+top    = (startMin / 30) * SLOT_H
+height = Math.max((duration_minutes / 30) * SLOT_H, SLOT_H * 0.9)
+```
+
+**Scroll automatico:**
+- Oggi: scorre all'ora corrente meno 1 ora (`(currentHour - 1) * 2 * SLOT_H`)
+- Altro giorno: scorre all'inizio della prima fascia aperta (`ranges[0][0] / 30 * SLOT_H`)
+- Deep-link da Panoramica con orario specifico: `(startMin - 60) / 30 * SLOT_H` (consumato via `scrollToTimeRef` — ref nullato dopo uso per evitare re-scroll)
+
+---
+
+### 10.4 Scadenza relativa nei promemoria
+
+Aggiunta in `Promemoria.jsx` — solo logica frontend, nessuna modifica al DB.
+
+- Stato locale: `dueDateMode: 'fixed' | 'relative'`, `relativeAmount: string`, `relativeUnit: 'days' | 'weeks' | 'months'`
+- `calcRelativeDate(amount, unit)`: somma il periodo alla data di oggi e restituisce un oggetto `Date`
+- Al salvataggio: se `dueDateMode === 'relative'`, `due_at` viene calcolata e salvata come `YYYY-MM-DD`; il DB riceve sempre una data assoluta
+- `openEdit` resetta sempre `dueDateMode: 'fixed'` (la data già salvata nel DB è assoluta)
