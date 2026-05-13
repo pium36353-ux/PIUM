@@ -10,39 +10,53 @@ const PLANS = [
   { value: 'starter', label: 'Starter' },
   { value: 'pro',     label: 'Pro'     },
 ]
-
-const STATUS_FILTERS = ['tutti', 'active', 'trial', 'expired', 'suspended']
+const STATUS_FILTERS      = ['tutti', 'active', 'trial', 'expired', 'suspended']
 const STATUS_FILTER_LABELS = { tutti: 'Tutti', active: 'Attivi', trial: 'Trial', expired: 'Scaduti', suspended: 'Sospesi' }
 
 /* ── Helpers ── */
-function getStatus(biz) {
-  return biz.status ?? 'trial'
-}
+function getStatus(biz) { return biz.status ?? 'trial' }
 
 function formatDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('it-IT', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  })
+  return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function formatDateShort(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
+}
+
+function trialDaysLeft(biz) {
+  if (getStatus(biz) !== 'trial' || !biz.trial_ends_at) return null
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const end   = new Date(biz.trial_ends_at); end.setHours(0, 0, 0, 0)
+  return Math.round((end - today) / 86400000)
 }
 
 /* ── Component ── */
 export default function Admin() {
   const navigate = useNavigate()
-  const [user, setUser]           = useState(null)
-  const [businesses, setBusinesses] = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [denied, setDenied]       = useState(false)
-
-  const [search, setSearch]       = useState('')
+  const [user,         setUser]         = useState(null)
+  const [businesses,   setBusinesses]   = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [denied,       setDenied]       = useState(false)
+  const [search,       setSearch]       = useState('')
   const [statusFilter, setStatusFilter] = useState('tutti')
-
-  const [updatingId, setUpdatingId] = useState(null)
+  const [updatingId,   setUpdatingId]   = useState(null)
+  const [copied,       setCopied]       = useState(null)
 
   const [section,      setSection]      = useState('clienti')
   const [affiliates,   setAffiliates]   = useState([])
   const [affLoading,   setAffLoading]   = useState(false)
   const [activatingId, setActivatingId] = useState(null)
+
+  /* Drawer */
+  const [drawerBiz,           setDrawerBiz]           = useState(null)
+  const [drawerHealth,        setDrawerHealth]        = useState(null)
+  const [drawerHealthLoading, setDrawerHealthLoading] = useState(false)
+  const [drawerNotes,         setDrawerNotes]         = useState('')
+  const [notesSaving,         setNotesSaving]         = useState(false)
+  const [notesSaved,          setNotesSaved]          = useState(false)
 
   /* ── Auth + role check ── */
   useEffect(() => {
@@ -54,21 +68,56 @@ export default function Admin() {
     })
   }, [navigate])
 
-  /* ── Load all businesses ── */
+  /* ── Load businesses ── */
   const load = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('businesses')
-      .select('id, name, email, city, category, slug, plan, plan_price, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total')
+      .select('id, name, email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total')
       .order('created_at', { ascending: false })
+    if (error) console.error('[Admin] load error:', error)
     setBusinesses(data ?? [])
     setLoading(false)
   }, [user])
 
   useEffect(() => { load() }, [load])
 
-  /* ── Inline plan update ── */
+  /* ── Drawer ── */
+  const openDrawer = useCallback(async (biz) => {
+    setDrawerBiz(biz)
+    setDrawerNotes(biz.admin_notes ?? '')
+    setNotesSaved(false)
+    setDrawerHealth(null)
+    setDrawerHealthLoading(true)
+    const { count } = await supabase
+      .from('services')
+      .select('*', { count: 'exact', head: true })
+      .eq('business_id', biz.id)
+    setDrawerHealth({ serviceCount: count ?? 0, hasCover: !!biz.cover_url })
+    setDrawerHealthLoading(false)
+  }, [])
+
+  const closeDrawer = useCallback(() => {
+    setDrawerBiz(null)
+    setDrawerHealth(null)
+    setDrawerNotes('')
+  }, [])
+
+  const saveNotes = useCallback(async () => {
+    if (!drawerBiz) return
+    setNotesSaving(true)
+    const { error } = await supabase.from('businesses')
+      .update({ admin_notes: drawerNotes }).eq('id', drawerBiz.id)
+    setNotesSaving(false)
+    if (!error) {
+      setBusinesses(prev => prev.map(b => b.id === drawerBiz.id ? { ...b, admin_notes: drawerNotes } : b))
+      setNotesSaved(true)
+      setTimeout(() => setNotesSaved(false), 2000)
+    }
+  }, [drawerBiz, drawerNotes])
+
+  /* ── Business actions ── */
   const updatePlan = async (id, plan) => {
     setUpdatingId(id)
     await supabase.from('businesses').update({ plan }).eq('id', id)
@@ -76,7 +125,6 @@ export default function Admin() {
     setUpdatingId(null)
   }
 
-  /* ── Plan status ── */
   const setBizStatus = async (id, status) => {
     setUpdatingId(id)
     await supabase.from('businesses').update({ status }).eq('id', id)
@@ -91,8 +139,7 @@ export default function Admin() {
 
   const extendTrial = async (biz) => {
     const base = biz.trial_ends_at && new Date(biz.trial_ends_at) > new Date()
-      ? new Date(biz.trial_ends_at)
-      : new Date()
+      ? new Date(biz.trial_ends_at) : new Date()
     base.setDate(base.getDate() + 30)
     const trial_ends_at = base.toISOString()
     setUpdatingId(biz.id)
@@ -101,6 +148,16 @@ export default function Admin() {
     setUpdatingId(null)
   }
 
+  const copyLink = useCallback((biz) => {
+    if (!biz.slug) return
+    const url = `${window.location.origin}/${biz.slug}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(biz.id)
+      setTimeout(() => setCopied(null), 2000)
+    })
+  }, [])
+
+  /* ── Affiliates ── */
   const loadAffiliates = useCallback(async () => {
     if (!user) return
     setAffLoading(true)
@@ -129,44 +186,34 @@ export default function Admin() {
     if (statusFilter !== 'tutti' && getStatus(b) !== statusFilter) return false
     if (search.trim()) {
       const q = search.toLowerCase()
-      if (
-        !b.name?.toLowerCase().includes(q) &&
-        !b.email?.toLowerCase().includes(q) &&
-        !b.city?.toLowerCase().includes(q)
-      ) return false
+      if (!b.name?.toLowerCase().includes(q) && !b.email?.toLowerCase().includes(q) && !b.city?.toLowerCase().includes(q)) return false
     }
     return true
   })
 
-  /* ── Stats ── */
-  const total    = businesses.length
-  const attivi   = businesses.filter(b => getStatus(b) === 'active').length
-  const trial    = businesses.filter(b => getStatus(b) === 'trial').length
-  const scaduti  = businesses.filter(b => getStatus(b) === 'expired').length
+  /* ── Computed stats ── */
+  const total     = businesses.length
+  const attivi    = businesses.filter(b => getStatus(b) === 'active').length
+  const inTrial   = businesses.filter(b => getStatus(b) === 'trial').length
+  const scaduti   = businesses.filter(b => getStatus(b) === 'expired').length
+  const mrr       = businesses.filter(b => getStatus(b) === 'active').reduce((s, b) => s + Number(b.plan_price ?? 99), 0)
+  const convBase  = attivi + scaduti
+  const convRate  = convBase > 0 ? Math.round((attivi / convBase) * 100) : null
 
-  /* ── Access denied ── */
-  if (denied) {
-    return (
-      <div className="adm-denied">
-        <div className="adm-denied-card">
-          <div className="adm-denied-icon"><IconLock /></div>
-          <h1 className="adm-denied-title">Accesso negato</h1>
-          <p className="adm-denied-msg">
-            Non hai i permessi per accedere a questa pagina.<br />
-            Solo gli amministratori di PIUM possono accedervi.
-          </p>
-          <button className="adm-btn-primary" onClick={() => navigate('/dashboard')}>
-            Torna alla dashboard
-          </button>
-        </div>
+  if (denied) return (
+    <div className="adm-denied">
+      <div className="adm-denied-card">
+        <div className="adm-denied-icon"><IconLock /></div>
+        <h1 className="adm-denied-title">Accesso negato</h1>
+        <p className="adm-denied-msg">Non hai i permessi per accedere a questa pagina.<br />Solo gli amministratori di PIUM possono accedervi.</p>
+        <button className="adm-btn-primary" onClick={() => navigate('/dashboard')}>Torna alla dashboard</button>
       </div>
-    )
-  }
+    </div>
+  )
 
   return (
     <div className="adm-shell">
 
-      {/* Header */}
       <header className="adm-header">
         <div className="adm-header-left">
           <div className="adm-brand">
@@ -177,15 +224,12 @@ export default function Admin() {
         </div>
         <div className="adm-header-right">
           <span className="adm-header-email">{user?.email}</span>
-          <button className="adm-signout" onClick={handleSignOut} title="Esci">
-            <IconLogout />
-          </button>
+          <button className="adm-signout" onClick={handleSignOut} title="Esci"><IconLogout /></button>
         </div>
       </header>
 
       <div className="adm-body">
 
-        {/* Page title */}
         <div className="adm-page-header">
           <div>
             <h1 className="adm-page-title">Pannello Admin</h1>
@@ -196,59 +240,39 @@ export default function Admin() {
           </button>
         </div>
 
-        {/* Section tabs */}
         <div className="adm-section-tabs">
-          <button
-            className={`adm-section-tab ${section === 'clienti' ? 'adm-section-tab--active' : ''}`}
-            onClick={() => setSection('clienti')}
-          >Clienti</button>
-          <button
-            className={`adm-section-tab ${section === 'affiliati' ? 'adm-section-tab--active' : ''}`}
-            onClick={() => { setSection('affiliati'); loadAffiliates() }}
-          >Affiliati</button>
+          <button className={`adm-section-tab ${section === 'clienti'   ? 'adm-section-tab--active' : ''}`} onClick={() => setSection('clienti')}>Clienti</button>
+          <button className={`adm-section-tab ${section === 'affiliati' ? 'adm-section-tab--active' : ''}`} onClick={() => { setSection('affiliati'); loadAffiliates() }}>Affiliati</button>
         </div>
 
         {section === 'clienti' ? (
           <>
-            {/* Stats */}
-            <div className="adm-stats">
-              <StatCard label="Clienti totali"  value={total}   icon={<IconUsers />}  color="accent" />
-              <StatCard label="Attivi"          value={attivi}  icon={<IconCheck />}  color="green"  />
-              <StatCard label="In trial"        value={trial}   icon={<IconClock />}  color="yellow" />
-              <StatCard label="Scaduti"         value={scaduti} icon={<IconPause />}  color="gray"   />
+            {/* Stats — 6 card */}
+            <div className="adm-stats adm-stats--6">
+              <StatCard label="Clienti totali"      value={total}                        icon={<IconUsers />}  color="accent"  />
+              <StatCard label="Attivi"              value={attivi}                       icon={<IconCheck />}  color="green"   />
+              <StatCard label="In trial"            value={inTrial}                      icon={<IconClock />}  color="yellow"  />
+              <StatCard label="Scaduti"             value={scaduti}                      icon={<IconPause />}  color="gray"    />
+              <StatCard label="MRR"                 value={`€${mrr.toFixed(0)}`}         icon={<IconEuro />}   color="purple"  />
+              <StatCard label="Conversione trial"   value={convRate !== null ? `${convRate}%` : '—'} icon={<IconTrend />}  color="blue"    />
             </div>
 
             {/* Toolbar */}
             <div className="adm-toolbar">
               <div className="adm-search-wrap">
                 <IconSearch />
-                <input
-                  className="adm-search"
-                  type="text"
-                  placeholder="Cerca per nome, email, città…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                />
-                {search && (
-                  <button className="adm-search-clear" onClick={() => setSearch('')}>
-                    <IconX />
-                  </button>
-                )}
+                <input className="adm-search" type="text" placeholder="Cerca per nome, email, città…" value={search} onChange={e => setSearch(e.target.value)} />
+                {search && <button className="adm-search-clear" onClick={() => setSearch('')}><IconX /></button>}
               </div>
               <div className="adm-filter-row">
                 {STATUS_FILTERS.map(s => (
-                  <button
-                    key={s}
-                    className={`adm-filter-btn ${statusFilter === s ? 'adm-filter-btn--active' : ''}`}
-                    onClick={() => setStatusFilter(s)}
-                  >
+                  <button key={s} className={`adm-filter-btn ${statusFilter === s ? 'adm-filter-btn--active' : ''}`} onClick={() => setStatusFilter(s)}>
                     {s === 'tutti' ? `Tutti (${total})` : STATUS_FILTER_LABELS[s]}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Table */}
             {loading ? (
               <div className="adm-loading"><AdminSpinner /></div>
             ) : visible.length === 0 ? (
@@ -265,13 +289,10 @@ export default function Admin() {
                       <tr>
                         <th>Attività</th>
                         <th>Email</th>
-                        <th>Città</th>
-                        <th>Piano</th>
                         <th>Stato</th>
-                        <th>Prezzo</th>
-                        <th>Trial scade</th>
-                        <th>Registrato</th>
-                        <th>Chiamate AI</th>
+                        <th>Trial</th>
+                        <th>Piano / €</th>
+                        <th>AI/mese</th>
                         <th>Azioni</th>
                       </tr>
                     </thead>
@@ -279,82 +300,42 @@ export default function Admin() {
                       {visible.map(b => {
                         const status = getStatus(b)
                         const busy   = updatingId === b.id
+                        const days   = trialDaysLeft(b)
                         return (
                           <tr key={b.id} className={busy ? 'adm-row--busy' : ''}>
                             <td>
-                              <div className="adm-biz-cell">
-                                <div className="adm-biz-avatar">
-                                  {b.name?.[0]?.toUpperCase() ?? '?'}
-                                </div>
+                              <button className="adm-biz-cell adm-biz-cell--btn" onClick={() => openDrawer(b)}>
+                                <div className="adm-biz-avatar">{b.name?.[0]?.toUpperCase() ?? '?'}</div>
                                 <div className="adm-biz-info">
                                   <span className="adm-biz-name">{b.name}</span>
                                   {b.category && <span className="adm-biz-cat">{b.category}</span>}
                                 </div>
+                              </button>
+                            </td>
+                            <td><span className="adm-cell-email">{b.email ?? '—'}</span></td>
+                            <td><StatusBadge status={status} /></td>
+                            <td><TrialCell days={days} trialEndsAt={b.trial_ends_at} status={status} /></td>
+                            <td>
+                              <div className="adm-plan-price-cell">
+                                <select className="adm-plan-select" value={b.plan ?? 'trial'} disabled={busy} onChange={e => updatePlan(b.id, e.target.value)}>
+                                  {PLANS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                                </select>
+                                <div className="adm-price-wrap">
+                                  <input className="adm-price-input" type="number" defaultValue={b.plan_price ?? 99} onBlur={e => { const v = Number(e.target.value); if (v > 0 && v !== b.plan_price) updatePlanPrice(b.id, v) }} disabled={busy} min={0} />
+                                  <span className="adm-price-unit">€</span>
+                                </div>
                               </div>
                             </td>
-                            <td>
-                              <span className="adm-cell-email">{b.email ?? '—'}</span>
-                            </td>
-                            <td>
-                              <span className="adm-cell-text">{b.city ?? '—'}</span>
-                            </td>
-                            <td>
-                              <select
-                                className="adm-plan-select"
-                                value={b.plan}
-                                disabled={busy}
-                                onChange={e => updatePlan(b.id, e.target.value)}
-                              >
-                                {PLANS.map(p => (
-                                  <option key={p.value} value={p.value}>{p.label}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <StatusBadge status={status} />
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <input
-                                  className="adm-price-input"
-                                  type="number"
-                                  defaultValue={b.plan_price ?? 99}
-                                  onBlur={e => { const v = Number(e.target.value); if (v > 0 && v !== b.plan_price) updatePlanPrice(b.id, v) }}
-                                  disabled={busy}
-                                  min={0}
-                                />
-                                <span style={{ fontSize: 11, color: 'var(--text)' }}>€/m</span>
-                              </div>
-                            </td>
-                            <td>
-                              {b.status === 'trial'
-                                ? <span className="adm-cell-text adm-cell-date">{formatDate(b.trial_ends_at)}</span>
-                                : <span className="adm-cell-text">—</span>
-                              }
-                            </td>
-                            <td>
-                              <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
-                            </td>
-                            <td>
-                              <span className="adm-ai-calls-cell">
-                                <span className="adm-ai-month">{b.ai_calls_month ?? 0} mese</span>
-                                <span className="adm-ai-total">{b.ai_calls_total ?? 0} tot</span>
-                              </span>
-                            </td>
+                            <td><span className="adm-ai-month">{b.ai_calls_month ?? 0}</span></td>
                             <td>
                               <div className="adm-row-actions">
                                 {busy ? <AdminSpinner small /> : (
                                   <>
-                                    {b.status !== 'active' && (
-                                      <button className="adm-toggle-btn adm-toggle-btn--active" onClick={() => setBizStatus(b.id, 'active')} title="Attiva piano"><IconPlay /></button>
-                                    )}
-                                    {b.status !== 'suspended' && (
-                                      <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setBizStatus(b.id, 'suspended')} title="Sospendi"><IconPause /></button>
-                                    )}
-                                    <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => extendTrial(b)} title="Estendi trial +30gg" style={{ fontSize: 11, fontWeight: 700 }}>+30</button>
-                                    {b.slug && (
-                                      <a className="adm-link-btn" href={`/site/${b.slug}`} target="_blank" rel="noreferrer" title="Vedi sito pubblico"><IconExternalLink /></a>
-                                    )}
+                                    {status !== 'active'    && <button className="adm-toggle-btn adm-toggle-btn--active"   onClick={() => setBizStatus(b.id, 'active')}    title="Attiva"><IconPlay /></button>}
+                                    {status !== 'suspended' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setBizStatus(b.id, 'suspended')} title="Sospendi"><IconPause /></button>}
+                                    <button className="adm-toggle-btn" onClick={() => extendTrial(b)} title="+30 giorni trial" style={{ fontSize: 11, fontWeight: 700 }}>+30</button>
+                                    <button className="adm-toggle-btn" onClick={() => copyLink(b)} title="Copia link sito">{copied === b.id ? <IconCheck /> : <IconCopy />}</button>
+                                    {b.slug && <a className="adm-link-btn" href={`/${b.slug}`} target="_blank" rel="noreferrer" title="Apri sito"><IconExternalLink /></a>}
                                   </>
                                 )}
                               </div>
@@ -371,65 +352,43 @@ export default function Admin() {
                   {visible.map(b => {
                     const status = getStatus(b)
                     const busy   = updatingId === b.id
+                    const days   = trialDaysLeft(b)
                     return (
                       <div key={b.id} className="adm-card">
                         <div className="adm-card-head">
-                          <div className="adm-biz-cell">
+                          <button className="adm-biz-cell adm-biz-cell--btn" onClick={() => openDrawer(b)}>
                             <div className="adm-biz-avatar">{b.name?.[0]?.toUpperCase() ?? '?'}</div>
                             <div className="adm-biz-info">
                               <span className="adm-biz-name">{b.name}</span>
                               {b.category && <span className="adm-biz-cat">{b.category}</span>}
                             </div>
-                          </div>
+                          </button>
                           <StatusBadge status={status} />
                         </div>
                         <div className="adm-card-meta">
                           {b.email && <span className="adm-cell-email">{b.email}</span>}
-                          {b.city  && <span className="adm-cell-text">{b.city}</span>}
-                          {b.status === 'trial' && <span className="adm-cell-text adm-cell-date">Trial scade: {formatDate(b.trial_ends_at)}</span>}
+                          <TrialCell days={days} trialEndsAt={b.trial_ends_at} status={status} />
                           <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
-                          <span className="adm-ai-calls-cell">
-                            <span className="adm-ai-month">{b.ai_calls_month ?? 0} mese</span>
-                            <span className="adm-ai-total">{b.ai_calls_total ?? 0} tot</span>
-                          </span>
+                          <span className="adm-ai-month">{b.ai_calls_month ?? 0} AI/mese</span>
                         </div>
                         <div className="adm-card-footer">
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <select
-                              className="adm-plan-select"
-                              value={b.plan}
-                              disabled={busy}
-                              onChange={e => updatePlan(b.id, e.target.value)}
-                            >
-                              {PLANS.map(p => (
-                                <option key={p.value} value={p.value}>{p.label}</option>
-                              ))}
+                            <select className="adm-plan-select" value={b.plan ?? 'trial'} disabled={busy} onChange={e => updatePlan(b.id, e.target.value)}>
+                              {PLANS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                             </select>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <input
-                                className="adm-price-input"
-                                type="number"
-                                defaultValue={b.plan_price ?? 99}
-                                onBlur={e => { const v = Number(e.target.value); if (v > 0 && v !== b.plan_price) updatePlanPrice(b.id, v) }}
-                                disabled={busy}
-                                min={0}
-                              />
-                              <span style={{ fontSize: 11, color: 'var(--text)' }}>€/m</span>
+                            <div className="adm-price-wrap">
+                              <input className="adm-price-input" type="number" defaultValue={b.plan_price ?? 99} onBlur={e => { const v = Number(e.target.value); if (v > 0 && v !== b.plan_price) updatePlanPrice(b.id, v) }} disabled={busy} min={0} />
+                              <span className="adm-price-unit">€</span>
                             </div>
                           </div>
                           <div className="adm-row-actions">
                             {busy ? <AdminSpinner small /> : (
                               <>
-                                {b.status !== 'active' && (
-                                  <button className="adm-toggle-btn adm-toggle-btn--active" onClick={() => setBizStatus(b.id, 'active')} title="Attiva"><IconPlay /></button>
-                                )}
-                                {b.status !== 'suspended' && (
-                                  <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setBizStatus(b.id, 'suspended')} title="Sospendi"><IconPause /></button>
-                                )}
-                                <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => extendTrial(b)} title="+30gg trial" style={{ fontSize: 11, fontWeight: 700 }}>+30</button>
-                                {b.slug && (
-                                  <a className="adm-link-btn" href={`/site/${b.slug}`} target="_blank" rel="noreferrer" title="Vedi sito pubblico"><IconExternalLink /></a>
-                                )}
+                                {status !== 'active'    && <button className="adm-toggle-btn adm-toggle-btn--active"   onClick={() => setBizStatus(b.id, 'active')}    title="Attiva"><IconPlay /></button>}
+                                {status !== 'suspended' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setBizStatus(b.id, 'suspended')} title="Sospendi"><IconPause /></button>}
+                                <button className="adm-toggle-btn" onClick={() => extendTrial(b)} title="+30gg" style={{ fontSize: 11, fontWeight: 700 }}>+30</button>
+                                <button className="adm-toggle-btn" onClick={() => copyLink(b)} title="Copia link">{copied === b.id ? <IconCheck /> : <IconCopy />}</button>
+                                {b.slug && <a className="adm-link-btn" href={`/${b.slug}`} target="_blank" rel="noreferrer" title="Sito"><IconExternalLink /></a>}
                               </>
                             )}
                           </div>
@@ -447,28 +406,20 @@ export default function Admin() {
             )}
           </>
         ) : (
+          /* ── Affiliati tab ── */
           <>
             {affLoading ? (
               <div className="adm-loading"><AdminSpinner /></div>
             ) : affiliates.length === 0 ? (
-              <div className="adm-empty">
-                <IconUsers />
-                <p>Nessun affiliato ancora.</p>
-              </div>
+              <div className="adm-empty"><IconUsers /><p>Nessun affiliato ancora.</p></div>
             ) : (
               <>
                 <div className="adm-table-wrap">
                   <table className="adm-table">
                     <thead>
                       <tr>
-                        <th>Affiliato</th>
-                        <th>Email</th>
-                        <th>Codice</th>
-                        <th>Stato</th>
-                        <th>Clienti</th>
-                        <th>Guadagnato</th>
-                        <th>Registrato</th>
-                        <th>Azioni</th>
+                        <th>Affiliato</th><th>Email</th><th>Codice</th><th>Stato</th>
+                        <th>Clienti</th><th>Guadagnato</th><th>Registrato</th><th>Azioni</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -479,45 +430,22 @@ export default function Admin() {
                             <td>
                               <div className="adm-biz-cell">
                                 <div className="adm-biz-avatar">{a.name?.[0]?.toUpperCase() ?? '?'}</div>
-                                <div className="adm-biz-info">
-                                  <span className="adm-biz-name">{a.name}</span>
-                                </div>
+                                <div className="adm-biz-info"><span className="adm-biz-name">{a.name}</span></div>
                               </div>
                             </td>
                             <td><span className="adm-cell-email">{a.email ?? '—'}</span></td>
-                            <td><code style={{ fontSize: 12, background: 'var(--surface)', padding: '2px 6px', borderRadius: 4 }}>{a.code}</code></td>
+                            <td><code style={{ fontSize: 12, background: 'var(--code-bg)', padding: '2px 6px', borderRadius: 4 }}>{a.code}</code></td>
                             <td><AffStatusBadge status={a.status} /></td>
                             <td><span className="adm-cell-text">{a.total_clients ?? 0}</span></td>
                             <td><span className="adm-cell-text">€{Number(a.total_earned ?? 0).toFixed(2)}</span></td>
                             <td><span className="adm-cell-text adm-cell-date">{formatDate(a.created_at)}</span></td>
                             <td>
                               <div className="adm-row-actions">
-                                {busy ? (
-                                  <AdminSpinner small />
-                                ) : (
+                                {busy ? <AdminSpinner small /> : (
                                   <>
-                                    {a.status !== 'approved' && (
-                                      <button
-                                        className="adm-toggle-btn adm-toggle-btn--active"
-                                        onClick={() => setAffiliateStatus(a.id, 'approved')}
-                                        title="Attiva affiliato"
-                                      ><IconPlay /></button>
-                                    )}
-                                    {a.status === 'approved' && (
-                                      <button
-                                        className="adm-toggle-btn adm-toggle-btn--inactive"
-                                        onClick={() => setAffiliateStatus(a.id, 'pending')}
-                                        title="Sospendi affiliato"
-                                      ><IconPause /></button>
-                                    )}
-                                    {a.status !== 'rejected' && (
-                                      <button
-                                        className="adm-toggle-btn adm-toggle-btn--inactive"
-                                        onClick={() => setAffiliateStatus(a.id, 'rejected')}
-                                        title="Rifiuta affiliato"
-                                        style={{ color: '#ef4444' }}
-                                      ><IconX /></button>
-                                    )}
+                                    {a.status !== 'approved' && <button className="adm-toggle-btn adm-toggle-btn--active"   onClick={() => setAffiliateStatus(a.id, 'approved')} title="Attiva affiliato"><IconPlay /></button>}
+                                    {a.status === 'approved' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'pending')}  title="Sospendi affiliato"><IconPause /></button>}
+                                    {a.status !== 'rejected' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'rejected')} title="Rifiuta affiliato" style={{ color: '#ef4444' }}><IconX /></button>}
                                   </>
                                 )}
                               </div>
@@ -528,8 +456,6 @@ export default function Admin() {
                     </tbody>
                   </table>
                 </div>
-
-                {/* Mobile cards */}
                 <div className="adm-cards">
                   {affiliates.map(a => {
                     const busy = activatingId === a.id
@@ -546,7 +472,7 @@ export default function Admin() {
                           <AffStatusBadge status={a.status} />
                         </div>
                         <div className="adm-card-meta">
-                          <span className="adm-cell-text">Codice: <code style={{ fontSize: 12, background: 'var(--surface)', padding: '2px 6px', borderRadius: 4 }}>{a.code}</code></span>
+                          <span className="adm-cell-text">Codice: <code style={{ fontSize: 12, background: 'var(--code-bg)', padding: '2px 6px', borderRadius: 4 }}>{a.code}</code></span>
                           <span className="adm-cell-text">Clienti: {a.total_clients ?? 0}</span>
                           <span className="adm-cell-text">Guadagnato: €{Number(a.total_earned ?? 0).toFixed(2)}</span>
                           <span className="adm-cell-text adm-cell-date">{formatDate(a.created_at)}</span>
@@ -555,15 +481,9 @@ export default function Admin() {
                           <div className="adm-row-actions">
                             {busy ? <AdminSpinner small /> : (
                               <>
-                                {a.status !== 'approved' && (
-                                  <button className="adm-toggle-btn adm-toggle-btn--active" onClick={() => setAffiliateStatus(a.id, 'approved')} title="Attiva affiliato"><IconPlay /></button>
-                                )}
-                                {a.status === 'approved' && (
-                                  <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'pending')} title="Sospendi affiliato"><IconPause /></button>
-                                )}
-                                {a.status !== 'rejected' && (
-                                  <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'rejected')} title="Rifiuta affiliato" style={{ color: '#ef4444' }}><IconX /></button>
-                                )}
+                                {a.status !== 'approved' && <button className="adm-toggle-btn adm-toggle-btn--active"   onClick={() => setAffiliateStatus(a.id, 'approved')} title="Attiva affiliato"><IconPlay /></button>}
+                                {a.status === 'approved' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'pending')}  title="Sospendi affiliato"><IconPause /></button>}
+                                {a.status !== 'rejected' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'rejected')} title="Rifiuta affiliato" style={{ color: '#ef4444' }}><IconX /></button>}
                               </>
                             )}
                           </div>
@@ -572,7 +492,6 @@ export default function Admin() {
                     )
                   })}
                 </div>
-
                 <p className="adm-count-label">{affiliates.length} affiliat{affiliates.length === 1 ? 'o' : 'i'}</p>
               </>
             )}
@@ -580,6 +499,180 @@ export default function Admin() {
         )}
 
       </div>
+
+      {/* Drawer */}
+      {drawerBiz && (
+        <BusinessDrawer
+          biz={drawerBiz}
+          health={drawerHealth}
+          healthLoading={drawerHealthLoading}
+          notes={drawerNotes}
+          onNotesChange={setDrawerNotes}
+          onSaveNotes={saveNotes}
+          notesSaving={notesSaving}
+          notesSaved={notesSaved}
+          onClose={closeDrawer}
+          onCopyLink={copyLink}
+          copied={copied}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ── BusinessDrawer ── */
+function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, copied }) {
+  const status = getStatus(biz)
+  const days   = trialDaysLeft(biz)
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="adm-drawer-overlay" onClick={onClose}>
+      <div className="adm-drawer" onClick={e => e.stopPropagation()}>
+
+        <div className="adm-drawer-header">
+          <div className="adm-drawer-title-wrap">
+            <div className="adm-biz-avatar adm-biz-avatar--lg">{biz.name?.[0]?.toUpperCase() ?? '?'}</div>
+            <div>
+              <div className="adm-drawer-title">{biz.name}</div>
+              {biz.category && <div className="adm-drawer-subtitle">{biz.category}</div>}
+            </div>
+          </div>
+          <button className="adm-drawer-close" onClick={onClose} title="Chiudi"><IconX /></button>
+        </div>
+
+        <div className="adm-drawer-body">
+
+          {/* Stato account */}
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Stato account</div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Stato</span>
+              <StatusBadge status={status} />
+            </div>
+            {status === 'trial' && biz.trial_ends_at && (
+              <div className="adm-drawer-row">
+                <span className="adm-drawer-label">Trial scade</span>
+                <span className="adm-drawer-value">
+                  {formatDate(biz.trial_ends_at)}
+                  {days !== null && (
+                    <span className={`adm-trial-days-badge adm-trial-days-badge--${days <= 0 ? 'red' : days <= 7 ? 'orange' : 'green'}`}>
+                      {days <= 0 ? 'SCADUTO' : `${days}g`}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Piano</span>
+              <span className="adm-drawer-value">{biz.plan ?? 'trial'} · €{biz.plan_price ?? 99}/mese</span>
+            </div>
+          </div>
+
+          {/* Dati attività */}
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Dati attività</div>
+            {[
+              { label: 'Email',      value: biz.email },
+              { label: 'Città',      value: biz.city  },
+              { label: 'Slug',       value: biz.slug  },
+              { label: 'Registrato', value: formatDate(biz.created_at) },
+            ].filter(r => r.value).map(({ label, value }) => (
+              <div key={label} className="adm-drawer-row">
+                <span className="adm-drawer-label">{label}</span>
+                <span className="adm-drawer-value">{value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Salute onboarding */}
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Salute onboarding</div>
+            {healthLoading ? (
+              <div className="adm-drawer-loading"><AdminSpinner small /></div>
+            ) : health ? (
+              <>
+                <div className="adm-health-row">
+                  <span className={`adm-health-dot ${health.hasCover ? 'adm-health-dot--ok' : 'adm-health-dot--warn'}`} />
+                  <span className="adm-drawer-label">Immagine copertina</span>
+                  <span className={`adm-health-tag ${health.hasCover ? 'adm-health-tag--ok' : 'adm-health-tag--warn'}`}>{health.hasCover ? 'Presente' : 'Mancante'}</span>
+                </div>
+                <div className="adm-health-row">
+                  <span className={`adm-health-dot ${health.serviceCount > 0 ? 'adm-health-dot--ok' : 'adm-health-dot--warn'}`} />
+                  <span className="adm-drawer-label">Servizi</span>
+                  <span className={`adm-health-tag ${health.serviceCount > 0 ? 'adm-health-tag--ok' : 'adm-health-tag--warn'}`}>
+                    {health.serviceCount > 0 ? `${health.serviceCount} configurati` : 'Nessuno'}
+                  </span>
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          {/* Utilizzo AI */}
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Utilizzo AI</div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Questo mese</span>
+              <span className="adm-drawer-value adm-drawer-value--accent">{biz.ai_calls_month ?? 0} chiamate</span>
+            </div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Totale storico</span>
+              <span className="adm-drawer-value">{biz.ai_calls_total ?? 0} chiamate</span>
+            </div>
+          </div>
+
+          {/* Note interne */}
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Note interne</div>
+            <textarea
+              className="adm-notes-area"
+              placeholder="Note visibili solo all'admin…"
+              value={notes}
+              onChange={e => onNotesChange(e.target.value)}
+              rows={4}
+            />
+            <button
+              className={`adm-notes-save-btn ${notesSaved ? 'adm-notes-save-btn--saved' : ''}`}
+              onClick={onSaveNotes}
+              disabled={notesSaving}
+            >
+              {notesSaving ? 'Salvataggio…' : notesSaved ? '✓ Salvato' : 'Salva note'}
+            </button>
+          </div>
+
+          {/* Azioni */}
+          {biz.slug && (
+            <div className="adm-drawer-section adm-drawer-section--actions">
+              <button className="adm-drawer-action-btn" onClick={() => onCopyLink(biz)}>
+                {copied === biz.id ? <><IconCheck /> Link copiato</> : <><IconCopy /> Copia link sito</>}
+              </button>
+              <a className="adm-drawer-action-btn adm-drawer-action-btn--outline" href={`/${biz.slug}`} target="_blank" rel="noreferrer">
+                <IconExternalLink /> Apri sito pubblico
+              </a>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── TrialCell ── */
+function TrialCell({ days, trialEndsAt, status }) {
+  if (status !== 'trial' || days === null) return <span className="adm-cell-text">—</span>
+  const tier = days <= 0 ? 'red' : days <= 7 ? 'orange' : 'green'
+  return (
+    <div className="adm-trial-cell">
+      <span className={`adm-trial-label adm-trial-label--${tier}`}>
+        {days <= 0 ? 'SCADUTO' : `${days} giorni`}
+      </span>
+      {trialEndsAt && <span className="adm-trial-date">{formatDateShort(trialEndsAt)}</span>}
     </div>
   )
 }
@@ -599,10 +692,10 @@ function StatCard({ label, value, icon, color }) {
 
 function StatusBadge({ status }) {
   const map = {
-    active:    { label: 'Attivo',   cls: 'adm-badge--green'  },
-    trial:     { label: 'Trial',    cls: 'adm-badge--yellow' },
-    expired:   { label: 'Scaduto',  cls: 'adm-badge--red'    },
-    suspended: { label: 'Sospeso',  cls: 'adm-badge--gray'   },
+    active:    { label: 'Attivo',  cls: 'adm-badge--green'  },
+    trial:     { label: 'Trial',   cls: 'adm-badge--yellow' },
+    expired:   { label: 'Scaduto', cls: 'adm-badge--red'    },
+    suspended: { label: 'Sospeso', cls: 'adm-badge--gray'   },
   }
   const { label, cls } = map[status] ?? { label: status, cls: 'adm-badge--gray' }
   return <span className={`adm-badge ${cls}`}>{label}</span>
@@ -630,13 +723,13 @@ function IconSearch()       { return <svg width="15" height="15" viewBox="0 0 24
 function IconX()            { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
 function IconLock()         { return <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> }
 function IconExternalLink() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> }
+function IconCopy()         { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> }
+function IconEuro()         { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10h12M4 14h12M19 6a7 7 0 1 0 0 12"/></svg> }
+function IconTrend()        { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> }
 function IconRefresh({ spin }) {
   return (
-    <svg
-      width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-      style={spin ? { animation: 'adm-spin 0.9s linear infinite' } : undefined}
-    >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      style={spin ? { animation: 'adm-spin 0.9s linear infinite' } : undefined}>
       <polyline points="23 4 23 10 17 10"/>
       <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
     </svg>
@@ -645,10 +738,8 @@ function IconRefresh({ spin }) {
 function AdminSpinner({ small }) {
   const s = small ? 13 : 22
   return (
-    <svg
-      style={{ width: s, height: s, animation: 'adm-spin 0.8s linear infinite', flexShrink: 0 }}
-      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-    >
+    <svg style={{ width: s, height: s, animation: 'adm-spin 0.8s linear infinite', flexShrink: 0 }}
+      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
       <path d="M12 2a10 10 0 0 1 10 10"/>
     </svg>
   )
