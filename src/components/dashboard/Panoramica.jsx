@@ -130,7 +130,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
     { label: 'Recensioni',          value: counts.recensioni,   icon: '⭐',  section: 'recensioni' },
     { label: 'Appuntamenti oggi',   value: counts.appuntamenti, icon: '📅', section: 'agenda'     },
     { label: 'Bozze social',        value: counts.bozzeSocial,  icon: '✍️', section: 'social'     },
-    { label: 'Calendario mensile',  value: null,                icon: '🗓️', section: 'agenda', viewMode: 'month', desc: 'Visualizza e pianifica gli appuntamenti del mese' },
+    { label: 'Calendario mensile',  value: null,                icon: '🗓️', section: 'agenda', viewMode: 'month' },
   ]
 
   return (
@@ -158,13 +158,10 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
               <span className="db-stat-badge">{pendingCount}</span>
             )}
             <span className="db-stat-icon">{s.icon}</span>
-            {s.value != null && (
-              <span className="db-stat-value">
-                {loading ? <span className="db-stat-loading">…</span> : s.value}
-              </span>
-            )}
+            <span className="db-stat-value">
+              {loading ? <span className="db-stat-loading">…</span> : (s.value ?? '—')}
+            </span>
             <span className="db-stat-label">{s.label}</span>
-            {s.desc && <span className="db-stat-desc">{s.desc}</span>}
           </button>
         ))}
       </div>
