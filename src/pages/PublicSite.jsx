@@ -5,7 +5,13 @@ import Logo from '../components/Logo'
 import BookingSection from '../components/public/BookingSection'
 
 export default function PublicSite() {
-  const { slug } = useParams()
+  const { slug: paramSlug } = useParams()
+  // Se la pagina è servita su un sottodominio (es. mario.piumapp.com),
+  // usa il sottodominio come slug; altrimenti usa il parametro di route.
+  const slug = (() => {
+    const parts = window.location.hostname.split('.')
+    return parts.length >= 3 && parts[0] !== 'www' ? parts[0] : paramSlug
+  })()
   const [business,    setBusiness]    = useState(null)
   const [siteContent, setSiteContent] = useState({})
   const [services,    setServices]    = useState([])
