@@ -57,6 +57,7 @@ export default function Admin() {
   const [drawerNotes,         setDrawerNotes]         = useState('')
   const [notesSaving,         setNotesSaving]         = useState(false)
   const [notesSaved,          setNotesSaved]          = useState(false)
+  const [drawerAffiliate,     setDrawerAffiliate]     = useState(null)  // { code, name } | null | 'organic'
 
   /* ── Auth + role check ── */
   useEffect(() => {
@@ -74,7 +75,7 @@ export default function Admin() {
     setLoading(true)
     const { data, error } = await supabase
       .from('businesses')
-      .select('id, name, email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited')
+      .select('id, name, email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
       .order('created_at', { ascending: false })
     if (error) console.error('[Admin] load error:', error)
     setBusinesses(data ?? [])
@@ -89,12 +90,18 @@ export default function Admin() {
     setDrawerNotes(biz.admin_notes ?? '')
     setNotesSaved(false)
     setDrawerHealth(null)
+    setDrawerAffiliate(null)
     setDrawerHealthLoading(true)
-    const { count } = await supabase
-      .from('services')
-      .select('*', { count: 'exact', head: true })
-      .eq('business_id', biz.id)
+
+    const [{ count }, { data: aff }] = await Promise.all([
+      supabase.from('services').select('*', { count: 'exact', head: true }).eq('business_id', biz.id),
+      biz.affiliate_code
+        ? supabase.from('affiliates').select('code, name').eq('code', biz.affiliate_code).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+
     setDrawerHealth({ serviceCount: count ?? 0, hasCover: !!biz.cover_url })
+    setDrawerAffiliate(biz.affiliate_code ? (aff ?? { code: biz.affiliate_code, name: null }) : 'organic')
     setDrawerHealthLoading(false)
   }, [])
 
@@ -102,6 +109,7 @@ export default function Admin() {
     setDrawerBiz(null)
     setDrawerHealth(null)
     setDrawerNotes('')
+    setDrawerAffiliate(null)
   }, [])
 
   const saveNotes = useCallback(async () => {
@@ -301,6 +309,7 @@ export default function Admin() {
                         <th>Trial</th>
                         <th>Piano / €</th>
                         <th>AI/mese</th>
+                        <th>Affiliato</th>
                         <th>Azioni</th>
                       </tr>
                     </thead>
@@ -335,6 +344,7 @@ export default function Admin() {
                               </div>
                             </td>
                             <td><span className="adm-ai-month">{b.ai_calls_month_display ?? 0}{b.ai_unlimited && <span className="adm-ai-unlimited-dot" title="AI illimitata">∞</span>}</span></td>
+                            <td><AffiliateCell code={b.affiliate_code} /></td>
                             <td>
                               <div className="adm-row-actions">
                                 {busy ? <AdminSpinner small /> : (
@@ -378,6 +388,7 @@ export default function Admin() {
                           <TrialCell days={days} trialEndsAt={b.trial_ends_at} status={status} />
                           <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
                           <span className="adm-ai-month">{b.ai_calls_month_display ?? 0} AI/mese{b.ai_unlimited && <span className="adm-ai-unlimited-dot" title="AI illimitata">∞</span>}</span>
+                          <AffiliateCell code={b.affiliate_code} />
                         </div>
                         <div className="adm-card-footer">
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -522,6 +533,7 @@ export default function Admin() {
         notesSaving={notesSaving}
         notesSaved={notesSaved}
         onClose={closeDrawer}
+        affiliate={drawerAffiliate}
         onCopyLink={copyLink}
         onToggleAiUnlimited={toggleAiUnlimited}
         copied={copied}
@@ -532,7 +544,7 @@ export default function Admin() {
 }
 
 /* ── BusinessDrawer ── */
-function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, copied }) {
+function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, affiliate, copied }) {
   const status = getStatus(biz)
   const days   = trialDaysLeft(biz)
 
@@ -599,6 +611,19 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
                 <span className="adm-drawer-value">{value}</span>
               </div>
             ))}
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Provenienza</span>
+              {affiliate === null ? (
+                <span className="adm-drawer-value adm-cell-muted">…</span>
+              ) : affiliate === 'organic' ? (
+                <span className="adm-drawer-value adm-cell-muted">Organico</span>
+              ) : (
+                <span className="adm-drawer-value">
+                  <span className="adm-aff-badge">{affiliate.code}</span>
+                  {affiliate.name && <span className="adm-cell-muted" style={{ marginLeft: 6 }}>{affiliate.name}</span>}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Salute onboarding */}
@@ -686,6 +711,12 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
       </div>
     </div>
   )
+}
+
+/* ── AffiliateCell ── */
+function AffiliateCell({ code }) {
+  if (!code) return <span className="adm-cell-text adm-cell-muted">—</span>
+  return <span className="adm-aff-badge">{code}</span>
 }
 
 /* ── TrialCell ── */
