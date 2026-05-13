@@ -212,6 +212,7 @@ export default function Admin() {
   )
 
   return (
+    <>
     <div className="adm-shell">
 
       <header className="adm-header">
@@ -500,23 +501,25 @@ export default function Admin() {
 
       </div>
 
-      {/* Drawer */}
-      {drawerBiz && (
-        <BusinessDrawer
-          biz={drawerBiz}
-          health={drawerHealth}
-          healthLoading={drawerHealthLoading}
-          notes={drawerNotes}
-          onNotesChange={setDrawerNotes}
-          onSaveNotes={saveNotes}
-          notesSaving={notesSaving}
-          notesSaved={notesSaved}
-          onClose={closeDrawer}
-          onCopyLink={copyLink}
-          copied={copied}
-        />
-      )}
     </div>
+
+    {/* Drawer — fuori da adm-shell per evitare stacking context problems */}
+    {drawerBiz && (
+      <BusinessDrawer
+        biz={drawerBiz}
+        health={drawerHealth}
+        healthLoading={drawerHealthLoading}
+        notes={drawerNotes}
+        onNotesChange={setDrawerNotes}
+        onSaveNotes={saveNotes}
+        notesSaving={notesSaving}
+        notesSaved={notesSaved}
+        onClose={closeDrawer}
+        onCopyLink={copyLink}
+        copied={copied}
+      />
+    )}
+  </>
   )
 }
 
