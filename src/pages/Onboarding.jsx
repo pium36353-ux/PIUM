@@ -34,15 +34,28 @@ const EMPTY = {
   city:                '',
 }
 
-function toSlug(name) {
-  const rand = Math.random().toString(36).slice(2, 6)
+function baseSlug(name) {
   return name
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[̀-ͯ]/g, '')  // rimuove accenti
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
-    + '-' + rand
+}
+
+async function generateSlug(name) {
+  const base = baseSlug(name)
+  for (let i = 0; i < 50; i++) {
+    const candidate = i === 0 ? base : `${base}-${i + 1}`
+    const { data } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('slug', candidate)
+      .maybeSingle()
+    if (!data) return candidate
+  }
+  // Fallback con suffisso random se tutti i tentativi sono occupati (caso estremo)
+  return `${base}-${Math.random().toString(36).slice(2, 6)}`
 }
 
 export default function Onboarding() {
@@ -111,7 +124,7 @@ export default function Onboarding() {
       .insert({
         user_id:             user.id,
         name:                form.name.trim(),
-        slug:                toSlug(form.name.trim()),
+        slug:                await generateSlug(form.name.trim()),
         category:            form.category,
         business_type_custom:form.business_type_custom.trim() || null,
         phone:               form.phone.trim()    || null,
