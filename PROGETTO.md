@@ -33,6 +33,8 @@
 - ✅ Galleria fotografica carosello nel sito pubblico
 - ✅ Card panoramica (attività completate, prossime attività, promemoria)
 - ✅ PWA installabile con icone
+- ✅ Sottodomini personalizzati automatici (nomeattivita.piumapp.com via Cloudflare Worker)
+- ✅ Slug puliti per nuovi onboarding (es. bar-roma, bar-roma-2 — senza suffisso casuale)
 
 ## Prima del lancio
 
@@ -43,7 +45,7 @@
 - [ ] Integrazione Stripe per pagamenti e gestione abbonamenti
 - [ ] Calcolo automatico guadagni affiliati collegato a Stripe
 - [ ] Bot supporto clienti con FAQ PIUM
-- [ ] Sottodominio personalizzato per ogni attività
+- ✅ Sottodominio personalizzato per ogni attività (nomeattivita.piumapp.com)
 - ✅ Notifiche push con impostazioni personalizzabili (minuti pre-appuntamento, notifica dopo spunta)
 
 ## Booking system — stato attuale e prossimi step
@@ -72,12 +74,15 @@
 - Fasce chiuse visibili nella griglia giornaliera dell'agenda con sfondo rigato
 - Disclaimer quando si salva un appuntamento fuori orario di lavoro
 - Scadenza relativa nei promemoria: "tra X giorni/settimane/mesi" con anteprima data calcolata
+- Sottodomini automatici: ogni attività raggiungibile su `nomeattivita.piumapp.com` — Cloudflare Worker (file `cloudflare-worker.js`) fa proxy trasparente verso `www.piumapp.com`; PublicSite.jsx legge lo slug da `window.location.hostname` quando il sottodominio è presente
+  - Worker name: `pium-subdomain-proxy`; Route: `*piumapp.com/*`; DNS: record A/CNAME wildcard `*.piumapp.com → www.piumapp.com`
+  - File creati/modificati: `cloudflare-worker.js` (nuovo), `src/pages/PublicSite.jsx` (rilevamento sottodominio)
+- Slug generazione: algoritmo asincrono in `Onboarding.jsx` che verifica unicità su Supabase prima di salvare; formato pulito `bar-roma` (con suffisso numerico `-2`, `-3`… in caso di collisione), eliminato il vecchio suffisso casuale a 4 caratteri
 
 **Da fare prossima sessione:**
 - Bot supporto clienti con FAQ di PIUM
-- Sottodominio personalizzato per ogni attività
 - Controllo analytics_events (rate limit insert pubblico)
-- Sottodominio personalizzato nomeattivita.piumapp.com
+- Pulizia slug vecchi clienti (migrazione da formato `bar-roma-xxxx` a `bar-roma` / `bar-roma-2`)
 - Booking system: selezione multipla servizi, messaggio WhatsApp precompilato alla conferma, promemoria WhatsApp il giorno prima
 
 ---
@@ -173,5 +178,6 @@ Claude API spostata su Supabase Edge Function (claude-proxy), chiave non esposta
 - **Galleria fotografica:** limite alzato a 20 foto, upload multiplo (attributo `multiple` sull'input), barra di progresso animata durante batch upload, counter "X / 20 foto" sempre visibile
 - **Compressione automatica immagini lato client:** libreria `browser-image-compression` applicata a galleria, immagine di copertina e foto profilo — impostazioni: `maxSizeMB: 0.8`, `maxWidthOrHeight: 1920`, `useWebWorker: true`
 - **Infrastruttura storage:** quando si raggiungono i primi clienti paganti, passare a Supabase Pro (25$/mese) per avere 100 GB di storage invece di 1 GB del piano gratuito
+
 
 

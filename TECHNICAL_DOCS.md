@@ -126,7 +126,7 @@ localhub/
 | `/affiliates` | `Affiliates` | Autenticato come affiliato | Dashboard affiliato: link referral, lista clienti, commissioni |
 | `/affiliates/auth` | `AffiliatesAuth` | Pubblico | Login/registrazione affiliati |
 | `/site/:slug` | `PublicSite` | Pubblico | Mini-sito attività (URL legacy, mantenuto per backward compat) |
-| `/:slug` | `PublicSite` | Pubblico | Mini-sito attività (URL attuale es. `/mario-parrucchiere-87pb`) |
+| `/:slug` | `PublicSite` | Pubblico | Mini-sito attività (URL attuale es. `/bar-roma`). Accessibile anche su `bar-roma.piumapp.com` tramite Cloudflare Worker |
 | `/ref/:code` | `RefRedirect` | Pubblico | Salva codice referral in `localStorage('pium_ref')` e redirect a `/auth` |
 
 **Nota routing:** React Router v7, le route statiche (es. `/admin`) hanno priorità su `/:slug` grazie all'ordine di dichiarazione in `App.jsx`.
@@ -168,7 +168,7 @@ La tabella centrale: un'attività per utente. Il titolare interagisce solo con i
 | `id` | uuid PK | `uuid_generate_v4()` |
 | `user_id` | uuid FK → `auth.users` | `on delete cascade` |
 | `name` | text NOT NULL | Nome dell'attività |
-| `slug` | text UNIQUE | URL pubblico es. `/mario-parrucchiere-87pb` |
+| `slug` | text UNIQUE | URL pubblico es. `mario-parrucchiere` (vecchio formato: `bar-roma-ffs6`). Generato da `generateSlug()` in Onboarding.jsx: cerca `bar-roma`, poi `bar-roma-2`, ecc. fino a trovare uno non occupato |
 | `category` | text | Categoria libera (es. "Parrucchiere") |
 | `description` | text | Descrizione generata da AI o manuale |
 | `address` | text | |
@@ -747,3 +747,82 @@ Aggiunta in `Promemoria.jsx` — solo logica frontend, nessuna modifica al DB.
 - `calcRelativeDate(amount, unit)`: somma il periodo alla data di oggi e restituisce un oggetto `Date`
 - Al salvataggio: se `dueDateMode === 'relative'`, `due_at` viene calcolata e salvata come `YYYY-MM-DD`; il DB riceve sempre una data assoluta
 - `openEdit` resetta sempre `dueDateMode: 'fixed'` (la data già salvata nel DB è assoluta)
+
+---
+
+### 10.5 Sottodomini `nomeattivita.piumapp.com` — Architettura
+
+**Problema:** Vercel non supporta wildcard subdomain routing con Cloudflare in modalità proxy. Non è possibile aggiungere `*.piumapp.com` come dominio Vercel e farlo passare per il proxy Cloudflare.
+
+**Soluzione: Cloudflare Worker come proxy trasparente**
+
+```
+Visitatore → bar-roma.piumapp.com
+    ↓
+Cloudflare Worker (pium-subdomain-proxy)
+    ↓  riscrive hostname a www.piumapp.com, mantiene path + query
+fetch(https://www.piumapp.com/...)
+    ↓
+Vercel serve la SPA React
+    ↓
+PublicSite.jsx legge window.location.hostname = "bar-roma.piumapp.com"
+    ↓
+estrae "bar-roma" come slug → carica dati da Supabase
+```
+
+**File:** `cloudflare-worker.js` (root del progetto — da incollare nel Cloudflare Dashboard)
+
+**Logica Worker:**
+- `parts.length < 3` o `parts[0] === 'www'` → pass-through (no proxy)
+- Altrimenti: `target.hostname = 'www.piumapp.com'`, tutto il resto (path, query, headers, body) invariato
+
+**Configurazione Cloudflare:**
+- Worker name: `pium-subdomain-proxy`
+- Route: `*piumapp.com/*`
+- DNS: record CNAME wildcard `*.piumapp.com → www.piumapp.com` (proxy arancione `🟠`)
+
+**Rilevamento slug in `PublicSite.jsx`:**
+```js
+const { slug: paramSlug } = useParams()
+const slug = (() => {
+  const parts = window.location.hostname.split('.')
+  return parts.length >= 3 && parts[0] !== 'www' ? parts[0] : paramSlug
+})()
+```
+Se il visitatore arriva da `bar-roma.piumapp.com`, `slug = 'bar-roma'` (da hostname). Se arriva da `www.piumapp.com/bar-roma`, `slug = paramSlug` (da React Router). Entrambe le modalità di accesso caricano gli stessi dati.
+
+---
+
+### 10.6 Slug — Generazione Asincrona (`Onboarding.jsx`)
+
+**Vecchio sistema:** `toSlug(name)` — aggiungeva 4 caratteri casuali (`Math.random().toString(36).slice(2, 6)`) senza verifica DB. Produceva URL come `bar-roma-ffs6`.
+
+**Nuovo sistema:** `baseSlug(name)` + `generateSlug(name)` async.
+
+```js
+function baseSlug(name) {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')      // rimuove diacritici
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+async function generateSlug(name) {
+  const base = baseSlug(name)
+  for (let i = 0; i < 50; i++) {
+    const candidate = i === 0 ? base : `${base}-${i + 1}`
+    const { data } = await supabase.from('businesses').select('id').eq('slug', candidate).maybeSingle()
+    if (!data) return candidate  // slot libero
+  }
+  return `${base}-${Math.random().toString(36).slice(2, 6)}`  // fallback dopo 50 tentativi
+}
+```
+
+**Utilizzo in `handleSubmit`:**
+```js
+slug: await generateSlug(form.name.trim())
+```
+
+**Comportamento:** `bar-roma` → se occupato → `bar-roma-2` → `bar-roma-3` → … Fallback random solo dopo 50 collisioni (scenario praticamente impossibile).
