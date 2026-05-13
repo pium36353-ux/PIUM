@@ -148,10 +148,10 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
             className="db-stat-card db-stat-card--link"
             onClick={() => {
               if (s.section === 'agenda') {
-                const navState = s.viewMode ? { viewMode: s.viewMode } : { agendaView: 'day' }
-                rNav(window.location.pathname, { state: navState, replace: true })
+                onNavigate?.('agenda', { view: s.viewMode ?? 'day' })
+              } else {
+                onNavigate?.(s.section)
               }
-              onNavigate?.(s.section)
             }}
           >
             {s.section === 'agenda' && !s.viewMode && pendingCount > 0 && (
@@ -183,7 +183,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
                   className="pn-activity-item pn-activity-item--link"
                   onClick={() => {
                     rNav(window.location.pathname, { state: { selectedDate: apt.date, selectedTime: apt.start_time?.slice(0, 5) }, replace: true })
-                    onNavigate?.('agenda')
+                    onNavigate?.('agenda', { view: 'day' })
                   }}
                 >
                   <span className="pn-activity-icon">📅</span>

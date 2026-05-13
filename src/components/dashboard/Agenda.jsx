@@ -66,13 +66,13 @@ function getMonthGrid(year, month) {
 }
 
 /* ── Component ── */
-export default function Agenda({ business }) {
+export default function Agenda({ business, initialView = 'day' }) {
   const location = useLocation()
   const rNav     = useNavigate()
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
-  const [view,         setView]         = useState('day')
+  const [view,         setView]         = useState(initialView)
   const [monthDate,    setMonthDate]    = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedDay,  setSelectedDay]  = useState(today)
 
@@ -101,7 +101,7 @@ export default function Agenda({ business }) {
 
   const scrollToTimeRef = useRef(null)
 
-  // Read location state after mount: atomically set date + view, then clear state
+  // Read location state after mount: set selected date/time, then clear state
   useEffect(() => {
     const state   = location.state ?? {}
     const dateStr = state.selectedDate ?? state.agendaDate
@@ -113,15 +113,9 @@ export default function Agenda({ business }) {
       setMonthDate(new Date(d.getFullYear(), d.getMonth(), 1))
     }
 
-    if (state.viewMode) {
-      setView(state.viewMode)
-    } else if (state.agendaView === 'day' || !!state.selectedDate) {
-      setView('day')
-    }
-
     if (state.selectedTime) scrollToTimeRef.current = state.selectedTime
 
-    if (state.viewMode || state.agendaView || state.agendaDate || state.selectedDate || state.selectedTime) {
+    if (state.agendaDate || state.selectedDate || state.selectedTime) {
       rNav(location.pathname, { state: {}, replace: true })
     }
   }, []) // eslint-disable-line

@@ -27,8 +27,9 @@ export default function Dashboard() {
   const [section, setSection]   = useState('panoramica')
   const [user, setUser]         = useState(null)
   const [business, setBusiness] = useState(null)
-  const [sideOpen,      setSideOpen]      = useState(false)
-  const [pendingCount,  setPendingCount]  = useState(0)
+  const [sideOpen,           setSideOpen]           = useState(false)
+  const [pendingCount,       setPendingCount]       = useState(0)
+  const [agendaInitialView,  setAgendaInitialView]  = useState('day')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -118,7 +119,8 @@ export default function Dashboard() {
     }
   }, [business])
 
-  const navigate_section = (id) => {
+  const navigate_section = (id, opts = {}) => {
+    if (id === 'agenda') setAgendaInitialView(opts.view ?? 'day')
     setSection(id)
     setSideOpen(false)
   }
@@ -230,7 +232,7 @@ export default function Dashboard() {
               <IconChevronLeft /> Panoramica
             </button>
           )}
-          {Section && <Section key={section} business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} />}
+          {Section && <Section key={section} business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} />}
         </main>
       </div>
     </div>
