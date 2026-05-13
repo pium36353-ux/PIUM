@@ -13,12 +13,12 @@ import Agenda      from '../components/dashboard/Agenda'
 
 const NAV = [
   { id: 'panoramica', label: 'Panoramica',  icon: IconGrid },
-  { id: 'editor',     label: 'Editor Sito', icon: IconPen },
-  { id: 'servizi',    label: 'Servizi',     icon: IconBriefcase },
+  { id: 'agenda',     label: 'Agenda',      icon: IconCalendar },
+  { id: 'promemoria', label: 'Promemoria',  icon: IconBell },
   { id: 'social',     label: 'Social',      icon: IconShare },
   { id: 'recensioni', label: 'Recensioni',  icon: IconStar },
-  { id: 'promemoria', label: 'Promemoria',  icon: IconBell },
-  { id: 'agenda',     label: 'Agenda',      icon: IconCalendar },
+  { id: 'servizi',    label: 'Servizi',     icon: IconBriefcase },
+  { id: 'editor',     label: 'Editor Sito', icon: IconPen },
 ]
 
 export default function Dashboard() {

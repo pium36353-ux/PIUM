@@ -59,7 +59,7 @@ function formatReminderDue(due_at) {
 /* ── Component ── */
 export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
   const rNav = useNavigate()
-  const [counts,       setCounts]       = useState({ servizi: null, recensioni: null, appuntamenti: null, bozzeSocial: null })
+  const [counts,       setCounts]       = useState({ servizi: null, recensioni: null, appuntamenti: null, bozzeSocial: null, promemoria: null })
   const [loading,      setLoading]      = useState(true)
   const [activity,     setActivity]     = useState([])
   const [upcoming,     setUpcoming]     = useState([])
@@ -72,12 +72,15 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
     setLoading(true)
     setCardsLoading(true)
     const today = new Date().toISOString().split('T')[0]
+    const sevenDaysLater = new Date(); sevenDaysLater.setDate(sevenDaysLater.getDate() + 7)
+    const sevenDaysStr = sevenDaysLater.toISOString().split('T')[0]
 
     const [
       { count: cServizi },
       { count: cRecensioni },
       { count: cAppuntamenti },
       { count: cSocial },
+      { count: cPromemoria },
       { data: apts },
       { data: rems },
       { data: doneApts },
@@ -87,6 +90,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
       supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
       supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('date', today).eq('completed', false),
       supabase.from('social_drafts').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'draft'),
+      supabase.from('reminders').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'pending').lte('due_at', sevenDaysStr),
       supabase.from('appointments').select('id, client_name, date, start_time, employees(name, color)').eq('business_id', business.id).gte('date', today).eq('completed', false).order('date').order('start_time').limit(5),
       supabase.from('reminders').select('id, title, due_at, priority').eq('business_id', business.id).eq('status', 'pending').gte('due_at', today).order('due_at').limit(5),
       supabase.from('appointments').select('id, client_name, date, updated_at').eq('business_id', business.id).eq('completed', true).order('updated_at', { ascending: false }).limit(5),
@@ -98,6 +102,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
       recensioni:   cRecensioni   ?? 0,
       appuntamenti: cAppuntamenti ?? 0,
       bozzeSocial:  cSocial       ?? 0,
+      promemoria:   cPromemoria   ?? 0,
     })
     setUpcoming(apts ?? [])
     setReminders(rems ?? [])
@@ -125,14 +130,6 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
     }
   }
 
-  const stats = [
-    { label: 'Servizi',             value: counts.servizi,      icon: '🛎️', section: 'servizi'    },
-    { label: 'Recensioni',          value: counts.recensioni,   icon: '⭐',  section: 'recensioni' },
-    { label: 'Appuntamenti oggi',   value: counts.appuntamenti, icon: '📅', section: 'agenda'     },
-    { label: 'Bozze social',        value: counts.bozzeSocial,  icon: '✍️', section: 'social'     },
-    { label: 'Calendario mensile',  value: null,                icon: '🗓️', section: 'agenda', viewMode: 'month' },
-  ]
-
   return (
     <div className="db-section">
       {!business && (
@@ -141,27 +138,35 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
         </div>
       )}
 
-      <div className="db-stats-grid">
-        {stats.map(s => (
-          <button
-            key={s.label}
-            className="db-stat-card db-stat-card--link"
-            onClick={() => {
-              if (s.section === 'agenda') {
-                onNavigate?.('agenda', { view: s.viewMode ?? 'day' })
-              } else {
-                onNavigate?.(s.section)
-              }
-            }}
-          >
-            {s.section === 'agenda' && !s.viewMode && pendingCount > 0 && (
-              <span className="db-stat-badge">{pendingCount}</span>
-            )}
-            <span className="db-stat-icon">{s.icon}</span>
-            <span className="db-stat-value">
-              {loading ? <span className="db-stat-loading">…</span> : (s.value ?? '—')}
-            </span>
-            <span className="db-stat-label">{s.label}</span>
+      {/* Hero grid — 2 big cards */}
+      <div className="pn-hero-grid">
+        <button className="pn-hero-card" onClick={() => onNavigate?.('agenda', { view: 'day' })}>
+          {pendingCount > 0 && <span className="db-stat-badge">{pendingCount}</span>}
+          <span className="pn-hero-icon">📅</span>
+          <span className="pn-hero-value">
+            {loading ? <span className="db-stat-loading">…</span> : (counts.appuntamenti ?? '—')}
+          </span>
+          <span className="pn-hero-label">Appuntamenti oggi</span>
+        </button>
+        <button className="pn-hero-card" onClick={() => onNavigate?.('agenda', { view: 'month' })}>
+          <span className="pn-hero-icon">🗓️</span>
+          <span className="pn-hero-value">—</span>
+          <span className="pn-hero-label">Calendario mensile</span>
+        </button>
+      </div>
+
+      {/* Compact count rows */}
+      <div className="pn-count-rows">
+        {[
+          { icon: '🔔', label: 'Promemoria in scadenza', value: counts.promemoria,  section: 'promemoria' },
+          { icon: '🛎️', label: 'Servizi attivi',         value: counts.servizi,     section: 'servizi'    },
+          { icon: '✍️',  label: 'Bozze social',           value: counts.bozzeSocial, section: 'social'     },
+          { icon: '⭐',  label: 'Recensioni',             value: counts.recensioni,  section: 'recensioni' },
+        ].map(row => (
+          <button key={row.section} className="pn-count-row" onClick={() => onNavigate?.(row.section)}>
+            <span className="pn-count-row-icon">{row.icon}</span>
+            <span className="pn-count-row-label">{row.label}</span>
+            <span className="pn-count-row-value">{loading ? '…' : (row.value ?? '—')}</span>
           </button>
         ))}
       </div>
