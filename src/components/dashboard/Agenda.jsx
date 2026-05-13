@@ -99,6 +99,8 @@ export default function Agenda({ business }) {
   const [processingId,    setProcessingId]    = useState(null)
   const [confirmedWa,     setConfirmedWa]     = useState(null)
 
+  const scrollToTimeRef = useRef(null)
+
   // Read location state after mount: atomically set date + view, then clear state
   useEffect(() => {
     const state   = location.state ?? {}
@@ -112,8 +114,9 @@ export default function Agenda({ business }) {
       setMonthDate(new Date(d.getFullYear(), d.getMonth(), 1))
     }
     if (forceDay) setView('day')
+    if (state.selectedTime) scrollToTimeRef.current = state.selectedTime
 
-    if (state.agendaView || state.agendaDate || state.selectedDate) {
+    if (state.agendaView || state.agendaDate || state.selectedDate || state.selectedTime) {
       rNav(location.pathname, { state: {}, replace: true })
     }
   }, []) // eslint-disable-line
@@ -485,6 +488,7 @@ export default function Agenda({ business }) {
             selectedDay={selectedDay}
             openingHours={business?.opening_hours}
             businessName={business?.name ?? ''}
+            scrollToTimeRef={scrollToTimeRef}
           />
 
           {/* Daily summary */}
@@ -694,11 +698,21 @@ function buildAptBlocks(apts) {
 
 const DAY_KEYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday']
 
-function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName }) {
+function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName, scrollToTimeRef }) {
   const wrapRef = useRef(null)
 
   useEffect(() => {
     if (loading || !wrapRef.current) return
+
+    // If we arrived here from Panoramica with a specific appointment time, scroll to it once
+    if (scrollToTimeRef?.current) {
+      const [h, m] = scrollToTimeRef.current.split(':').map(Number)
+      const startMin = h * 60 + m
+      wrapRef.current.scrollTop = Math.max(0, startMin - 60) / 5 * SLOT_H
+      scrollToTimeRef.current = null
+      return
+    }
+
     const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0)
     const isToday = selectedDay.getTime() === todayMidnight.getTime()
 

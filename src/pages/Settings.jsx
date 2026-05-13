@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 import { requestPermission, testNotification } from '../lib/notifications'
+import { subscribePush, unsubscribePush, isPushSubscribed } from '../lib/pushSubscription'
 
 const NOTIF_KEY = 'pium_notification_settings'
 const DEFAULT_NOTIF = { appointmentMinutesBefore: 15, notifyNextOnComplete: false }
@@ -26,6 +27,8 @@ export default function Settings() {
   })
   const [notifSaved, setNotifSaved] = useState(false)
   const [testStatus, setTestStatus] = useState('idle') // idle | sent | error
+  const [pushSub, setPushSub] = useState(null) // null=checking true=on false=off
+  const [pushStatus, setPushStatus] = useState('idle') // idle | saving | error
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -33,6 +36,28 @@ export default function Settings() {
       setUser(data.user)
     })
   }, [navigate])
+
+  useEffect(() => {
+    isPushSubscribed().then(v => setPushSub(v))
+  }, [])
+
+  const handleSubscribePush = async () => {
+    setPushStatus('saving')
+    const res = await subscribePush()
+    if (res?.ok) {
+      setPushSub(true)
+      setPushStatus('idle')
+    } else {
+      setPushStatus('error')
+    }
+  }
+
+  const handleUnsubscribePush = async () => {
+    setPushStatus('saving')
+    await unsubscribePush()
+    setPushSub(false)
+    setPushStatus('idle')
+  }
 
   const handleRequestPermission = async () => {
     const result = await requestPermission()
@@ -195,6 +220,27 @@ export default function Settings() {
 
               {notifSaved && (
                 <p className="sett-success" style={{ marginTop: 8 }}><IconCheck /> Impostazioni salvate</p>
+              )}
+
+              {'PushManager' in window && pushSub !== null && (
+                <div className="sett-toggle-row" style={{ marginTop: 16 }}>
+                  <div>
+                    <span className="sett-label">Notifiche push (browser chiuso)</span>
+                    <p className="sett-notif-hint" style={{ margin: '2px 0 0' }}>Ricevi notifiche anche con il telefono in tasca</p>
+                  </div>
+                  <button
+                    className={`sett-toggle ${pushSub ? 'sett-toggle--on' : ''}`}
+                    onClick={pushSub ? handleUnsubscribePush : handleSubscribePush}
+                    disabled={pushStatus === 'saving'}
+                    aria-pressed={pushSub}
+                  >
+                    <span className="sett-toggle-thumb" />
+                  </button>
+                </div>
+              )}
+
+              {pushStatus === 'error' && (
+                <p className="sett-error" style={{ marginTop: 8 }}><IconAlert /> Errore attivazione push. Riprova.</p>
               )}
 
               <button

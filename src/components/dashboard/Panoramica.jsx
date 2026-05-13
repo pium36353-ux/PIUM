@@ -85,7 +85,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
     ] = await Promise.all([
       supabase.from('services').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
       supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
-      supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', business.id).gte('date', today),
+      supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('date', today).eq('completed', false),
       supabase.from('social_drafts').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'draft'),
       supabase.from('appointments').select('id, client_name, date, start_time, employees(name, color)').eq('business_id', business.id).gte('date', today).eq('completed', false).order('date').order('start_time').limit(5),
       supabase.from('reminders').select('id, title, due_at, priority').eq('business_id', business.id).eq('status', 'pending').gte('due_at', today).order('due_at').limit(5),
@@ -128,7 +128,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
   const stats = [
     { label: 'Servizi',             value: counts.servizi,      icon: '🛎️', section: 'servizi'    },
     { label: 'Recensioni',          value: counts.recensioni,   icon: '⭐',  section: 'recensioni' },
-    { label: 'Appuntamenti oggi+',  value: counts.appuntamenti, icon: '📅', section: 'agenda'     },
+    { label: 'Appuntamenti oggi',   value: counts.appuntamenti, icon: '📅', section: 'agenda'     },
     { label: 'Bozze social',        value: counts.bozzeSocial,  icon: '✍️', section: 'social'     },
   ]
 
@@ -180,7 +180,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
                   key={apt.id}
                   className="pn-activity-item pn-activity-item--link"
                   onClick={() => {
-                    rNav(window.location.pathname, { state: { selectedDate: apt.date }, replace: true })
+                    rNav(window.location.pathname, { state: { selectedDate: apt.date, selectedTime: apt.start_time?.slice(0, 5) }, replace: true })
                     onNavigate?.('agenda')
                   }}
                 >

@@ -55,10 +55,12 @@ self.addEventListener('notificationclick', (e) => {
     }
     return
   }
+  const targetUrl = e.notification.data?.url ?? '/dashboard'
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      if (list.length > 0) return list[0].focus()
-      return self.clients.openWindow('/dashboard')
+      const match = list.find(c => c.url.includes('/dashboard'))
+      if (match) return match.focus()
+      return self.clients.openWindow(targetUrl)
     })
   )
 })
