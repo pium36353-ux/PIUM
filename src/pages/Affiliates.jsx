@@ -35,7 +35,6 @@ export default function Affiliates() {
       .eq('user_id', userId)
       .maybeSingle()
 
-    console.log('[affiliates] userId:', userId, '| data:', aff, '| error:', affErr)
     setAffiliate(aff ?? null)
 
     if (aff) {

@@ -149,10 +149,7 @@ export default function Onboarding() {
     setLoadingMsg('Generazione descrizione AI…')
     try {
       const prompt = buildDescriptionPrompt(form)
-      console.log('[Claude] prompt inviato:', prompt)
-
       const aiDescription = await generateWithClaude(prompt)
-      console.log('[Claude] risposta ricevuta:', aiDescription)
 
       const { error: updateError } = await supabase
         .from('businesses')
@@ -161,8 +158,6 @@ export default function Onboarding() {
 
       if (updateError) {
         console.error('[Supabase] errore aggiornamento description:', updateError)
-      } else {
-        console.log('[Supabase] description salvata correttamente')
       }
     } catch (err) {
       console.error('[Claude] errore durante la generazione:', err)
