@@ -95,9 +95,10 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [addAnotherTime, setAddAnotherTime] = useState(null)
   const [taxRate,       setTaxRate]       = useState(22)
 
-  const [pendingBookings, setPendingBookings] = useState([])
-  const [processingId,    setProcessingId]    = useState(null)
-  const [confirmedWa,     setConfirmedWa]     = useState(null)
+  const [pendingBookings,       setPendingBookings]       = useState([])
+  const [processingId,          setProcessingId]          = useState(null)
+  const [confirmedWa,           setConfirmedWa]           = useState(null)
+  const [showOutOfHoursConfirm, setShowOutOfHoursConfirm] = useState(false)
 
   const scrollToTimeRef = useRef(null)
 
@@ -196,8 +197,25 @@ export default function Agenda({ business, initialView = 'day' }) {
   }
 
   /* ── CRUD: appointments ── */
-  const handleSave = async () => {
+  const handleSave = async (skipHoursCheck = false) => {
     if (!validate()) return
+
+    if (!skipHoursCheck) {
+      const dateObj = new Date(form.date + 'T00:00:00')
+      const dayKey  = DAY_KEYS[dateObj.getDay()]
+      const dayH    = business?.opening_hours?.[dayKey]
+      const ranges  = parseOpeningRanges(dayH)
+      if (ranges.length > 0) {
+        const [sh, sm] = form.start_time.split(':').map(Number)
+        const startMin = sh * 60 + sm
+        if (!ranges.some(([s, e]) => startMin >= s && startMin < e)) {
+          setShowOutOfHoursConfirm(true)
+          return
+        }
+      }
+    }
+
+    setShowOutOfHoursConfirm(false)
     setSaving(true)
     const payload = {
       client_name:      form.client_name.trim(),
@@ -649,12 +667,24 @@ export default function Agenda({ business, initialView = 'day' }) {
 
             </div>
 
-            <div className="sv-modal-footer">
-              <button className="sv-btn-cancel" onClick={closeModal}>Annulla</button>
-              <button className="sv-btn-save" onClick={handleSave} disabled={saving}>
-                {saving ? 'Salvataggio…' : 'Salva'}
-              </button>
-            </div>
+            {showOutOfHoursConfirm ? (
+              <div className="sv-ooh-confirm">
+                <p className="sv-ooh-text">Questo appuntamento è fuori dall'orario di lavoro. Vuoi salvarlo comunque?</p>
+                <div className="sv-modal-footer">
+                  <button className="sv-btn-cancel" onClick={() => setShowOutOfHoursConfirm(false)}>Annulla</button>
+                  <button className="sv-btn-save" onClick={() => handleSave(true)} disabled={saving}>
+                    {saving ? 'Salvataggio…' : 'Salva comunque'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="sv-modal-footer">
+                <button className="sv-btn-cancel" onClick={closeModal}>Annulla</button>
+                <button className="sv-btn-save" onClick={() => handleSave(false)} disabled={saving}>
+                  {saving ? 'Salvataggio…' : 'Salva'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -697,6 +727,39 @@ function buildAptBlocks(apts) {
 
 const DAY_KEYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday']
 
+// Returns sorted [[startMin, endMin]] pairs for a day's opening_hours entry (handles old + new format)
+function parseOpeningRanges(dayH) {
+  if (!dayH || dayH.closed) return []
+  if ('open' in dayH && 'close' in dayH) {
+    const [oh, om] = dayH.open.split(':').map(Number)
+    const [ch, cm] = dayH.close.split(':').map(Number)
+    return [[oh * 60 + om, ch * 60 + cm]]
+  }
+  const ranges = []
+  if (dayH.morning?.active && dayH.morning.open && dayH.morning.close) {
+    const [oh, om] = dayH.morning.open.split(':').map(Number)
+    const [ch, cm] = dayH.morning.close.split(':').map(Number)
+    ranges.push([oh * 60 + om, ch * 60 + cm])
+  }
+  if (dayH.afternoon?.active && dayH.afternoon.open && dayH.afternoon.close) {
+    const [oh, om] = dayH.afternoon.open.split(':').map(Number)
+    const [ch, cm] = dayH.afternoon.close.split(':').map(Number)
+    ranges.push([oh * 60 + om, ch * 60 + cm])
+  }
+  return ranges
+}
+
+function buildClosedOverlays(openRanges) {
+  const closed = []
+  let cursor = 0
+  for (const [s, e] of openRanges) {
+    if (cursor < s) closed.push([cursor, s])
+    cursor = e
+  }
+  if (cursor < 1440) closed.push([cursor, 1440])
+  return closed
+}
+
 function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName, scrollToTimeRef }) {
   const wrapRef = useRef(null)
 
@@ -721,9 +784,9 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
     } else {
       const dayKey = DAY_KEYS[selectedDay.getDay()]
       const dayH   = openingHours?.[dayKey]
-      if (dayH && !dayH.closed && dayH.open) {
-        const [h, m] = dayH.open.split(':').map(Number)
-        scrollPx = ((h * 60 + m) / 30) * SLOT_H
+      const ranges = parseOpeningRanges(dayH)
+      if (ranges.length > 0) {
+        scrollPx = (ranges[0][0] / 30) * SLOT_H
       } else {
         scrollPx = 8 * 2 * SLOT_H
       }
@@ -755,6 +818,27 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
 
           {/* Right: slot rows + absolute appointment blocks */}
           <div className="ag-slots-col" style={{ position: 'relative' }}>
+            {/* Closed-period shading */}
+            {(() => {
+              const dayKey = DAY_KEYS[selectedDay.getDay()]
+              const dayH   = openingHours?.[dayKey]
+              const ranges = parseOpeningRanges(dayH)
+              if (ranges.length === 0) return null
+              return buildClosedOverlays(ranges).map(([s, e], i) => (
+                <div
+                  key={i}
+                  className="ag-closed-period"
+                  style={{
+                    position: 'absolute',
+                    top:    (s / 30) * SLOT_H,
+                    height: ((e - s) / 30) * SLOT_H,
+                    left: 0, right: 0,
+                    pointerEvents: 'none',
+                    zIndex: 0,
+                  }}
+                />
+              ))
+            })()}
             {Array.from({ length: 48 }, (_, i) => {
               const totalMin = i * 30
               const h       = Math.floor(totalMin / 60)

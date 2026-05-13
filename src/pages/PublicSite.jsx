@@ -268,7 +268,7 @@ export default function PublicSite() {
                       <span className="ps-hours-day">{label}</span>
                       {d.closed
                         ? <span className="ps-hours-closed">Chiuso</span>
-                        : <span className="ps-hours-time">{d.open} – {d.close}</span>
+                        : <span className="ps-hours-time">{formatDayHours(d)}</span>
                       }
                     </div>
                   )
@@ -511,6 +511,19 @@ function getTheme(category) {
 }
 
 /* ── Helpers ── */
+function formatDayHours(d) {
+  if (!d) return '—'
+  // New format with morning/afternoon slots
+  if ('morning' in d || 'afternoon' in d) {
+    const m = d.morning?.active  ? `${d.morning.open} – ${d.morning.close}`   : null
+    const a = d.afternoon?.active ? `${d.afternoon.open} – ${d.afternoon.close}` : null
+    if (m && a) return `${m} · ${a}`
+    return m ?? a ?? '—'
+  }
+  // Old format: { open, close }
+  return `${d.open} – ${d.close}`
+}
+
 function formatDuration(min) {
   if (min < 60) return `${min} min`
   const h = Math.floor(min / 60)
