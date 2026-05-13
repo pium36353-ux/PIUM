@@ -74,7 +74,7 @@ export default function Admin() {
     setLoading(true)
     const { data, error } = await supabase
       .from('businesses')
-      .select('id, name, email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total')
+      .select('id, name, email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited')
       .order('created_at', { ascending: false })
     if (error) console.error('[Admin] load error:', error)
     setBusinesses(data ?? [])
@@ -147,6 +147,13 @@ export default function Admin() {
     setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, trial_ends_at, status: 'trial' } : b))
     setUpdatingId(null)
   }
+
+  const toggleAiUnlimited = useCallback(async (biz) => {
+    const next = !biz.ai_unlimited
+    await supabase.from('businesses').update({ ai_unlimited: next }).eq('id', biz.id)
+    setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, ai_unlimited: next } : b))
+    setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, ai_unlimited: next } : prev)
+  }, [])
 
   const copyLink = useCallback((biz) => {
     if (!biz.slug) return
@@ -327,7 +334,7 @@ export default function Admin() {
                                 </div>
                               </div>
                             </td>
-                            <td><span className="adm-ai-month">{b.ai_calls_month ?? 0}</span></td>
+                            <td><span className="adm-ai-month">{b.ai_calls_month_display ?? 0}{b.ai_unlimited && <span className="adm-ai-unlimited-dot" title="AI illimitata">∞</span>}</span></td>
                             <td>
                               <div className="adm-row-actions">
                                 {busy ? <AdminSpinner small /> : (
@@ -370,7 +377,7 @@ export default function Admin() {
                           {b.email && <span className="adm-cell-email">{b.email}</span>}
                           <TrialCell days={days} trialEndsAt={b.trial_ends_at} status={status} />
                           <span className="adm-cell-text adm-cell-date">{formatDate(b.created_at)}</span>
-                          <span className="adm-ai-month">{b.ai_calls_month ?? 0} AI/mese</span>
+                          <span className="adm-ai-month">{b.ai_calls_month_display ?? 0} AI/mese{b.ai_unlimited && <span className="adm-ai-unlimited-dot" title="AI illimitata">∞</span>}</span>
                         </div>
                         <div className="adm-card-footer">
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -516,6 +523,7 @@ export default function Admin() {
         notesSaved={notesSaved}
         onClose={closeDrawer}
         onCopyLink={copyLink}
+        onToggleAiUnlimited={toggleAiUnlimited}
         copied={copied}
       />
     )}
@@ -524,7 +532,7 @@ export default function Admin() {
 }
 
 /* ── BusinessDrawer ── */
-function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, copied }) {
+function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, copied }) {
   const status = getStatus(biz)
   const days   = trialDaysLeft(biz)
 
@@ -620,8 +628,22 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
           <div className="adm-drawer-section">
             <div className="adm-drawer-section-title">Utilizzo AI</div>
             <div className="adm-drawer-row">
+              <span className="adm-drawer-label">AI illimitata</span>
+              <button
+                className={`adm-ai-toggle ${biz.ai_unlimited ? 'adm-ai-toggle--on' : ''}`}
+                onClick={() => onToggleAiUnlimited(biz)}
+                title={biz.ai_unlimited ? 'Disabilita AI illimitata' : 'Abilita AI illimitata'}
+              >
+                {biz.ai_unlimited ? 'ON' : 'OFF'}
+              </button>
+            </div>
+            <div className="adm-drawer-row">
               <span className="adm-drawer-label">Questo mese</span>
-              <span className="adm-drawer-value adm-drawer-value--accent">{biz.ai_calls_month ?? 0} chiamate</span>
+              <span className="adm-drawer-value adm-drawer-value--accent">{biz.ai_calls_month_display ?? 0} chiamate</span>
+            </div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Token usati</span>
+              <span className="adm-drawer-value">{(biz.ai_tokens_month ?? 0).toLocaleString('it-IT')}</span>
             </div>
             <div className="adm-drawer-row">
               <span className="adm-drawer-label">Totale storico</span>

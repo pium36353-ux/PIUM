@@ -5,6 +5,7 @@ import { notifyNextAppointment } from '../../lib/notifications'
 
 /* ── Helpers ── */
 const MONTHS_SHORT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic']
+const MONTHS_IT    = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre']
 const DAYS_SHORT   = ['dom','lun','mar','mer','gio','ven','sab']
 
 function formatAptDate(dateStr, timeStr) {
@@ -137,6 +138,32 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
           Nessuna attività trovata. Configura la tua attività per iniziare.
         </div>
       )}
+
+      {/* AI usage bar */}
+      {business && (() => {
+        const nextMonthIdx  = (new Date().getMonth() + 1) % 12
+        const nextMonthName = MONTHS_IT[nextMonthIdx]
+        const calls   = business.ai_calls_month_display ?? 0
+        const limit   = 350
+        const pct     = Math.min(100, (calls / limit) * 100)
+        const nearLimit = !business.ai_unlimited && calls >= limit * 0.8
+        return (
+          <div className="pn-ai-bar-wrap">
+            <div className="pn-ai-bar-header">
+              <span className="pn-ai-bar-label">🤖 Utilizzo AI questo mese</span>
+              <span className={`pn-ai-bar-count ${nearLimit ? 'pn-ai-bar-count--warn' : ''}`}>
+                {business.ai_unlimited ? 'Illimitato' : `${calls} / ${limit} chiamate`}
+              </span>
+            </div>
+            {!business.ai_unlimited && (
+              <div className="pn-ai-bar-track">
+                <div className="pn-ai-bar-fill" style={{ width: `${pct}%`, '--bar-color': nearLimit ? '#f59e0b' : 'var(--accent, #6366f1)' }} />
+              </div>
+            )}
+            <p className="pn-ai-bar-renew">Si rinnova il 1° {nextMonthName}</p>
+          </div>
+        )
+      })()}
 
       {/* Hero grid — 2 big cards */}
       <div className="pn-hero-grid">

@@ -94,6 +94,7 @@ export default function Recensioni({ business }) {
         generating: false,
         saved:      !!r.replied_at,
         editing:    false,
+        error:      null,
       }
     })
     setReplies(init)
@@ -112,13 +113,15 @@ export default function Recensioni({ business }) {
     setReplies(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
 
   const generateReply = async (review) => {
-    setReply(review.id, { generating: true, saved: false })
+    setReply(review.id, { generating: true, saved: false, error: null })
     try {
       const text = await generateWithClaude(buildReplyPrompt(business, review))
-      setReply(review.id, { text: text.trim(), generating: false, editing: true })
+      setReply(review.id, { text: text.trim(), generating: false, editing: true, error: null })
     } catch (err) {
-      console.error('[Recensioni] errore generazione risposta:', err)
-      setReply(review.id, { generating: false })
+      const errorMsg = err.message === 'AI_LIMIT_REACHED'
+        ? 'Limite mensile AI raggiunto. Si rinnova il 1° del mese.'
+        : 'Errore nella generazione. Riprova.'
+      setReply(review.id, { generating: false, error: errorMsg })
     }
   }
 
@@ -432,6 +435,10 @@ function ReviewCard({ review: r, business, reply, confirmId, deletingId, onGener
             )}
           </div>
         </div>
+
+        {reply.error && (
+          <div className="rv-reply-error">{reply.error}</div>
+        )}
 
         {reply.generating ? (
           <div className="rv-reply-generating">

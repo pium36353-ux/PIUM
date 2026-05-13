@@ -124,8 +124,12 @@ export default function Social({ business }) {
       const raw    = await generateWithClaude(prompt)
       setGenPreview(parseAIResponse(raw))
     } catch (err) {
-      setGenError('Errore durante la generazione. Riprova.')
-      console.error('[Social] generazione fallita:', err)
+      if (err.message === 'AI_LIMIT_REACHED') {
+        setGenError('Hai raggiunto il limite mensile di utilizzo AI. Si rinnova il 1° del mese.')
+      } else {
+        setGenError('Errore durante la generazione. Riprova.')
+        console.error('[Social] generazione fallita:', err)
+      }
     }
     setGenLoading(false)
   }
