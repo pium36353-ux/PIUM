@@ -72,8 +72,9 @@ export default function Recensioni({ business }) {
   const [replies, setReplies]       = useState({})
 
   // Delete
-  const [confirmId, setConfirmId]   = useState(null)
-  const [deletingId, setDeletingId] = useState(null)
+  const [confirmId, setConfirmId]     = useState(null)
+  const [deletingId, setDeletingId]   = useState(null)
+  const [deletedToast, setDeletedToast] = useState(false)
 
   /* ── Load ── */
   const load = useCallback(async () => {
@@ -181,6 +182,8 @@ export default function Recensioni({ business }) {
     setReplies(prev => { const n = { ...prev }; delete n[id]; return n })
     setDeletingId(null)
     setConfirmId(null)
+    setDeletedToast(true)
+    setTimeout(() => setDeletedToast(false), 2500)
   }
 
   if (!business) {
@@ -189,6 +192,8 @@ export default function Recensioni({ business }) {
 
   return (
     <div className="db-section">
+
+      {deletedToast && <div className="db-deleted-toast">Eliminato ✓</div>}
 
       {/* Toolbar */}
       <div className="db-section-toolbar">

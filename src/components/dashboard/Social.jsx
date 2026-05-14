@@ -95,6 +95,9 @@ export default function Social({ business }) {
   // Copy
   const [copiedId, setCopiedId] = useState(null)
 
+  // Delete feedback
+  const [deletedToast, setDeletedToast] = useState(false)
+
   /* ── Load ── */
   const load = useCallback(async () => {
     if (!business) return
@@ -231,6 +234,8 @@ export default function Social({ business }) {
     setDrafts(prev => prev.filter(d => d.id !== id))
     setDeletingId(null)
     setConfirmId(null)
+    setDeletedToast(true)
+    setTimeout(() => setDeletedToast(false), 2500)
   }
 
   if (!business) {
@@ -243,6 +248,8 @@ export default function Social({ business }) {
 
   return (
     <div className="db-section">
+
+      {deletedToast && <div className="db-deleted-toast">Eliminato ✓</div>}
 
       {/* Toolbar */}
       <div className="db-section-toolbar">

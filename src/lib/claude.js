@@ -20,7 +20,10 @@ export async function generateWithClaude(prompt) {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
-    throw new Error(err.error ?? `Errore Edge Function: ${response.status}`)
+    if (err.error) throw new Error(err.error)
+    if (response.status === 401) throw new Error('Sessione scaduta. Effettua di nuovo il login.')
+    if (response.status >= 500) throw new Error('Servizio temporaneamente non disponibile. Riprova tra poco.')
+    throw new Error('Errore di connessione. Riprova.')
   }
 
   const { text } = await response.json()

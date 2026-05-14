@@ -31,6 +31,7 @@ export default function Servizi({ business }) {
   const [deletingId, setDeletingId] = useState(null)
   const [confirmId, setConfirmId]   = useState(null)
   const [errors, setErrors]         = useState({})
+  const [deletedToast, setDeletedToast] = useState(false)
 
   const load = useCallback(async () => {
     if (!business) return
@@ -138,6 +139,8 @@ export default function Servizi({ business }) {
     setServices((prev) => prev.filter((s) => s.id !== id))
     setDeletingId(null)
     setConfirmId(null)
+    setDeletedToast(true)
+    setTimeout(() => setDeletedToast(false), 2500)
   }
 
   if (!business) {
@@ -150,6 +153,8 @@ export default function Servizi({ business }) {
 
   return (
     <div className="db-section">
+
+      {deletedToast && <div className="db-deleted-toast">Eliminato ✓</div>}
 
       {/* Toolbar */}
       <div className="db-section-toolbar">
