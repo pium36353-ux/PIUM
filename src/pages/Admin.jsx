@@ -39,6 +39,7 @@ export default function Admin() {
   const [user,         setUser]         = useState(null)
   const [businesses,   setBusinesses]   = useState([])
   const [loading,      setLoading]      = useState(true)
+  const [loadError,    setLoadError]    = useState(null)
   const [denied,       setDenied]       = useState(false)
   const [search,       setSearch]       = useState('')
   const [statusFilter, setStatusFilter] = useState('tutti')
@@ -77,7 +78,11 @@ export default function Admin() {
       .from('businesses')
       .select('id, name, email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
       .order('created_at', { ascending: false })
-    if (error) console.error('[Admin] load error:', error)
+    if (error) {
+      setLoadError('Errore nel caricamento dei clienti. Riprova o controlla la connessione.')
+    } else {
+      setLoadError(null)
+    }
     setBusinesses(data ?? [])
     setLoading(false)
   }, [user])
@@ -288,6 +293,13 @@ export default function Admin() {
                 ))}
               </div>
             </div>
+
+            {loadError && (
+              <div className="adm-load-error" role="alert">
+                <IconAlert /> {loadError}
+                <button className="adm-load-error-retry" onClick={load}>Riprova</button>
+              </div>
+            )}
 
             {loading ? (
               <div className="adm-loading"><AdminSpinner /></div>
@@ -781,6 +793,7 @@ function IconLock()         { return <svg width="32" height="32" viewBox="0 0 24
 function IconExternalLink() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> }
 function IconCopy()         { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> }
 function IconEuro()         { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10h12M4 14h12M19 6a7 7 0 1 0 0 12"/></svg> }
+function IconAlert()        { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> }
 function IconTrend()        { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> }
 function IconRefresh({ spin }) {
   return (

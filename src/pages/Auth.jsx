@@ -20,8 +20,9 @@ export default function Auth() {
   const [mode, setMode]       = useState('login')
   const [values, setValues]   = useState({ name: '', email: '', password: '' })
   const [showPwd, setShowPwd] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState(null)
+  const [loading,   setLoading]   = useState(false)
+  const [error,     setError]     = useState(null)
+  const [confirmed, setConfirmed] = useState(false)
 
   useEffect(() => {
     // Salva codice referral se presente nell'URL (?ref=CODICE)
@@ -155,6 +156,12 @@ export default function Auth() {
               <button type="button" className="auth-link-btn" onClick={handleForgotPassword}>
                 Password dimenticata?
               </button>
+            </div>
+          )}
+
+          {confirmed && (
+            <div className="auth-success" role="status">
+              ✓ Email inviata! Controlla la tua casella di posta.
             </div>
           )}
 

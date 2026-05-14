@@ -23,7 +23,7 @@ export default function PublicSite() {
     async function load() {
       const { data: biz, error } = await supabase
         .from('businesses')
-        .select('*')
+        .select('id, user_id, name, slug, category, business_type_custom, description, phone, whatsapp, email, address, city, profile_image, instagram_url, facebook_url, opening_hours')
         .eq('slug', slug)
         .eq('is_active', true)
         .maybeSingle()

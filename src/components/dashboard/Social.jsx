@@ -141,7 +141,7 @@ export default function Social({ business }) {
     if (!genPreview) return
     setGenSaving(true)
     const prompt = buildPrompt(business, genForm)
-    await supabase.from('social_drafts').insert({
+    const { error } = await supabase.from('social_drafts').insert({
       business_id:  business.id,
       platform:     genForm.platform,
       content:      genPreview.content,
@@ -151,6 +151,10 @@ export default function Social({ business }) {
       ai_prompt:    prompt,
     })
     setGenSaving(false)
+    if (error) {
+      setGenError('Errore nel salvataggio della bozza. Riprova.')
+      return
+    }
     setGenModal(false)
     setGenPreview(null)
     setGenForm(EMPTY_GENERATE)
