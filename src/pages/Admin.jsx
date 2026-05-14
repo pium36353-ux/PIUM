@@ -59,6 +59,9 @@ export default function Admin() {
   const [notesSaving,         setNotesSaving]         = useState(false)
   const [notesSaved,          setNotesSaved]          = useState(false)
   const [drawerAffiliate,     setDrawerAffiliate]     = useState(null)  // { code, name } | null | 'organic'
+  const [drawerTrialDate,     setDrawerTrialDate]     = useState('')
+  const [trialDateSaving,     setTrialDateSaving]     = useState(false)
+  const [trialDateSaved,      setTrialDateSaved]      = useState(false)
 
   /* ── Auth + role check ── */
   useEffect(() => {
@@ -96,6 +99,8 @@ export default function Admin() {
     setNotesSaved(false)
     setDrawerHealth(null)
     setDrawerAffiliate(null)
+    setDrawerTrialDate(biz.trial_ends_at ? biz.trial_ends_at.slice(0, 10) : '')
+    setTrialDateSaved(false)
     setDrawerHealthLoading(true)
 
     const [{ count }, { data: aff }] = await Promise.all([
@@ -115,6 +120,8 @@ export default function Admin() {
     setDrawerHealth(null)
     setDrawerNotes('')
     setDrawerAffiliate(null)
+    setDrawerTrialDate('')
+    setTrialDateSaved(false)
   }, [])
 
   const saveNotes = useCallback(async () => {
@@ -129,6 +136,21 @@ export default function Admin() {
       setTimeout(() => setNotesSaved(false), 2000)
     }
   }, [drawerBiz, drawerNotes])
+
+  const saveTrialDate = useCallback(async () => {
+    if (!drawerBiz) return
+    setTrialDateSaving(true)
+    const trial_ends_at = drawerTrialDate ? new Date(drawerTrialDate + 'T00:00:00').toISOString() : null
+    const updates = { trial_ends_at, ...(drawerTrialDate ? { status: 'trial' } : {}) }
+    const { error } = await supabase.from('businesses').update(updates).eq('id', drawerBiz.id)
+    setTrialDateSaving(false)
+    if (!error) {
+      setBusinesses(prev => prev.map(b => b.id === drawerBiz.id ? { ...b, ...updates } : b))
+      setDrawerBiz(prev => prev ? { ...prev, ...updates } : prev)
+      setTrialDateSaved(true)
+      setTimeout(() => setTrialDateSaved(false), 2000)
+    }
+  }, [drawerBiz, drawerTrialDate])
 
   /* ── Business actions ── */
   const updatePlan = async (id, plan) => {
@@ -546,6 +568,11 @@ export default function Admin() {
         notesSaved={notesSaved}
         onClose={closeDrawer}
         affiliate={drawerAffiliate}
+        trialDate={drawerTrialDate}
+        onTrialDateChange={v => { setDrawerTrialDate(v); setTrialDateSaved(false) }}
+        onSaveTrialDate={saveTrialDate}
+        trialDateSaving={trialDateSaving}
+        trialDateSaved={trialDateSaved}
         onCopyLink={copyLink}
         onToggleAiUnlimited={toggleAiUnlimited}
         copied={copied}
@@ -556,9 +583,15 @@ export default function Admin() {
 }
 
 /* ── BusinessDrawer ── */
-function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, affiliate, copied }) {
+function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, affiliate, trialDate, onTrialDateChange, onSaveTrialDate, trialDateSaving, trialDateSaved, copied }) {
   const status = getStatus(biz)
   const days   = trialDaysLeft(biz)
+
+  const add30Days = () => {
+    const base = trialDate ? new Date(trialDate + 'T00:00:00') : new Date()
+    base.setDate(base.getDate() + 30)
+    onTrialDateChange(base.toISOString().slice(0, 10))
+  }
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -590,19 +623,32 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
               <span className="adm-drawer-label">Stato</span>
               <StatusBadge status={status} />
             </div>
-            {status === 'trial' && biz.trial_ends_at && (
-              <div className="adm-drawer-row">
-                <span className="adm-drawer-label">Trial scade</span>
-                <span className="adm-drawer-value">
-                  {formatDate(biz.trial_ends_at)}
-                  {days !== null && (
-                    <span className={`adm-trial-days-badge adm-trial-days-badge--${days <= 0 ? 'red' : days <= 7 ? 'orange' : 'green'}`}>
-                      {days <= 0 ? 'SCADUTO' : `${days}g`}
-                    </span>
-                  )}
-                </span>
+            <div className="adm-drawer-row adm-drawer-row--col">
+              <span className="adm-drawer-label">
+                Trial scade
+                {days !== null && (
+                  <span className={`adm-trial-days-badge adm-trial-days-badge--${days <= 0 ? 'red' : days <= 7 ? 'orange' : 'green'}`} style={{ marginLeft: 6 }}>
+                    {days <= 0 ? 'SCADUTO' : `${days}g`}
+                  </span>
+                )}
+              </span>
+              <div className="adm-trial-edit-row">
+                <input
+                  type="date"
+                  className="adm-trial-date-input"
+                  value={trialDate}
+                  onChange={e => onTrialDateChange(e.target.value)}
+                />
+                <button className="adm-trial-plus30" onClick={add30Days} title="+30 giorni">+30</button>
+                <button
+                  className={`adm-trial-save-btn ${trialDateSaved ? 'adm-trial-save-btn--saved' : ''}`}
+                  onClick={onSaveTrialDate}
+                  disabled={trialDateSaving}
+                >
+                  {trialDateSaving ? '…' : trialDateSaved ? '✓ Salvato' : 'Salva'}
+                </button>
               </div>
-            )}
+            </div>
             <div className="adm-drawer-row">
               <span className="adm-drawer-label">Piano</span>
               <span className="adm-drawer-value">{biz.plan ?? 'trial'} · €{biz.plan_price ?? 99}/mese</span>

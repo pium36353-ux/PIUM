@@ -8239,3 +8239,60 @@ code {
   opacity: 0.45;
   font-size: 13px;
 }
+
+/* ── Admin: trial date editor ── */
+.adm-drawer-row--col {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.adm-trial-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.adm-trial-date-input {
+  flex: 1;
+  min-width: 130px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+.adm-trial-date-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.adm-trial-plus30 {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s;
+}
+.adm-trial-plus30:hover { border-color: var(--accent); color: var(--accent); }
+.adm-trial-save-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.adm-trial-save-btn:disabled { opacity: 0.6; cursor: default; }
+.adm-trial-save-btn--saved {
+  background: #22c55e;
+}
