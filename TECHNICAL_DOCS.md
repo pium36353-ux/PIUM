@@ -1,6 +1,6 @@
 # PIUM — Documentazione Tecnica
 
-> Documento generato il 2026-05-12. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
+> Documento aggiornato al 2026-05-14. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
 
 ---
 
@@ -21,6 +21,10 @@
 7. [Web Push VAPID — Setup Manuale](#7-web-push-vapid--setup-manuale)
 8. [Ruoli e Autenticazione](#8-ruoli-e-autenticazione)
 9. [PWA e Service Worker](#9-pwa-e-service-worker)
+10. [Modifiche Architetturali 2026-05-13](#10-modifiche-architetturali--sessione-2026-05-13)
+11. [Sicurezza — Decisioni e Pattern](#11-sicurezza--decisioni-e-pattern)
+12. [Sistema Affiliati](#12-sistema-affiliati)
+13. [Sottodomini — Quick Reference](#13-sottodomini--quick-reference)
 
 ---
 
@@ -183,11 +187,20 @@ La tabella centrale: un'attività per utente. Il titolare interagisce solo con i
 | `instagram_url` | text | (aggiunta con migration 20260507) |
 | `facebook_url` | text | (aggiunta con migration 20260507) |
 | `business_type_custom` | text | Categoria personalizzata libera |
-| `plan` | text | `trial \| free \| starter \| pro` (default `trial`, aggiunta migration 20260423) |
-| `status` | text | `trial \| active \| expired \| suspended` — gestito da admin |
+| `plan` | text | `trial \| free \| starter \| pro` (default `trial`, migration 20260423) |
+| `plan_price` | numeric(10,2) | Prezzo mensile personalizzato concordato con il cliente (migration 20260518) |
+| `status` | text | `trial \| active \| expired \| suspended` — gestito da admin (migration 20260518) |
+| `trial_ends_at` | timestamptz | Scadenza periodo trial — editabile dall'admin nel drawer (migration 20260518) |
+| `admin_notes` | text | Note interne visibili solo all'admin (migration 20260518) |
+| `affiliate_code` | text | Codice affiliato che ha riferito questo cliente al signup (migration 20260520). Join: `affiliate_code = affiliates.code` |
 | `is_active` | boolean | Default `true`; se `false` il mini-sito non è visibile |
-| `ai_calls_month` | int | Contatore chiamate AI nel mese corrente |
+| `ai_calls_month` | int | Contatore chiamate AI nel mese corrente (deprecato — usa `ai_calls_month_display`) |
 | `ai_calls_total` | int | Contatore chiamate AI totali |
+| `ai_tokens_month` | int | Token Claude consumati nel mese corrente, usato per il gate 350k (migration 20260519) |
+| `ai_calls_month_display` | int | Numero di chiamate AI questo mese — valore mostrato in Panoramica e Admin (migration 20260519) |
+| `ai_unlimited` | boolean | Se `true` bypass rate limit — togglabile dall'admin nel drawer (migration 20260519) |
+| `ai_reset_date` | date | Data dell'ultimo reset mensile token — confrontata con mese corrente nell'Edge Function (migration 20260519) |
+| `opening_hours` | jsonb | Orari di apertura per giorno della settimana (formato v2 con `morning`/`afternoon` — vedi §10.1) |
 | `created_at` | timestamptz | |
 | `updated_at` | timestamptz | Auto-aggiornato da trigger `trg_businesses_updated_at` |
 
@@ -444,13 +457,19 @@ Domande e risposte per il SupportBot flottante. Read-only dal client.
 - **Path:** `supabase/functions/claude-proxy/index.ts`
 - **Trigger:** Chiamata HTTP da client autenticato (via `src/lib/claude.js`)
 - **Cosa fa:**
-  1. Verifica JWT Supabase dell'utente
+  1. Verifica JWT Supabase dell'utente → estrae `user_id`
   2. Legge `prompt` dal body JSON
-  3. Chiama `api.anthropic.com/v1/messages` con `claude-sonnet-4-6` (max 1000 token)
-  4. Incrementa `ai_calls_month` e `ai_calls_total` su `businesses` (fire-and-forget)
-  5. Restituisce `{ text: string }`
+  3. **Rate limiting:** SELECT su `businesses` per `user_id` — legge `ai_tokens_month`, `ai_reset_date`, `ai_unlimited`
+  4. Controlla se il mese è cambiato (`ai_reset_date.slice(0,7) !== currentMonth`) → se sì, `effectiveTokens = 0`
+  5. Se `effectiveTokens >= 350_000` e `!ai_unlimited` → risponde `429 { error: 'AI_LIMIT_REACHED' }`
+  6. Chiama `api.anthropic.com/v1/messages` con `claude-sonnet-4-6` (max 1024 token output)
+  7. Fire-and-forget UPDATE su `businesses`: incrementa `ai_tokens_month`, `ai_calls_month_display`, `ai_calls_total`; se reset mensile, azzera prima i contatori e aggiorna `ai_reset_date`
+  8. Restituisce `{ text: string }`
+- **Limiti:** 350.000 token/mese per cliente. Reset automatico il 1° del mese (rilevato dal confronto data). Clienti `ai_unlimited = true` non sono soggetti al limite.
 - **Secrets necessari:** `CLAUDE_API_KEY`
-- **Usata da:** `Onboarding.jsx` (generazione descrizione AI), `EditorSito.jsx`, `Social.jsx`
+- **Usata da:** `Onboarding.jsx` (generazione descrizione AI), `EditorSito.jsx`, `Social.jsx`, `Recensioni.jsx`
+- **Errori propagati al client:** `AI_LIMIT_REACHED` (429), `Sessione scaduta` (401), `Servizio non disponibile` (500+)
+- **Deployed con:** `npx supabase functions deploy claude-proxy --project-ref <ref>` con `SUPABASE_ACCESS_TOKEN` in env
 
 #### `notify-new-booking`
 - **Path:** `supabase/functions/notify-new-booking/index.ts`
@@ -551,16 +570,37 @@ Esegui `supabase/schema.sql` nella SQL Editor di Supabase. Crea:
   → UNIQUE (user_id, endpoint)
   → ALTER TABLE: enable RLS
   → CREATE POLICY "push_subscriptions: owner" (owner full access)
+
+20260517_admin_rls_fix.sql
+  → DROP + RECREATE POLICY "businesses: admin read all" (idempotente — fix 0 clienti in admin)
+  → DROP + RECREATE POLICY "businesses: admin update all"
+
+20260518_admin_notes.sql
+  → ALTER businesses: aggiunge admin_notes text, status text, plan_price numeric, trial_ends_at timestamptz
+  → (colonne già esistenti in produzione, migration documentale IF NOT EXISTS)
+
+20260519_ai_rate_limit.sql
+  → ALTER businesses: aggiunge ai_tokens_month int DEFAULT 0, ai_calls_month_display int DEFAULT 0, ai_unlimited boolean DEFAULT false, ai_reset_date date
+
+20260520_affiliate_code.sql
+  → ALTER businesses: aggiunge affiliate_code text
+  → CREATE INDEX idx_businesses_affiliate_code WHERE affiliate_code IS NOT NULL
+
+20260521_activity_log.sql
+  → CREATE TABLE IF NOT EXISTS activity_log (id, business_id, user_id, type, description, created_at)
+  → CREATE INDEX idx_activity_log_business_id
+  → ALTER TABLE: enable RLS
+  → CREATE POLICY "owner read", "owner insert", "admin read all"
 ```
 
 ### Step 3 — Tabelle non in migrations (create direttamente in Supabase)
 
 Le seguenti tabelle esistono in produzione ma non hanno file di migration locale. Ricreale manualmente se necessario:
 
-- **`activity_log`** — colonne: `id uuid PK`, `business_id uuid FK`, `user_id uuid FK`, `type text`, `description text`, `created_at timestamptz`
-- **`faq`** — colonne: `id uuid PK`, `categoria text`, `domanda text`, `risposta text`, `sort_order int`
-- **`businesses.status`** — colonna `status text` su businesses (`trial|active|expired|suspended`), aggiunta direttamente dall'admin
-- **`businesses.ai_calls_month`** e **`businesses.ai_calls_total`** — colonne int su businesses per tracking utilizzo AI
+- **`faq`** — colonne: `id uuid PK`, `categoria text`, `domanda text`, `risposta text`, `sort_order int`. Read-only dal client; popolata manualmente dalla Dashboard Supabase.
+- **`affiliates`** — colonne: `id uuid PK`, `user_id uuid FK`, `name text`, `code text UNIQUE`, `status text` (`pending|active`), `total_earned numeric`, `total_pending numeric`, `created_at timestamptz`. Join con `businesses` via `businesses.affiliate_code = affiliates.code`.
+
+> **Nota:** `activity_log` era precedentemente in questa lista — ora documentata in `20260521_activity_log.sql`.
 
 ### Step 4 — Realtime
 Nel Dashboard Supabase → Database → Replication, assicurarsi che `bookings` sia abilitata per Realtime (già incluso nella migration 20260514, ma verificare che la `supabase_realtime` publication includa la tabella).
@@ -826,3 +866,139 @@ slug: await generateSlug(form.name.trim())
 ```
 
 **Comportamento:** `bar-roma` → se occupato → `bar-roma-2` → `bar-roma-3` → … Fallback random solo dopo 50 collisioni (scenario praticamente impossibile).
+
+---
+
+## 11. Sicurezza — Decisioni e Pattern
+
+### 11.1 Select esplicito su pagine pubbliche
+
+`PublicSite.jsx` usa una select esplicita per evitare di esporre campi admin/billing al browser:
+
+```js
+.select('id, user_id, name, slug, category, business_type_custom, description, phone, whatsapp, email, address, city, profile_image, instagram_url, facebook_url, opening_hours')
+```
+
+Campi esclusi deliberatamente: `admin_notes`, `affiliate_code`, `ai_calls_*`, `ai_tokens_month`, `ai_unlimited`, `ai_reset_date`, `plan_price`, `plan`, `status`, `trial_ends_at`.
+
+### 11.2 Gestione sessione scaduta in `claude.js`
+
+`src/lib/claude.js` verifica la sessione **prima** di chiamare la Edge Function:
+
+```js
+const { data: { session } } = await supabase.auth.getSession()
+if (!session?.access_token) {
+  throw new Error('Sessione scaduta. Effettua di nuovo il login.')
+}
+```
+
+Se la Edge Function risponde con errore HTTP, il messaggio è sempre tradotto in italiano (no status code esposto all'utente):
+- `err.error` presente → propagato com'è (es. `AI_LIMIT_REACHED`)
+- 401 → `"Sessione scaduta. Effettua di nuovo il login."`
+- 500+ → `"Servizio temporaneamente non disponibile. Riprova tra poco."`
+- altro → `"Errore di connessione. Riprova."`
+
+### 11.3 Messaggi di errore Auth in italiano
+
+`Auth.jsx` usa `translateError(msg)` che mappa gli errori Supabase in italiano. Il fallback restituisce `"Si è verificato un errore. Riprova tra poco."` invece del messaggio grezzo in inglese.
+
+### 11.4 RLS Admin su `businesses`
+
+Due policy RLS permettono all'admin di leggere e modificare qualsiasi business:
+
+```sql
+-- Lettura
+CREATE POLICY "businesses: admin read all" ON businesses FOR SELECT
+  USING (auth.jwt()->'app_metadata'->>'role' = 'admin');
+
+-- Modifica
+CREATE POLICY "businesses: admin update all" ON businesses FOR UPDATE
+  USING (auth.jwt()->'app_metadata'->>'role' = 'admin')
+  WITH CHECK (auth.jwt()->'app_metadata'->>'role' = 'admin');
+```
+
+Il ruolo viene impostato manualmente dalla Dashboard Supabase → Authentication → Users → Edit User Metadata → `{ "role": "admin" }`.
+
+### 11.5 Console.log sensibili rimossi
+
+Rimossi in sessione 2026-05-14:
+- `Onboarding.jsx`: prompt Claude inviato, risposta AI ricevuta, conferma salvataggio descrizione
+- `Affiliates.jsx`: userId + dati affiliato
+
+---
+
+## 12. Sistema Affiliati
+
+### 12.1 Flusso referral
+
+```
+Affiliato condivide link → piumapp.com/auth?ref=CODICE
+    ↓
+Auth.jsx salva ref in localStorage('pium_ref')
+    ↓
+Utente si registra → Onboarding.jsx legge pium_ref
+    ↓
+INSERT businesses con affiliate_code = codice affiliato
+localStorage.removeItem('pium_ref')  // pulizia
+    ↓
+Admin vede badge codice in tabella + nome affiliato nel drawer
+```
+
+### 12.2 Join affiliates → businesses
+
+Non c'è FK formale. Il collegamento avviene via string match:
+
+```js
+supabase.from('affiliates').select('code, name').eq('code', biz.affiliate_code).maybeSingle()
+```
+
+`businesses.affiliate_code` = valore del codice (es. `"MARCO2024"`)  
+`affiliates.code` = stessa stringa — colonna UNIQUE nella tabella affiliates.
+
+### 12.3 Tabella `affiliates`
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid FK → `auth.users` | L'affiliato ha un account Supabase Auth separato |
+| `name` | text | Nome completo affiliato |
+| `code` | text UNIQUE | Codice referral (es. `MARCO2024`) |
+| `status` | text | `pending \| active` — approvato dall'admin |
+| `total_earned` | numeric | Commissioni totali guadagnate |
+| `total_pending` | numeric | Commissioni in attesa di pagamento |
+| `created_at` | timestamptz | |
+
+### 12.4 Migration
+
+`affiliate_code` su `businesses` documentata in `20260520_affiliate_code.sql`. La tabella `affiliates` non ha migration locale — esiste in produzione, ricreala manualmente se necessario (vedi §6, Step 3).
+
+---
+
+## 13. Sottodomini — Quick Reference
+
+> Architettura completa in §10.5. Questa sezione è un riferimento rapido per chi deve replicare o debuggare il sistema.
+
+**Stack:** Cloudflare Worker + DNS wildcard CNAME.
+
+**Worker `pium-subdomain-proxy`:**
+- Route configurata: `*piumapp.com/*`
+- Logica: se hostname ha 3+ parti e non è `www.` → proxy trasparente verso `www.piumapp.com`
+- File sorgente: `cloudflare-worker.js` (root del progetto)
+
+**DNS Cloudflare:**
+```
+CNAME  *   →  www.piumapp.com  (proxy arancione 🟠)
+CNAME  www →  <cname-vercel>   (proxy arancione 🟠)
+```
+
+**Lettura slug in `PublicSite.jsx`:**
+```js
+const parts = window.location.hostname.split('.')
+const slug = parts.length >= 3 && parts[0] !== 'www' ? parts[0] : paramSlug
+```
+
+**Debug:** Se un sottodominio non funziona, verificare in ordine:
+1. DNS wildcard attivo (Cloudflare Dashboard → DNS)
+2. Worker deployato e route assegnata (Workers → Triggers)
+3. `window.location.hostname` nel browser mostra il sottodominio corretto
+4. Slug esiste in `businesses.slug` su Supabase

@@ -45,6 +45,9 @@
 - ✅ Fix admin panel che mostrava 0 clienti (RLS policy + colonne mancanti)
 - ✅ Fix drawer admin non visibile (spostato fuori da adm-shell, z-index 9999)
 - ✅ Colonne DB documentate in migration: admin_notes, status, plan_price, trial_ends_at, ai_calls_month, ai_calls_total, ai_tokens_month, ai_calls_month_display, ai_unlimited, ai_reset_date
+- ✅ Link sito cliente automatico nei post social AI (slug.piumapp.com incluso nel prompt Claude, in modo naturale come call-to-action)
+- ✅ Data trial editabile dall'admin (input type=date + pulsante +30 come scorciatoia + feedback ✓ Salvato in drawer)
+- ✅ Debug completo pre-lancio — 5 fix ALTA: crash reset password, saveDraft senza try/catch, select * su PublicSite, sessione scaduta non gestita in claude.js, errori admin visibili agli utenti; 5 fix MEDIA: errori in italiano, toast "Eliminato ✓", migration affiliate_code e activity_log, barra AI nascosta se 0 chiamate
 
 ## Prima del lancio
 
@@ -52,7 +55,7 @@
 - [ ] Calcolo automatico guadagni affiliati collegato a Stripe
 - [ ] Reset password cliente dal pannello admin
 - [ ] Pulizia slug vecchi clienti (migrazione da formato bar-roma-xxxx a bar-roma / bar-roma-2)
-- [ ] Debug generale completo prima del lancio
+- ✅ Debug generale completo pre-lancio
 - ✅ Icona PWA funzionante su mobile
 - [ ] Sostituire Claude API key temporanea con quella account aziendale prima del lancio
 - [ ] Verificare numero di telefono sull'account Anthropic
