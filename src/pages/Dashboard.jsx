@@ -21,6 +21,12 @@ const NAV = [
   { id: 'editor',     label: 'Editor Sito', icon: IconPen },
 ]
 
+function formatTrialEnd(dateStr) {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
 export default function Dashboard() {
   const navigate  = useNavigate()
   const location  = useLocation()
@@ -30,6 +36,8 @@ export default function Dashboard() {
   const [sideOpen,           setSideOpen]           = useState(false)
   const [pendingCount,       setPendingCount]       = useState(0)
   const [agendaInitialView,  setAgendaInitialView]  = useState('day')
+  const [stripeSuccess,      setStripeSuccess]      = useState(false)
+  const [checkoutLoading,    setCheckoutLoading]    = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -57,6 +65,48 @@ export default function Dashboard() {
     const s = new URLSearchParams(location.search).get('s')
     if (s && NAV.some(n => n.id === s)) setSection(s)
   }, [location.search])
+
+  // Ritorno da Stripe dopo pagamento riuscito
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get('stripe_success') !== 'true' || !user) return
+    setStripeSuccess(true)
+    navigate('/dashboard', { replace: true })
+    // Aspetta 2s poi ricarica business per riflettere status=active dal webhook
+    setTimeout(() => {
+      supabase.from('businesses').select('*').eq('user_id', user.id).maybeSingle()
+        .then(({ data: biz }) => { if (biz) setBusiness(biz) })
+    }, 2000)
+    const t = setTimeout(() => setStripeSuccess(false), 6000)
+    return () => clearTimeout(t)
+  }, [location.search, user]) // eslint-disable-line
+
+  const handleCheckout = async () => {
+    setCheckoutLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        console.error('Stripe checkout error:', data.error)
+      }
+    } catch (err) {
+      console.error('Checkout error:', err)
+    } finally {
+      setCheckoutLoading(false)
+    }
+  }
 
   const Section = {
     panoramica: Panoramica,
@@ -225,6 +275,35 @@ export default function Dashboard() {
             <div className="db-expired-banner">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               Il tuo periodo di prova è scaduto. Contatta <a href="mailto:info@piumapp.com">info@piumapp.com</a> per attivare il tuo piano.
+            </div>
+          )}
+
+          {business?.status === 'trial' && (
+            <div className="db-trial-banner">
+              <div className="db-trial-banner-text">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>
+                  {business.trial_ends_at
+                    ? <>Il tuo periodo gratuito scade il <strong>{formatTrialEnd(business.trial_ends_at)}</strong> —</>
+                    : <>Stai usando PIUM in prova gratuita —</>
+                  }
+                  {' '}Attiva il piano a <strong>99€/mese</strong>
+                </span>
+              </div>
+              <button
+                className="db-trial-btn"
+                onClick={handleCheckout}
+                disabled={checkoutLoading}
+              >
+                {checkoutLoading ? 'Caricamento…' : 'Attiva ora'}
+              </button>
+            </div>
+          )}
+
+          {stripeSuccess && (
+            <div className="db-stripe-success">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="20 6 9 17 4 12"/></svg>
+              Pagamento completato! Il tuo piano è ora attivo. Grazie per aver scelto PIUM.
             </div>
           )}
           {section !== 'panoramica' && (
