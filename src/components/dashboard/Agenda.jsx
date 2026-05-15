@@ -30,6 +30,13 @@ const EMPTY_EMP  = { name: '', color: COLORS[0] }
 
 const SLOT_H = 40 // px per 30-minute slot
 
+/* ── Wheel picker constants ── */
+const WP_ITEM_H    = 44
+const WP_VISIBLE   = 5
+const WP_PAD       = (WP_ITEM_H * WP_VISIBLE) / 2 - WP_ITEM_H / 2  // 88px
+const WP_YEAR_START = 2020
+const WP_YEAR_END   = 2035
+
 /* ── Date utilities ── */
 function formatDate(date) {
   const y = date.getFullYear()
@@ -94,6 +101,8 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [editingId,     setEditingId]     = useState(null)
   const [addAnotherTime, setAddAnotherTime] = useState(null)
   const [taxRate,       setTaxRate]       = useState(22)
+
+  const [showDatePicker,        setShowDatePicker]        = useState(false)
 
   const [pendingBookings,       setPendingBookings]       = useState([])
   const [processingId,          setProcessingId]          = useState(null)
@@ -263,6 +272,16 @@ export default function Agenda({ business, initialView = 'day' }) {
     loadAppointments()
   }
 
+  const handlePickerConfirm = (date) => {
+    date.setHours(0, 0, 0, 0)
+    if (view === 'day') {
+      setSelectedDay(date)
+    } else {
+      setMonthDate(new Date(date.getFullYear(), date.getMonth(), 1))
+    }
+    setShowDatePicker(false)
+  }
+
   const rejectPendingBooking = async (id) => {
     setProcessingId(id)
     await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id)
@@ -308,6 +327,14 @@ export default function Agenda({ business, initialView = 'day' }) {
   return (
     <div className="db-section">
 
+      {showDatePicker && (
+        <DateWheelPicker
+          date={view === 'day' ? selectedDay : monthDate}
+          onConfirm={handlePickerConfirm}
+          onCancel={() => setShowDatePicker(false)}
+        />
+      )}
+
       {/* ── Header ── */}
       <div className="ag-header">
 
@@ -334,7 +361,7 @@ export default function Agenda({ business, initialView = 'day' }) {
             else setSelectedDay(d => addDays(d, -1))
           }} aria-label="Precedente"><IconChevLeft /></button>
 
-          <span className="ag-nav-label">
+          <span className="ag-nav-label ag-nav-label--pick" onClick={() => setShowDatePicker(true)}>
             {view === 'month'
               ? `${MONTHS_LONG[monthDate.getMonth()]} ${monthDate.getFullYear()}`
               : <>
@@ -693,6 +720,109 @@ export default function Agenda({ business, initialView = 'day' }) {
         </div>
       )}
 
+    </div>
+  )
+}
+
+/* ── Date Wheel Picker ── */
+function DateWheelPicker({ date, onConfirm, onCancel }) {
+  const [d, setD] = useState(date.getDate() - 1)  // 0-based day index
+  const [m, setM] = useState(date.getMonth())
+  const [y, setY] = useState(date.getFullYear() - WP_YEAR_START)
+
+  const yr          = WP_YEAR_START + y
+  const daysInMonth = new Date(yr, m + 1, 0).getDate()
+
+  // Clamp day when month/year change (e.g. Jan 31 → Feb: day → 28)
+  useEffect(() => {
+    if (d >= daysInMonth) setD(daysInMonth - 1)
+  }, [m, y]) // eslint-disable-line
+
+  // Prevent body scroll while picker is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
+  // Close on Escape
+  useEffect(() => {
+    const fn = (e) => { if (e.key === 'Escape') onCancel() }
+    document.addEventListener('keydown', fn)
+    return () => document.removeEventListener('keydown', fn)
+  }, [onCancel])
+
+  const days   = Array.from({ length: daysInMonth }, (_, i) => String(i + 1).padStart(2, '0'))
+  const months = MONTHS_LONG
+  const years  = Array.from({ length: WP_YEAR_END - WP_YEAR_START + 1 }, (_, i) => String(WP_YEAR_START + i))
+
+  const handleConfirm = () => {
+    const clampedD = Math.min(d, daysInMonth - 1)
+    onConfirm(new Date(yr, m, clampedD + 1))
+  }
+
+  return (
+    <div className="wp-overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div className="wp-picker">
+        <div className="wp-header">
+          <button className="wp-btn-cancel" onClick={onCancel}>Annulla</button>
+          <span className="wp-title">Scegli data</span>
+          <button className="wp-btn-confirm" onClick={handleConfirm}>Conferma</button>
+        </div>
+        <div className="wp-columns">
+          <div className="wp-center-band" />
+          <WheelColumn items={days}   value={Math.min(d, daysInMonth - 1)} onChange={setD} />
+          <WheelColumn items={months} value={m}                            onChange={setM} />
+          <WheelColumn items={years}  value={y}                            onChange={setY} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function WheelColumn({ items, value, onChange }) {
+  const ref   = useRef(null)
+  const timer = useRef(null)
+
+  // Set initial scroll position without animation
+  useEffect(() => {
+    if (ref.current) ref.current.scrollTop = value * WP_ITEM_H
+  }, []) // eslint-disable-line
+
+  // Sync scroll when value is updated externally (e.g. day clamping)
+  useEffect(() => {
+    if (!ref.current) return
+    const current = Math.round(ref.current.scrollTop / WP_ITEM_H)
+    if (current !== value) {
+      ref.current.scrollTo({ top: value * WP_ITEM_H, behavior: 'smooth' })
+    }
+  }, [value])
+
+  const handleScroll = () => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      if (!ref.current) return
+      const idx     = Math.round(ref.current.scrollTop / WP_ITEM_H)
+      const clamped = Math.max(0, Math.min(items.length - 1, idx))
+      onChange(clamped)
+    }, 100)
+  }
+
+  return (
+    <div className="wp-col-wrap">
+      <div className="wp-col" ref={ref} onScroll={handleScroll}>
+        <div style={{ height: WP_PAD, flexShrink: 0 }} />
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className={`wp-item ${i === value ? 'wp-item--sel' : ''}`}
+            style={{ height: WP_ITEM_H }}
+            onClick={() => onChange(i)}
+          >
+            {item}
+          </div>
+        ))}
+        <div style={{ height: WP_PAD, flexShrink: 0 }} />
+      </div>
     </div>
   )
 }

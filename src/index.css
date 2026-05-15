@@ -7544,6 +7544,137 @@ code {
 /* spin keyframe (reuse) */
 @keyframes ag-spin { to { transform: rotate(360deg); } }
 
+/* ── Agenda: clickable date label ── */
+.ag-nav-label--pick {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 4px 10px;
+  margin: -4px -10px;
+  transition: background 0.15s;
+}
+.ag-nav-label--pick:hover { background: var(--accent-bg); }
+
+/* ── Date Wheel Picker ── */
+.wp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.wp-picker {
+  background: var(--bg);
+  border-radius: 18px;
+  overflow: hidden;
+  width: min(360px, 92vw);
+  box-shadow: 0 16px 60px rgba(0,0,0,0.25);
+}
+.wp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.wp-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+.wp-btn-cancel, .wp-btn-confirm {
+  font-size: 14px;
+  font-family: var(--sans);
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 5px 8px;
+  border-radius: 7px;
+  transition: background 0.12s;
+}
+.wp-btn-cancel  { color: var(--text); }
+.wp-btn-cancel:hover { background: var(--code-bg); }
+.wp-btn-confirm { color: var(--accent); font-weight: 700; }
+.wp-btn-confirm:hover { background: var(--accent-bg); }
+
+/* Three columns */
+.wp-columns {
+  display: flex;
+  height: 220px; /* WP_ITEM_H × WP_VISIBLE = 44 × 5 */
+  position: relative;
+}
+/* Center highlight band */
+.wp-center-band {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 44px;
+  transform: translateY(-50%);
+  background: var(--accent-bg);
+  border-top: 1px solid var(--accent-border);
+  border-bottom: 1px solid var(--accent-border);
+  pointer-events: none;
+  z-index: 1;
+}
+/* Each column */
+.wp-col-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+.wp-col-wrap + .wp-col-wrap {
+  border-left: 1px solid var(--border);
+}
+.wp-col {
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.wp-col::-webkit-scrollbar { display: none; }
+/* Items */
+.wp-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text);
+  cursor: pointer;
+  scroll-snap-align: center;
+  user-select: none;
+  transition: color 0.12s;
+  position: relative;
+  z-index: 2;
+}
+.wp-item--sel {
+  color: var(--text-h);
+  font-weight: 700;
+}
+/* Fade gradients at top and bottom */
+.wp-col-wrap::before,
+.wp-col-wrap::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 80px;
+  pointer-events: none;
+  z-index: 3;
+}
+.wp-col-wrap::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--bg) 5%, transparent);
+}
+.wp-col-wrap::after {
+  bottom: 0;
+  background: linear-gradient(to top, var(--bg) 5%, transparent);
+}
+
 /* ── Agenda: mobile date display ── */
 @media (max-width: 640px) {
   .ag-header { row-gap: 10px; }
