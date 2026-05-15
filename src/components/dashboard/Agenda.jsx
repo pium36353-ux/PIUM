@@ -337,7 +337,11 @@ export default function Agenda({ business, initialView = 'day' }) {
           <span className="ag-nav-label">
             {view === 'month'
               ? `${MONTHS_LONG[monthDate.getMonth()]} ${monthDate.getFullYear()}`
-              : `${DAY_FULL[selectedDay.getDay()]}, ${selectedDay.getDate()} ${MONTHS[selectedDay.getMonth()]} ${selectedDay.getFullYear()}`
+              : <>
+                  <span className="ag-nav-day-name">{DAY_FULL[selectedDay.getDay()]}</span>
+                  <span className="ag-nav-day-sep">, </span>
+                  <span className="ag-nav-day-date">{selectedDay.getDate()} {MONTHS_LONG[selectedDay.getMonth()]} {selectedDay.getFullYear()}</span>
+                </>
             }
           </span>
 

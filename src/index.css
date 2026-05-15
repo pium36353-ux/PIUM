@@ -6011,14 +6011,12 @@ code {
 }
 
 .ag-nav-label {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-h);
   flex: 1;
   text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .ag-header-actions {
@@ -7545,6 +7543,40 @@ code {
 
 /* spin keyframe (reuse) */
 @keyframes ag-spin { to { transform: rotate(360deg); } }
+
+/* ── Agenda: mobile date display ── */
+@media (max-width: 640px) {
+  .ag-header { row-gap: 10px; }
+  .ag-view-tabs { order: 1; }
+  .ag-header-actions { order: 2; }
+  .ag-nav {
+    order: 3;
+    flex: none;
+    width: 100%;
+    justify-content: center;
+  }
+  .ag-nav-label {
+    font-size: 20px;
+    font-weight: 700;
+    flex: unset;
+  }
+  .ag-nav-day-name {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 2px;
+  }
+  .ag-nav-day-sep { display: none; }
+  .ag-nav-day-date {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+}
 
 /* ── Affiliates ── */
 .af-shell {
