@@ -27,6 +27,8 @@
 
 ## Completati di recente
 
+- ✅ Integrazione Stripe: Edge Function `stripe-checkout` (crea sessione), `stripe-webhook` (aggiorna status → active al pagamento), banner trial in dashboard con data scadenza e pulsante "Attiva ora", toast verde post-pagamento. Colonne `stripe_subscription_id` e `stripe_customer_id` aggiunte a `businesses`. Chiavi test configurate, webhook registrato su Stripe Dashboard.
+
 - ✅ Sistema affiliati (registrazione, dashboard, approvazione da admin)
 - ✅ Gestione piani clienti (trial/active/expired/suspended, prezzo personalizzabile, estensione trial)
 - ✅ Login admin separato su route nascosta /x-admin-login
@@ -51,12 +53,13 @@
 
 ## Prima del lancio
 
-- [ ] Integrazione Stripe per pagamenti ricorrenti automatici
+- ✅ Integrazione Stripe per pagamenti ricorrenti automatici
 - [ ] Calcolo automatico guadagni affiliati collegato a Stripe
 - [ ] Reset password cliente dal pannello admin
 - [ ] Pulizia slug vecchi clienti (migrazione da formato bar-roma-xxxx a bar-roma / bar-roma-2)
 - ✅ Debug generale completo pre-lancio
 - ✅ Icona PWA funzionante su mobile
+- [ ] Upgrade Supabase al piano Pro (25€/mese) — il piano Free ha 50 MB totali di storage condivisi tra tutti gli utenti. Con la crescita prevista è insufficiente. L'upgrade porta a 100 GB. Nessuna modifica al codice necessaria, solo upgrade dal pannello Supabase.
 - [ ] Sostituire Claude API key temporanea con quella account aziendale prima del lancio
 - [ ] Verificare numero di telefono sull'account Anthropic
 - [ ] Aggiungere dati di fatturazione completi su Anthropic
