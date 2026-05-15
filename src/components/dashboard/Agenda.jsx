@@ -569,7 +569,8 @@ export default function Agenda({ business, initialView = 'day' }) {
 
       {/* ── Settings panel ── */}
       {showSettings && (
-        <div className="ag-settings">
+        <div className="sv-modal-overlay" onClick={e => e.target === e.currentTarget && setShowSettings(false)}>
+        <div className="ag-settings-modal">
           <div className="ag-settings-head">
             <span className="ag-settings-title">Gestione dipendenti</span>
             <button className="sv-modal-close" onClick={() => setShowSettings(false)}><IconX /></button>
@@ -598,6 +599,7 @@ export default function Agenda({ business, initialView = 'day' }) {
               {savingEmp ? 'Salvataggio…' : 'Aggiungi dipendente'}
             </button>
           </div>
+        </div>
         </div>
       )}
 

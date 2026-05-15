@@ -6492,13 +6492,17 @@ code {
   }
 }
 
-/* Settings panel */
-.ag-settings {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-top: 16px;
+/* Settings modal */
+.ag-settings-modal {
   background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 24px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
 }
 
 .ag-settings-head {

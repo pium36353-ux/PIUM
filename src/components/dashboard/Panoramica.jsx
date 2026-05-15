@@ -139,8 +139,8 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
         </div>
       )}
 
-      {/* AI usage bar — hidden when 0 calls and not unlimited */}
-      {business && (business.ai_unlimited || (business.ai_calls_month_display ?? 0) > 0) && (() => {
+      {/* AI usage bar */}
+      {business && (() => {
         const nextMonthIdx  = (new Date().getMonth() + 1) % 12
         const nextMonthName = MONTHS_IT[nextMonthIdx]
         const calls   = business.ai_calls_month_display ?? 0
