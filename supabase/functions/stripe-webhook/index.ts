@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
       .from('businesses')
       .update({
         status:                  'active',
+        plan:                    'active',
         ...(subId      ? { stripe_subscription_id: subId }     : {}),
         ...(customerId ? { stripe_customer_id:     customerId } : {}),
       })

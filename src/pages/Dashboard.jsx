@@ -38,6 +38,7 @@ export default function Dashboard() {
   const [agendaInitialView,  setAgendaInitialView]  = useState('day')
   const [stripeSuccess,      setStripeSuccess]      = useState(false)
   const [checkoutLoading,    setCheckoutLoading]    = useState(false)
+  const [pendingActivation,  setPendingActivation]  = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -66,15 +67,22 @@ export default function Dashboard() {
     if (s && NAV.some(n => n.id === s)) setSection(s)
   }, [location.search])
 
-  // Ritorno da Stripe dopo pagamento riuscito — polling fino a status=active
+  // Step 1 — rileva il ritorno da Stripe e avvia il polling
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     if (params.get('stripe_success') !== 'true' || !user) return
     navigate('/dashboard', { replace: true })
+    setPendingActivation(true)
+  }, [location.search, user]) // eslint-disable-line
+
+  // Step 2 — polling separato, non cancellato dal navigate
+  useEffect(() => {
+    if (!pendingActivation || !user) return
 
     let attempts = 0
-    const MAX    = 5   // 5 tentativi × 2s = 10s max
-    const DELAY  = 2000
+    const MAX   = 5     // 5 × 2s = 10s max
+    const DELAY = 2000
+    let timer
 
     const poll = () => {
       attempts++
@@ -83,17 +91,18 @@ export default function Dashboard() {
           if (!biz) return
           if (biz.status === 'active') {
             setBusiness(biz)
+            setPendingActivation(false)
             setStripeSuccess(true)
-            const t = setTimeout(() => setStripeSuccess(false), 6000)
-            return () => clearTimeout(t)
+            setTimeout(() => setStripeSuccess(false), 6000)
+            return
           }
           if (attempts < MAX) timer = setTimeout(poll, DELAY)
         })
     }
 
-    let timer = setTimeout(poll, DELAY)
+    timer = setTimeout(poll, DELAY)
     return () => clearTimeout(timer)
-  }, [location.search, user]) // eslint-disable-line
+  }, [pendingActivation, user]) // eslint-disable-line
 
   const handleCheckout = async () => {
     setCheckoutLoading(true)
