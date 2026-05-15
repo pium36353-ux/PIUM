@@ -69,6 +69,7 @@ Deno.serve(async (req) => {
       'line_items[0][price_data][recurring][interval]':      'month',
       'line_items[0][price_data][product_data][name]':       'PIUM — Piano Mensile',
       'line_items[0][price_data][product_data][description]':'Accesso completo alla piattaforma PIUM per la tua attività',
+      'line_items[0][quantity]':                             '1',
       success_url:                                           `${APP_URL}/dashboard?stripe_success=true`,
       cancel_url:                                            `${APP_URL}/dashboard`,
       locale:                                                'it',
