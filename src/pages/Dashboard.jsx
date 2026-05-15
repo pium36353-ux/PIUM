@@ -66,19 +66,33 @@ export default function Dashboard() {
     if (s && NAV.some(n => n.id === s)) setSection(s)
   }, [location.search])
 
-  // Ritorno da Stripe dopo pagamento riuscito
+  // Ritorno da Stripe dopo pagamento riuscito — polling fino a status=active
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     if (params.get('stripe_success') !== 'true' || !user) return
-    setStripeSuccess(true)
     navigate('/dashboard', { replace: true })
-    // Aspetta 2s poi ricarica business per riflettere status=active dal webhook
-    setTimeout(() => {
+
+    let attempts = 0
+    const MAX    = 5   // 5 tentativi × 2s = 10s max
+    const DELAY  = 2000
+
+    const poll = () => {
+      attempts++
       supabase.from('businesses').select('*').eq('user_id', user.id).maybeSingle()
-        .then(({ data: biz }) => { if (biz) setBusiness(biz) })
-    }, 2000)
-    const t = setTimeout(() => setStripeSuccess(false), 6000)
-    return () => clearTimeout(t)
+        .then(({ data: biz }) => {
+          if (!biz) return
+          if (biz.status === 'active') {
+            setBusiness(biz)
+            setStripeSuccess(true)
+            const t = setTimeout(() => setStripeSuccess(false), 6000)
+            return () => clearTimeout(t)
+          }
+          if (attempts < MAX) timer = setTimeout(poll, DELAY)
+        })
+    }
+
+    let timer = setTimeout(poll, DELAY)
+    return () => clearTimeout(timer)
   }, [location.search, user]) // eslint-disable-line
 
   const handleCheckout = async () => {
