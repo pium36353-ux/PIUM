@@ -24,95 +24,112 @@
 | 20 | Rate limiting AI | ✅ |
 | 21 | Sottodomini personalizzati | ✅ |
 | 22 | Bot FAQ supporto | ✅ |
+| 23 | Pagamenti Stripe | ✅ |
 
-## Completati di recente
-
-- ✅ Integrazione Stripe: Edge Function `stripe-checkout` (crea sessione), `stripe-webhook` (aggiorna status → active al pagamento), banner trial in dashboard con data scadenza e pulsante "Attiva ora", toast verde post-pagamento. Colonne `stripe_subscription_id` e `stripe_customer_id` aggiunte a `businesses`. Chiavi test configurate, webhook registrato su Stripe Dashboard.
-
-- ✅ Sistema affiliati (registrazione, dashboard, approvazione da admin)
-- ✅ Gestione piani clienti (trial/active/expired/suspended, prezzo personalizzabile, estensione trial)
-- ✅ Login admin separato su route nascosta /x-admin-login
-- ✅ Notifiche push con impostazioni personalizzabili (minuti pre-appuntamento, notifica dopo spunta, azione "✓ Fatto" dalla notifica)
-- ✅ Documenti GDPR generati (Privacy Policy, Termini di Servizio, DPA, Cookie Policy)
-- ✅ Email info@piumapp.com attiva con forwarding su Cloudflare
-- ✅ Galleria fotografica carosello nel sito pubblico (fino a 20 foto, compressione automatica)
-- ✅ Card panoramica (attività completate, prossime attività, promemoria)
-- ✅ PWA installabile con icone
-- ✅ Sottodomini personalizzati automatici (nomeattivita.piumapp.com via Cloudflare Worker)
-- ✅ Slug puliti per nuovi onboarding (es. bar-roma, bar-roma-2 — senza suffisso casuale)
-- ✅ Redesign completo Admin panel: tabella 8 colonne, 6 StatCard (MRR, conversione trial), drawer laterale per ogni cliente
-- ✅ Rate limiting AI: 350k token/mese, contatore reale su Edge Function, barra utilizzo in Panoramica, toggle AI illimitata nel drawer admin
-- ✅ Affiliato per cliente in admin panel (badge codice in tabella + provenienza con nome affiliato nel drawer)
-- ✅ Rimozione di tutti i console.log sensibili (prompt Claude, dati utenti, token)
-- ✅ Fix admin panel che mostrava 0 clienti (RLS policy + colonne mancanti)
-- ✅ Fix drawer admin non visibile (spostato fuori da adm-shell, z-index 9999)
-- ✅ Colonne DB documentate in migration: admin_notes, status, plan_price, trial_ends_at, ai_calls_month, ai_calls_total, ai_tokens_month, ai_calls_month_display, ai_unlimited, ai_reset_date
-- ✅ Link sito cliente automatico nei post social AI (slug.piumapp.com incluso nel prompt Claude, in modo naturale come call-to-action)
-- ✅ Data trial editabile dall'admin (input type=date + pulsante +30 come scorciatoia + feedback ✓ Salvato in drawer)
-- ✅ Debug completo pre-lancio — 5 fix ALTA: crash reset password, saveDraft senza try/catch, select * su PublicSite, sessione scaduta non gestita in claude.js, errori admin visibili agli utenti; 5 fix MEDIA: errori in italiano, toast "Eliminato ✓", migration affiliate_code e activity_log, barra AI nascosta se 0 chiamate
+---
 
 ## Prima del lancio
 
-- ✅ Integrazione Stripe per pagamenti ricorrenti automatici
-- [ ] Calcolo automatico guadagni affiliati collegato a Stripe
-- [ ] Reset password cliente dal pannello admin
-- [ ] Pulizia slug vecchi clienti (migrazione da formato bar-roma-xxxx a bar-roma / bar-roma-2)
-- ✅ Debug generale completo pre-lancio
-- ✅ Icona PWA funzionante su mobile
-- [ ] Upgrade Supabase al piano Pro (25€/mese) — il piano Free ha 50 MB totali di storage condivisi tra tutti gli utenti. Con la crescita prevista è insufficiente. L'upgrade porta a 100 GB. Nessuna modifica al codice necessaria, solo upgrade dal pannello Supabase.
-- [ ] Sostituire Claude API key temporanea con quella account aziendale prima del lancio
-- [ ] Verificare numero di telefono sull'account Anthropic
-- [ ] Aggiungere dati di fatturazione completi su Anthropic
+### Bloccanti (senza questi non si lancia)
+- [ ] **Sostituire chiavi Stripe da test a live** — attualmente configurate con `pk_test_` / `sk_test_`. Prima del lancio: generare chiavi live su Stripe Dashboard, aggiornare secret su Supabase, aggiornare `VITE_STRIPE_PUBLIC_KEY` nel `.env` di produzione su Vercel
+- [ ] **Sostituire Claude API key temporanea** con quella account aziendale
+- [ ] **Verificare numero di telefono** sull'account Anthropic
+- [ ] **Aggiungere dati di fatturazione** su Anthropic
+- [ ] **Verifica onboarding → sito pubblico** funzionante end-to-end su utente reale
+
+### Importanti ma non bloccanti
+- [ ] **Upgrade Supabase al piano Pro** (25€/mese) — il piano Free ha 50 MB storage condivisi. Con foto dei clienti si esaurisce rapidamente. Nessuna modifica al codice, solo upgrade dal pannello Supabase
+- [ ] **Calcolo automatico guadagni affiliati** collegato a Stripe (ora è manuale)
+- [ ] **Reset password cliente** dal pannello admin
+- [ ] **Pulizia slug vecchi clienti** — migrazione da formato `bar-roma-xxxx` a `bar-roma`
+
+### Nice to have
 - [ ] Template visivi per categoria attività (ristorante, parrucchiere, estetica, ecc.)
 - [ ] Opuscolo venditori PDF
-- [ ] Verifica onboarding → sito pubblico funzionante end-to-end
-- ✅ Bot supporto clienti con FAQ PIUM
-- ✅ Sottodominio personalizzato per ogni attività (nomeattivita.piumapp.com)
-- ✅ Notifiche push con impostazioni personalizzabili
-- ✅ Sistema trial/blocco dopo 1 mese gratis
-- ✅ Dashboard affiliati + sistema retribuzione manuale
-- ✅ Limite chiamate AI (350k token/mese con reset mensile automatico)
-- ✅ Spostare chiamate Claude API su Supabase Edge Functions
-- ✅ Admin panel professionale con gestione clienti completa
+- [ ] Analytics (sezione #10 mai implementata)
 
-## Booking system — stato attuale e prossimi step
+---
+
+## Cosa funziona oggi — recap completo
+
+### Prodotto cliente
+- **Auth**: registrazione email/password, login, logout, reset password
+- **Onboarding**: wizard guidato con generazione slug univoco (`bar-roma`, `bar-roma-2`), categoria attività, orari, descrizione
+- **Dashboard**:
+  - *Panoramica*: hero card appuntamenti oggi + calendario mensile, contatori (promemoria, servizi, bozze social, recensioni), card prossime attività, card promemoria in scadenza, card attività completate, barra utilizzo AI con reset mensile
+  - *Agenda*: vista giornaliera con timeline slot 30 min, vista mensile con griglia; drum-scroll date picker; gestione dipendenti (modal centrato); prenotazioni pubbliche con sistema pending/conferma; notifiche push appuntamenti
+  - *Servizi*: CRUD completo, toast eliminazione
+  - *Social*: generazione bozze AI con Claude (include link sito pubblico nel testo), approvazione/eliminazione, toast eliminazione
+  - *Recensioni*: lista recensioni, risposta AI con Claude, toast eliminazione
+  - *Promemoria*: CRUD, stati pending/done, urgenza colorata (rosso/arancio/verde)
+  - *Editor Sito*: modifica dati attività, caricamento foto profilo + galleria (max 20 foto, compressione auto), orari, descrizione
+- **Sito pubblico**: `nomeattivita.piumapp.com` via Cloudflare Worker, pagina pubblica con servizi, galleria carosello, form prenotazione
+- **Notifiche push**: PWA installabile, notifiche X minuti prima degli appuntamenti, azione "✓ Fatto" dalla notifica, impostazioni personalizzabili
+- **Bot supporto**: FAQ PIUM rispondibile via chat
+- **Pagamenti**: flusso Stripe Checkout completo — banner trial con data scadenza, redirect a Stripe, webhook che aggiorna `status` e `plan` ad `active`, polling post-redirect con toast conferma
+
+### Sistema trial e monetizzazione
+- Trial gratuito con `trial_ends_at` configurabile dall'admin
+- Banner trial visibile in dashboard con data scadenza e pulsante "Attiva ora"
+- Blocco accesso dopo scadenza (`status = expired`) con banner rosso
+- Pagamento 99€/mese via Stripe — dopo pagamento: `status = active`, `plan = active`, banner sparisce
+- Rate limiting AI: 350k token/mese, reset automatico mensile, toggle illimitato per VIP
+
+### Admin panel (`/x-admin-login`)
+- Tabella clienti: 8 colonne (Attività, Email, Stato, Trial, Piano/€, AI/mese, Affiliato, Azioni)
+- 6 StatCard: MRR, clienti attivi, in trial, conversione trial→paid, chiamate AI totali mese
+- Drawer laterale per ogni cliente: stato account, dati attività, salute onboarding, utilizzo AI, note interne, estensione trial (input data + +30gg), toggle AI illimitata
+- Badge affiliato + provenienza con nome affiliato nel drawer
+
+### Sistema affiliati
+- Registrazione affiliati con codice univoco
+- Dashboard affiliati con link referral personalizzato
+- Clienti registrati via referral tracciati (`affiliate_code` in `businesses`)
+- Approvazione manuale da admin, guadagni tracciati manualmente (Stripe non ancora collegato)
+
+### Infrastruttura
+- Deploy su Vercel (CI/CD automatico da `git push`)
+- Dominio `piumapp.com` su Cloudflare Registrar
+- Supabase: auth, DB PostgreSQL, storage foto, Edge Functions, Realtime
+- Edge Functions deployate: `claude-proxy` (AI con rate limiting), `stripe-checkout`, `stripe-webhook`, `notify-new-booking`
+- Cloudflare Worker: proxy trasparente sottodomini `*.piumapp.com → www.piumapp.com`
+- GDPR: Privacy Policy, Termini di Servizio, DPA, Cookie Policy generati
+- Email `info@piumapp.com` attiva con forwarding su Cloudflare
+
+---
+
+## Fatto nelle ultime sessioni
+
+- ✅ **Integrazione Stripe completa**: Edge Function `stripe-checkout` (crea sessione Checkout), `stripe-webhook` (verifica firma HMAC, aggiorna `status` e `plan` ad `active`), banner trial in dashboard, polling post-redirect fino a conferma DB, toast verde conferma. Colonne `stripe_subscription_id`, `stripe_customer_id` su `businesses`. Fix JWT (`verify_jwt = false`), fix `quantity` mancante, fix polling cancellato da navigate (due `useEffect` separati)
+- ✅ **Drum-scroll date picker in Agenda**: cliccando la data si apre modale con tre colonne giorno/mese/anno a scroll snap, funziona su desktop (mouse) e mobile (touch)
+- ✅ **Settings dipendenti come modal centrato**: non più in fondo alla pagina, overlay con backdrop blur, chiudibile toccando fuori
+- ✅ **Fix data troncata su mobile** in Agenda vista giornaliera: layout a due righe su mobile, font grande leggibile
+- ✅ **Debug completo pre-lancio**: errori in italiano, toast "Eliminato ✓" su Servizi/Social/Recensioni, migration affiliate_code e activity_log, barra AI sempre visibile (anche a 0 chiamate)
+- ✅ **Admin panel redesign**: tabella 8 colonne, 6 StatCard con MRR, drawer laterale completo
+- ✅ **Rate limiting AI**: 350k token/mese con reset automatico, barra utilizzo in Panoramica
+- ✅ **Sottodomini personalizzati**: `nomeattivita.piumapp.com` via Cloudflare Worker
+- ✅ **PWA**: installabile su mobile con icone, notifiche push funzionanti
+- ✅ **Bot supporto FAQ PIUM**
+
+---
+
+## Booking system
 
 ✅ V1 completata: prenotazione pubblica con sistema pending + conferma manuale titolare
 
-### Da implementare prossima sessione booking:
-1. Selezione multipla servizi — il cliente può scegliere più servizi nella stessa prenotazione
-2. Messaggio WhatsApp precompilato — quando il titolare conferma, appare un pulsante
-   "Invia conferma su WhatsApp" con messaggio già scritto e numero del cliente precompilato
-3. Promemoria appuntamento — il giorno prima o X ore prima, nella dashboard appare
-   un alert con pulsante "Invia promemoria WhatsApp" con messaggio precompilato
-
-## Fatto in questa sessione
-
-- **Redesign Admin panel**: tabella clienti con 8 colonne (Attività, Email, Stato, Trial, Piano/€, AI/mese, Affiliato, Azioni), 6 StatCard con MRR e tasso di conversione, drawer laterale con stato account, dati attività, salute onboarding, utilizzo AI, note interne
-- **Rate limiting AI**: Edge Function `claude-proxy` aggiornata — SELECT biz prima della chiamata Claude, controllo mensile tramite `ai_reset_date`, 429 con `AI_LIMIT_REACHED` se ≥ 350k token, fire-and-forget UPDATE con reset o incremento. Frontend: errore localizzato in Social.jsx e Recensioni.jsx, barra utilizzo "X/350 chiamate" in Panoramica con warning arancione all'80%, toggle AI illimitata nel drawer admin
-  - Migration: `20260519_ai_rate_limit.sql` (ai_tokens_month, ai_calls_month_display, ai_unlimited, ai_reset_date)
-  - Edge Function deployata con `npx supabase functions deploy`
-- **Affiliato per cliente**: colonna `affiliate_code` aggiunta al SELECT in Admin.jsx; `openDrawer` fa join con tabella `affiliates` in parallelo; badge viola con codice in tabella; riga "Provenienza" nel drawer con nome affiliato o "Organico"
-- **Rimozione console.log sensibili**: rimossi da Onboarding.jsx (prompt Claude, risposta AI, conferma salvataggio) e Affiliates.jsx (userId + dati affiliato)
-- **Fix drawer admin**: spostato `<BusinessDrawer>` fuori da `adm-shell` tramite React Fragment per evitare stacking context con `overflow: hidden`
-- **Fix admin 0 clienti**: migration idempotente `20260517_admin_rls_fix.sql` per RLS + `20260518_admin_notes.sql` per colonne fantasma
-
-## Da fare prossima sessione
-
-- Integrazione Stripe (prima priorità assoluta per il lancio)
-- Reset password cliente dal pannello admin
-- Pulizia slug vecchi clienti (migrazione da formato bar-roma-xxxx a bar-roma)
-- Debug generale end-to-end prima del lancio
-- Bot supporto clienti con FAQ PIUM
+### Da implementare (prossima sessione booking):
+1. Selezione multipla servizi nella stessa prenotazione
+2. Messaggio WhatsApp precompilato alla conferma prenotazione
+3. Promemoria appuntamento il giorno prima via WhatsApp
 
 ---
 
 ## Note tecniche
 
-- **Cloudflare Worker**: `pium-subdomain-proxy` — route `*piumapp.com/*`, DNS wildcard `*.piumapp.com`. Legge lo slug dal sottodominio e fa proxy trasparente verso `www.piumapp.com`. File: `cloudflare-worker.js`
-- **Slug generazione**: algoritmo asincrono in `Onboarding.jsx` — verifica unicità su Supabase, formato `bar-roma` con suffisso numerico `-2`, `-3` in caso di collisione
-- **Rate limiting AI**: token limit 350.000/mese, confronto `ai_reset_date.slice(0,7)` con mese corrente per reset automatico, `ai_unlimited = true` bypassa il limite per clienti VIP
-- **Galleria fotografica**: limite 20 foto, upload multiplo, compressione automatica client-side con `browser-image-compression` (maxSizeMB: 0.8, maxWidthOrHeight: 1920)
-- **Infrastruttura storage**: passare a Supabase Pro (25$/mese) quando si raggiungono i primi clienti paganti (100 GB storage invece di 1 GB)
+- **Stripe**: chiavi test attive. Prima del lancio sostituire con chiavi live su Stripe Dashboard + Supabase secrets + Vercel env vars. Webhook URL: `https://onkyhknchhlsmcknpinr.supabase.co/functions/v1/stripe-webhook`
+- **Cloudflare Worker**: `pium-subdomain-proxy` — route `*piumapp.com/*`, DNS wildcard `*.piumapp.com`. File: `cloudflare-worker.js`
+- **Slug**: algoritmo in `Onboarding.jsx` — formato `bar-roma`, suffisso numerico `-2`, `-3` su collisione
+- **Rate limiting AI**: 350.000 token/mese, reset su `ai_reset_date`, `ai_unlimited = true` bypassa limite
+- **Galleria**: max 20 foto, compressione auto con `browser-image-compression` (maxSizeMB: 0.8, maxWidthOrHeight: 1920)
 - **Pricing**: 99€/mese. Primi 10 clienti a 69€/mese con prezzo bloccato (piano fondatori)
-- **Dominio**: piumapp.com su Cloudflare Registrar, deploy su Vercel
+- **Deploy**: Vercel (prod automatico da push su `master`), Supabase Free plan (upgrade a Pro prima di scalare)
