@@ -9066,3 +9066,22 @@ code {
   color: var(--text-muted);
   font-weight: 400;
 }
+
+/* Clienti — edit form nel drawer */
+.cl-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cl-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cl-edit-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

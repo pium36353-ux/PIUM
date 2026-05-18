@@ -67,6 +67,8 @@ function groupClients(appointments, contacts = []) {
         phone:        phoneKey(ct.phone),
         email:        ct.email || null,
         source:       ct.source ?? 'manual',
+        contactId:    ct.id,
+        notes:        ct.notes || '',
         appointments: [],
         spent:        0,
         firstVisit:   null,
@@ -87,6 +89,8 @@ function groupClients(appointments, contacts = []) {
         phone:        phoneKey(apt.client_phone),
         email:        null,
         source:       'appointment',
+        contactId:    null,
+        notes:        '',
         appointments: [],
         spent:        0,
         firstVisit:   apt.date,
@@ -185,6 +189,15 @@ export default function Clienti({ business }) {
 
   const closeImport = () => {
     setShowImport(false)
+  }
+
+  const reloadContacts = async () => {
+    const { data: cts } = await supabase
+      .from('contacts')
+      .select('id, name, phone, email, notes, source')
+      .eq('business_id', business.id)
+      .order('name')
+    setContacts(cts ?? [])
   }
 
   // Dedup + INSERT in batch; restituisce { imported, skipped }
@@ -348,7 +361,7 @@ export default function Clienti({ business }) {
 
       {/* Drawer scheda cliente */}
       {drawer && (
-        <ClientDrawer client={drawer} onClose={() => setDrawer(null)} />
+        <ClientDrawer client={drawer} business={business} onClose={() => setDrawer(null)} onReload={reloadContacts} />
       )}
 
       {/* Modal importazione contatti */}
@@ -465,12 +478,33 @@ export default function Clienti({ business }) {
 }
 
 /* ── ClientDrawer ── */
-function ClientDrawer({ client, onClose }) {
+function ClientDrawer({ client, business, onClose, onReload }) {
   const waLink = buildWaLink(client.phone)
   const freq   = avgFrequency(client)
 
+  const [editName,  setEditName]  = useState(client.name  || '')
+  const [editPhone, setEditPhone] = useState(client.phone || '')
+  const [editNotes, setEditNotes] = useState(client.notes || '')
+  const [saving,    setSaving]    = useState(false)
+
   const apts = [...client.appointments]
     .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : b.start_time > a.start_time ? 1 : -1))
+
+  const handleSave = async () => {
+    setSaving(true)
+    const payload = {
+      name:  editName.trim() || client.name,
+      phone: phoneKey(editPhone) || null,
+      notes: editNotes.trim() || null,
+    }
+    if (client.contactId) {
+      await supabase.from('contacts').update(payload).eq('id', client.contactId)
+    } else {
+      await supabase.from('contacts').insert({ ...payload, business_id: business.id, source: 'manual' })
+    }
+    await onReload()
+    setSaving(false)
+  }
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -528,6 +562,45 @@ function ClientDrawer({ client, onClose }) {
                 <span className="cl-stat-value">{freq ? `${freq}gg` : '—'}</span>
                 <span className="cl-stat-label">frequenza media</span>
               </div>
+            </div>
+          </div>
+
+          {/* Modifica contatto */}
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Modifica contatto</div>
+            <div className="cl-edit-form">
+              <div className="cl-edit-field">
+                <label className="cl-edit-label">Nome</label>
+                <input
+                  className="sv-input"
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                />
+              </div>
+              <div className="cl-edit-field">
+                <label className="cl-edit-label">Telefono</label>
+                <input
+                  className="sv-input"
+                  type="tel"
+                  value={editPhone}
+                  onChange={e => setEditPhone(e.target.value)}
+                  placeholder="+39 333 000 0000"
+                />
+              </div>
+              <div className="cl-edit-field">
+                <label className="cl-edit-label">Note</label>
+                <textarea
+                  className="sv-textarea"
+                  rows={3}
+                  value={editNotes}
+                  onChange={e => setEditNotes(e.target.value)}
+                  placeholder="Preferenze, allergie, informazioni utili…"
+                />
+              </div>
+              <button className="sv-btn-save" style={{ width: '100%' }} onClick={handleSave} disabled={saving}>
+                {saving ? 'Salvataggio…' : 'Salva modifiche'}
+              </button>
             </div>
           </div>
 
