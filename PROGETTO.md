@@ -27,6 +27,7 @@
 | 23 | Pagamenti Stripe | ✅ |
 | 24 | Rubrica clienti con storico | ✅ |
 | 25 | Multi-servizio per appuntamento | ✅ |
+| 26 | Importazione contatti (vCard + Android) | ✅ |
 
 ---
 
@@ -115,6 +116,9 @@
 - ✅ **Campo `client_phone` su `appointments`**: migration `20260524`, campo telefono nel modal appuntamento con bottone WhatsApp inline (si attiva solo se il numero è presente). RPC `owner_confirm_booking` aggiornata: copia automaticamente `customer_phone` dalla prenotazione pubblica all'appuntamento creato
 - ✅ **Sezione Clienti in dashboard**: nuovo menu "Clienti" con icona Users. `Clienti.jsx` aggrega gli appuntamenti per telefono (o nome normalizzato), mostra rubrica con avatar, numero di visite, totale speso, ultima visita. Ricerca in tempo reale per nome o telefono. Drawer laterale con: riepilogo (visite totali, speso, frequenza media in giorni), storico completo visite con data/ora/dipendente/prezzo/note
 - ✅ **Multi-servizio per appuntamento**: tabella `appointment_services` (migration `20260526`) con `price_snapshot` e `duration_snapshot` per congelare i valori al momento della prenotazione. Modal appuntamento aggiornato con lista checkbox servizi attivi — spuntare un servizio accumula prezzo e durata automaticamente; i campi restano editabili manualmente. In modifica: pre-compilazione dei servizi già selezionati. Drawer Clienti mostra i tag servizi nello storico ("Taglio • Barba")
+- ✅ **Tabella `contacts`** (migration `20260527`): contatti senza appuntamenti. RLS owner-only, indice composto `(business_id, phone)` per deduplicazione. `Clienti.jsx` legge da due sorgenti in parallelo (appointments + contacts) con merge per chiave telefono — i contatti senza visite appaiono in fondo alla lista con badge "contatto"
+- ✅ **Importazione contatti**: modal a tre step (scelta metodo → anteprima → risultato). **vCard (.vcf)**: parsing con libreria `vcf`, normalizzazione LF→CRLF prima del parse (fix bug specifica vCard), anteprima lista nomi+numeri, deduplicazione per telefono prima dell'insert. **Contact Picker API**: pulsante visibile solo su Chrome Android (`PICKER_SUPPORTED`), chiama `navigator.contacts.select()`, stesso flusso preview+dedup. Messaggio finale: "Importati X contatti, Y già presenti saltati"
+- ✅ **Fix pulsanti "Vedi sito pubblico"**: `EditorSito.jsx` e `Admin.jsx` ora usano `https://${slug}.piumapp.com` invece di URL relativi `/site/${slug}` — i clienti vedono il proprio sottodominio personalizzato
 
 ---
 
