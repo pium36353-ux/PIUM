@@ -6587,6 +6587,31 @@ code {
 
 .ag-emp-add-btn { align-self: flex-start; }
 
+.ag-phone-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ag-phone-row .sv-input { flex: 1; }
+
+.ag-wa-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  height: 40px;
+  background: #25d366;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity .15s;
+  &:hover { opacity: .85; }
+}
+
 /* ── Opening hours (dashboard) ── */
 .oh-list {
   display: flex;
