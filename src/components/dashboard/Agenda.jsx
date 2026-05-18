@@ -202,7 +202,7 @@ export default function Agenda({ business, initialView = 'day' }) {
   }
   const openEditModal = async (apt, tappedTime = null) => {
     loadEmployees()
-    loadServices()
+    await loadServices()
     setSuggestions([])
     setDropdownVisible(false)
     const { data: aptSvcs } = await supabase
@@ -225,7 +225,14 @@ export default function Agenda({ business, initialView = 'day' }) {
     setErrors({})
     setShowModal(true)
   }
-  const closeModal = () => { setShowModal(false); setEditingId(null); setAddAnotherTime(null) }
+  const closeModal = () => {
+    clearTimeout(suggestTimerRef.current)
+    setSuggestions([])
+    setDropdownVisible(false)
+    setShowModal(false)
+    setEditingId(null)
+    setAddAnotherTime(null)
+  }
   const setField = (f) => (e) => { setForm(p => ({ ...p, [f]: e.target.value })); setErrors(p => ({ ...p, [f]: null })) }
 
   const handleNameChange = (e) => {
@@ -328,50 +335,61 @@ export default function Agenda({ business, initialView = 'day' }) {
 
     setShowOutOfHoursConfirm(false)
     setSaving(true)
-    const payload = {
-      client_name:      form.client_name.trim(),
-      client_phone:     form.client_phone.trim() || null,
-      employee_id:      form.employee_id || null,
-      date:             form.date,
-      start_time:       form.start_time,
-      duration_minutes: Number(form.duration_minutes),
-      price:            form.price !== '' ? Number(form.price) : null,
-      notes:            form.notes.trim() || null,
-    }
+    setErrors(prev => ({ ...prev, _global: null }))
 
-    let appointmentId = editingId
-    if (editingId) {
-      await supabase.from('appointments').update(payload).eq('id', editingId)
-    } else {
-      const { data: newApt } = await supabase
-        .from('appointments')
-        .insert({ ...payload, business_id: business.id, completed: false })
-        .select('id')
-        .single()
-      appointmentId = newApt?.id
-      logActivity(business.id, business.user_id, 'appointment_created', `Appuntamento creato: ${form.client_name.trim()} il ${form.date}`)
-    }
-
-    // Sync appointment_services (delete-all + re-insert)
-    if (appointmentId) {
-      await supabase.from('appointment_services').delete().eq('appointment_id', appointmentId)
-      if (form.selected_services.length > 0) {
-        const rows = form.selected_services.map(svcId => {
-          const svc = services.find(s => s.id === svcId)
-          return {
-            appointment_id:    appointmentId,
-            service_id:        svcId,
-            price_snapshot:    svc?.price ?? null,
-            duration_snapshot: svc?.duration_min ?? null,
-          }
-        })
-        await supabase.from('appointment_services').insert(rows)
+    try {
+      const payload = {
+        client_name:      form.client_name.trim(),
+        client_phone:     form.client_phone.trim() || null,
+        employee_id:      form.employee_id || null,
+        date:             form.date,
+        start_time:       form.start_time,
+        duration_minutes: Number(form.duration_minutes),
+        price:            form.price !== '' ? Number(form.price) : null,
+        notes:            form.notes.trim() || null,
       }
-    }
 
-    setSaving(false)
-    closeModal()
-    loadAppointments()
+      let appointmentId = editingId
+      if (editingId) {
+        const { error } = await supabase.from('appointments').update(payload).eq('id', editingId)
+        if (error) throw error
+      } else {
+        const { data: newApt, error } = await supabase
+          .from('appointments')
+          .insert({ ...payload, business_id: business.id, completed: false })
+          .select('id')
+          .single()
+        if (error) throw error
+        appointmentId = newApt?.id
+        logActivity(business.id, business.user_id, 'appointment_created', `Appuntamento creato: ${form.client_name.trim()} il ${form.date}`)
+      }
+
+      // Sync appointment_services (delete-all + re-insert)
+      if (appointmentId) {
+        const { error: delErr } = await supabase.from('appointment_services').delete().eq('appointment_id', appointmentId)
+        if (delErr) throw delErr
+        if (form.selected_services.length > 0) {
+          const rows = form.selected_services.map(svcId => {
+            const svc = services.find(s => s.id === svcId)
+            return {
+              appointment_id:    appointmentId,
+              service_id:        svcId,
+              price_snapshot:    svc?.price ?? null,
+              duration_snapshot: svc?.duration_min ?? null,
+            }
+          })
+          const { error: insErr } = await supabase.from('appointment_services').insert(rows)
+          if (insErr) throw insErr
+        }
+      }
+
+      closeModal()
+      loadAppointments()
+    } catch {
+      setErrors(prev => ({ ...prev, _global: 'Errore nel salvataggio. Riprova.' }))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const toggleCompleted = async (apt) => {
@@ -902,6 +920,10 @@ export default function Agenda({ business, initialView = 'day' }) {
               </div>
 
             </div>
+
+            {errors._global && (
+              <p className="sv-field-error" style={{ margin: '0 20px 4px', textAlign: 'center' }}>{errors._global}</p>
+            )}
 
             {showOutOfHoursConfirm ? (
               <div className="sv-ooh-confirm">

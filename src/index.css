@@ -748,6 +748,16 @@ body {
   margin-bottom: 20px;
   a { color: inherit; font-weight: 600; }
 }
+.db-load-retry {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+}
 
 /* Trial banner */
 .db-trial-banner {

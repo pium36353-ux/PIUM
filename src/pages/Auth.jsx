@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
@@ -23,6 +23,7 @@ export default function Auth() {
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState(null)
   const [confirmed, setConfirmed] = useState(false)
+  const pendingRef = useRef(false)
 
   useEffect(() => {
     // Salva codice referral se presente nell'URL (?ref=CODICE)
@@ -39,40 +40,46 @@ export default function Auth() {
   const set = (id) => (e) => setValues((v) => ({ ...v, [id]: e.target.value }))
 
   const switchMode = (next) => {
+    pendingRef.current = false
     setMode(next)
     setError(null)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (pendingRef.current) return
+    pendingRef.current = true
     setLoading(true)
     setError(null)
 
-    if (mode === 'login') {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: values.email,
-        password: values.password,
-      })
-      if (error) {
-        setError(translateError(error.message))
+    try {
+      if (mode === 'login') {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: values.email,
+          password: values.password,
+        })
+        if (error) {
+          setError(translateError(error.message))
+        } else {
+          const role = data.user?.app_metadata?.role
+          navigate(role === 'admin' ? '/admin' : '/dashboard', { replace: true })
+        }
       } else {
-        const role = data.user?.app_metadata?.role
-        navigate(role === 'admin' ? '/admin' : '/dashboard', { replace: true })
+        const { error } = await supabase.auth.signUp({
+          email: values.email,
+          password: values.password,
+          options: { data: { full_name: values.name } },
+        })
+        if (error) {
+          setError(translateError(error.message))
+        } else {
+          navigate('/onboarding', { replace: true })
+        }
       }
-    } else {
-      const { error } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
-        options: { data: { full_name: values.name } },
-      })
-      if (error) {
-        setError(translateError(error.message))
-      } else {
-        navigate('/onboarding', { replace: true })
-      }
+    } finally {
+      pendingRef.current = false
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   return (

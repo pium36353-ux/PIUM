@@ -40,7 +40,9 @@ export default function Dashboard() {
   const [agendaInitialView,  setAgendaInitialView]  = useState('day')
   const [stripeSuccess,      setStripeSuccess]      = useState(false)
   const [checkoutLoading,    setCheckoutLoading]    = useState(false)
+  const [checkoutError,      setCheckoutError]      = useState(null)
   const [pendingActivation,  setPendingActivation]  = useState(false)
+  const [loadError,          setLoadError]          = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -51,7 +53,8 @@ export default function Dashboard() {
         .select('*')
         .eq('user_id', data.user.id)
         .maybeSingle()
-        .then(({ data: biz }) => {
+        .then(({ data: biz, error }) => {
+          if (error) { setLoadError(true); return }
           if (!biz) { navigate('/onboarding'); return }
           setBusiness(biz)
         })
@@ -108,6 +111,7 @@ export default function Dashboard() {
 
   const handleCheckout = async () => {
     setCheckoutLoading(true)
+    setCheckoutError(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(
@@ -124,10 +128,10 @@ export default function Dashboard() {
       if (data.url) {
         window.location.href = data.url
       } else {
-        console.error('Stripe checkout error:', data.error)
+        setCheckoutError('Errore nel caricamento del pagamento. Riprova o contatta info@piumapp.com.')
       }
-    } catch (err) {
-      console.error('Checkout error:', err)
+    } catch {
+      setCheckoutError('Errore nel caricamento del pagamento. Riprova o contatta info@piumapp.com.')
     } finally {
       setCheckoutLoading(false)
     }
@@ -297,6 +301,13 @@ export default function Dashboard() {
         </div>
 
         <main className="db-content">
+          {loadError && (
+            <div className="db-expired-banner">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Errore di connessione. <button className="db-load-retry" onClick={() => window.location.reload()}>Ricarica la pagina</button>
+            </div>
+          )}
+
           {business?.status === 'expired' && (
             <div className="db-expired-banner">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -323,6 +334,12 @@ export default function Dashboard() {
               >
                 {checkoutLoading ? 'Caricamento…' : 'Attiva ora'}
               </button>
+            </div>
+          )}
+          {checkoutError && (
+            <div className="db-expired-banner" style={{ marginTop: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {checkoutError}
             </div>
           )}
 
