@@ -25,22 +25,46 @@ function buildWaLink(phone) {
   return `https://wa.me/${phone.trim().replace(/^\+/, '').replace(/\s+/g, '')}`
 }
 
-// Raggruppa appuntamenti per telefono (se presente) o nome normalizzato
-function groupClients(appointments) {
+function phoneKey(phone) {
+  return phone?.trim().replace(/\s+/g, '') || null
+}
+
+// Merge contatti importati + appuntamenti in un'unica lista deduplicata.
+// Chiave: telefono pulito se presente, altrimenti __name__ + nome lowercase.
+// Gli appuntamenti hanno priorità su nome e telefono rispetto ai contatti.
+function groupClients(appointments, contacts = []) {
   const map = new Map()
 
-  const sorted = [...appointments].sort((a, b) => (a.date < b.date ? -1 : 1))
+  // 1. Seed dai contatti importati (priorità più bassa)
+  for (const ct of contacts) {
+    const key = phoneKey(ct.phone) ?? ('__name__' + ct.name.trim().toLowerCase())
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        name:         ct.name,
+        phone:        phoneKey(ct.phone),
+        email:        ct.email || null,
+        source:       ct.source ?? 'manual',
+        appointments: [],
+        spent:        0,
+        firstVisit:   null,
+        lastVisit:    null,
+      })
+    }
+  }
 
+  // 2. Sovrapponi gli appuntamenti (priorità più alta)
+  const sorted = [...appointments].sort((a, b) => (a.date < b.date ? -1 : 1))
   for (const apt of sorted) {
-    const key = apt.client_phone?.trim()
-      ? apt.client_phone.trim().replace(/\s+/g, '')
-      : '__name__' + apt.client_name.trim().toLowerCase()
+    const key = phoneKey(apt.client_phone) ?? ('__name__' + apt.client_name.trim().toLowerCase())
 
     if (!map.has(key)) {
       map.set(key, {
         key,
         name:         apt.client_name,
-        phone:        apt.client_phone?.trim() || null,
+        phone:        phoneKey(apt.client_phone),
+        email:        null,
+        source:       'appointment',
         appointments: [],
         spent:        0,
         firstVisit:   apt.date,
@@ -50,14 +74,20 @@ function groupClients(appointments) {
 
     const c = map.get(key)
     c.appointments.push(apt)
-    c.name     = apt.client_name                                    // usa il nome più recente
-    c.lastVisit = apt.date > c.lastVisit ? apt.date : c.lastVisit
-    if (!c.phone && apt.client_phone?.trim()) c.phone = apt.client_phone.trim()
+    c.name      = apt.client_name
+    c.lastVisit  = apt.date > (c.lastVisit ?? '') ? apt.date : c.lastVisit
+    c.firstVisit = c.firstVisit === null || apt.date < c.firstVisit ? apt.date : c.firstVisit
+    if (!c.phone && phoneKey(apt.client_phone)) c.phone = phoneKey(apt.client_phone)
     if (apt.completed && apt.price != null) c.spent += Number(apt.price)
   }
 
-  return Array.from(map.values())
-    .sort((a, b) => b.lastVisit.localeCompare(a.lastVisit))
+  // Clienti con visite: ordinati per lastVisit desc; contatti senza visite: in fondo per nome
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.lastVisit && b.lastVisit) return b.lastVisit.localeCompare(a.lastVisit)
+    if (a.lastVisit) return -1
+    if (b.lastVisit) return 1
+    return a.name.localeCompare(b.name)
+  })
 }
 
 function avgFrequency(client) {
@@ -71,24 +101,32 @@ function avgFrequency(client) {
 /* ── Component ── */
 export default function Clienti({ business }) {
   const [appointments, setAppointments] = useState([])
+  const [contacts,     setContacts]     = useState([])
   const [loading,      setLoading]      = useState(true)
   const [search,       setSearch]       = useState('')
-  const [drawer,       setDrawer]       = useState(null)  // client object | null
+  const [drawer,       setDrawer]       = useState(null)
 
   useEffect(() => {
     if (!business) return
-    supabase
-      .from('appointments')
-      .select('id, client_name, client_phone, date, start_time, duration_minutes, price, notes, completed, employees(name, color), appointment_services(service_id, price_snapshot, duration_snapshot, services(name))')
-      .eq('business_id', business.id)
-      .order('date', { ascending: false })
-      .then(({ data }) => {
-        setAppointments(data ?? [])
-        setLoading(false)
-      })
+    Promise.all([
+      supabase
+        .from('appointments')
+        .select('id, client_name, client_phone, date, start_time, duration_minutes, price, notes, completed, employees(name, color), appointment_services(service_id, price_snapshot, duration_snapshot, services(name))')
+        .eq('business_id', business.id)
+        .order('date', { ascending: false }),
+      supabase
+        .from('contacts')
+        .select('id, name, phone, email, notes, source')
+        .eq('business_id', business.id)
+        .order('name'),
+    ]).then(([{ data: apts }, { data: cts }]) => {
+      setAppointments(apts ?? [])
+      setContacts(cts ?? [])
+      setLoading(false)
+    })
   }, [business])
 
-  const clients = useMemo(() => groupClients(appointments), [appointments])
+  const clients = useMemo(() => groupClients(appointments, contacts), [appointments, contacts])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -110,19 +148,29 @@ export default function Clienti({ business }) {
   return (
     <div className="db-section">
 
-      {/* Barra di ricerca */}
-      <div className="cl-search-wrap">
-        <svg className="cl-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input
-          className="cl-search-input"
-          type="text"
-          placeholder="Cerca per nome o telefono…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        {search && (
-          <button className="cl-search-clear" onClick={() => setSearch('')}>✕</button>
-        )}
+      {/* Toolbar */}
+      <div className="cl-toolbar">
+        <div className="cl-search-wrap">
+          <svg className="cl-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input
+            className="cl-search-input"
+            type="text"
+            placeholder="Cerca per nome o telefono…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && (
+            <button className="cl-search-clear" onClick={() => setSearch('')}>✕</button>
+          )}
+        </div>
+        <button
+          className="cl-import-btn"
+          onClick={() => alert('Funzione in arrivo')}
+          title="Importa contatti"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="21" y1="11" x2="15" y2="11"/><line x1="18" y1="8" x2="18" y2="14"/></svg>
+          Importa
+        </button>
       </div>
 
       {/* Lista clienti */}
@@ -161,9 +209,15 @@ export default function Clienti({ business }) {
                   )}
                 </div>
                 <div className="cl-meta">
-                  <span className="cl-meta-appt">{c.appointments.length} {c.appointments.length === 1 ? 'visita' : 'visite'}</span>
+                  {c.appointments.length > 0
+                    ? <span className="cl-meta-appt">{c.appointments.length} {c.appointments.length === 1 ? 'visita' : 'visite'}</span>
+                    : <span className="cl-meta-no-visits">Nessuna visita</span>
+                  }
                   {c.spent > 0 && <span className="cl-meta-spent">{fmtCurrency(c.spent)}</span>}
-                  <span className="cl-meta-date">{fmtDate(c.lastVisit)}</span>
+                  {c.lastVisit
+                    ? <span className="cl-meta-date">{fmtDate(c.lastVisit)}</span>
+                    : <span className="cl-meta-source">contatto</span>
+                  }
                 </div>
                 <svg className="cl-row-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
               </div>
@@ -216,7 +270,10 @@ function ClientDrawer({ client, onClose }) {
                   )}
                 </div>
               )}
-              <div className="adm-drawer-subtitle">Prima visita: {fmtDate(client.firstVisit)}</div>
+              {client.firstVisit
+                ? <div className="adm-drawer-subtitle">Prima visita: {fmtDate(client.firstVisit)}</div>
+                : <div className="adm-drawer-subtitle">Contatto importato — nessuna visita</div>
+              }
             </div>
           </div>
           <button className="adm-drawer-close" onClick={onClose}>
@@ -248,6 +305,9 @@ function ClientDrawer({ client, onClose }) {
           {/* Storico appuntamenti */}
           <div className="adm-drawer-section">
             <div className="adm-drawer-section-title">Storico visite</div>
+            {apts.length === 0 ? (
+              <p className="cl-apt-empty">Nessuna visita ancora.</p>
+            ) : (
             <div className="cl-apt-list">
               {apts.map(apt => (
                 <div key={apt.id} className={`cl-apt-item ${apt.completed ? 'cl-apt-item--done' : ''}`}>
@@ -291,6 +351,7 @@ function ClientDrawer({ client, onClose }) {
                 </div>
               ))}
             </div>
+            )}
           </div>
 
         </div>
