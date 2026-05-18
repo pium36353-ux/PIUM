@@ -119,6 +119,7 @@
 - ✅ **Tabella `contacts`** (migration `20260527`): contatti senza appuntamenti. RLS owner-only, indice composto `(business_id, phone)` per deduplicazione. `Clienti.jsx` legge da due sorgenti in parallelo (appointments + contacts) con merge per chiave telefono — i contatti senza visite appaiono in fondo alla lista con badge "contatto"
 - ✅ **Importazione contatti**: modal a tre step (scelta metodo → anteprima → risultato). **vCard (.vcf)**: parsing con libreria `vcf`, normalizzazione LF→CRLF prima del parse (fix bug specifica vCard), anteprima lista nomi+numeri, deduplicazione per telefono prima dell'insert. **Contact Picker API**: pulsante visibile solo su Chrome Android (`PICKER_SUPPORTED`), chiama `navigator.contacts.select()`, stesso flusso preview+dedup. Messaggio finale: "Importati X contatti, Y già presenti saltati"
 - ✅ **Fix pulsanti "Vedi sito pubblico"**: `EditorSito.jsx` e `Admin.jsx` ora usano `https://${slug}.piumapp.com` invece di URL relativi `/site/${slug}` — i clienti vedono il proprio sottodominio personalizzato
+- ✅ **Modifica contatto nel drawer clienti**: campi nome, telefono e note modificabili con un unico pulsante "Salva modifiche". Se il cliente viene solo da appuntamenti (nessun record in `contacts`) → INSERT automatico al primo salvataggio; se ha già un record in `contacts` → UPDATE
 
 ---
 
