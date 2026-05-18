@@ -54,6 +54,23 @@ function NotificationScheduler() {
 }
 
 export default function App() {
+  // Cloudflare Worker proxies mario.piumapp.com → www.piumapp.com transparently.
+  // The browser hostname is still mario.piumapp.com, so we detect it here and
+  // render PublicSite directly, bypassing PublicRoute which would redirect
+  // authenticated users to /dashboard.
+  const hostParts = window.location.hostname.split('.')
+  const isSubdomain = hostParts.length >= 3 && hostParts[0] !== 'www'
+
+  if (isSubdomain) {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="*" element={<PublicSite />} />
+        </Routes>
+      </BrowserRouter>
+    )
+  }
+
   return (
     <BrowserRouter>
       <NotificationScheduler />
