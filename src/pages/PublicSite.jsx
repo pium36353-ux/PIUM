@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
@@ -383,19 +383,36 @@ function NotFound() {
 /* ── Carosello galleria ── */
 function Carousel({ images }) {
   const [current, setCurrent] = useState(0)
-  const n = images.length
-  const prev = useCallback(() => setCurrent(i => (i - 1 + n) % n), [n])
-  const next = useCallback(() => setCurrent(i => (i + 1) % n), [n])
+  const n      = images.length
+  const prev   = useCallback(() => setCurrent(i => (i - 1 + n) % n), [n])
+  const next   = useCallback(() => setCurrent(i => (i + 1) % n), [n])
+  const touchX = useRef(null)
 
   return (
     <section className="ps-section">
       <h2 className="ps-section-title">Galleria</h2>
       <div className="ps-carousel">
-        <div className="ps-carousel-track-wrap">
+        <div
+          className="ps-carousel-track-wrap"
+          onTouchStart={e => { touchX.current = e.touches[0].clientX }}
+          onTouchEnd={e => {
+            if (touchX.current === null) return
+            const dx = e.changedTouches[0].clientX - touchX.current
+            if (dx > 40) prev()
+            else if (dx < -40) next()
+            touchX.current = null
+          }}
+        >
           <div className="ps-carousel-track" style={{ transform: `translateX(-${current * 100}%)` }}>
             {images.map((url, i) => (
               <div key={i} className="ps-carousel-slide">
-                <img src={url} alt={`Foto ${i + 1}`} className="ps-carousel-img" loading="lazy" />
+                <img
+                  src={url}
+                  alt={`Foto ${i + 1}`}
+                  className="ps-carousel-img"
+                  loading="lazy"
+                  onError={e => { e.currentTarget.closest('.ps-carousel-slide').style.display = 'none' }}
+                />
               </div>
             ))}
           </div>

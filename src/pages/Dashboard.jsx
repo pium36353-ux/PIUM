@@ -181,7 +181,7 @@ export default function Dashboard() {
           if (svc?.name) serviceName = svc.name
         }
         notifyNewBooking(payload.new.customer_name, serviceName, payload.new.appointment_date, payload.new.appointment_time)
-        setPendingCount(c => c + 1)
+        fetchCount()
       })
       .on('postgres_changes', {
         event: 'UPDATE',

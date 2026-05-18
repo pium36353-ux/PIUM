@@ -78,15 +78,28 @@ function groupClients(appointments, contacts = []) {
   }
 
   // 2. Sovrapponi gli appuntamenti (priorità più alta)
-  const sorted = [...appointments].sort((a, b) => (a.date < b.date ? -1 : 1))
+  // nameIndex: per clienti senza telefono, mappa cleanName → chiave del primo incontro
+  // (riduce collisioni tra omonimi mantenendo la coerenza per visite multiple)
+  const sorted    = [...appointments].sort((a, b) => (a.date < b.date ? -1 : 1))
+  const nameIndex = new Map()
   for (const apt of sorted) {
-    const key = phoneKey(apt.client_phone) ?? ('__name__' + apt.client_name.trim().toLowerCase())
+    const phoneK    = phoneKey(apt.client_phone)
+    const cleanName = apt.client_name.trim().toLowerCase()
+    let key
+    if (phoneK) {
+      key = phoneK
+    } else if (nameIndex.has(cleanName)) {
+      key = nameIndex.get(cleanName)
+    } else {
+      key = `__name__${cleanName}__${apt.date}`
+      nameIndex.set(cleanName, key)
+    }
 
     if (!map.has(key)) {
       map.set(key, {
         key,
         name:         apt.client_name,
-        phone:        phoneKey(apt.client_phone),
+        phone:        phoneK,
         email:        null,
         source:       'appointment',
         contactId:    null,
@@ -103,7 +116,7 @@ function groupClients(appointments, contacts = []) {
     c.name      = apt.client_name
     c.lastVisit  = apt.date > (c.lastVisit ?? '') ? apt.date : c.lastVisit
     c.firstVisit = c.firstVisit === null || apt.date < c.firstVisit ? apt.date : c.firstVisit
-    if (!c.phone && phoneKey(apt.client_phone)) c.phone = phoneKey(apt.client_phone)
+    if (!c.phone && phoneK) c.phone = phoneK
     if (apt.completed && apt.price != null) c.spent += Number(apt.price)
   }
 
@@ -143,6 +156,7 @@ export default function Clienti({ business }) {
 
   useEffect(() => {
     if (!business) return
+    let cancelled = false
     Promise.all([
       supabase
         .from('appointments')
@@ -155,10 +169,12 @@ export default function Clienti({ business }) {
         .eq('business_id', business.id)
         .order('name'),
     ]).then(([{ data: apts }, { data: cts }]) => {
+      if (cancelled) return
       setAppointments(apts ?? [])
       setContacts(cts ?? [])
       setLoading(false)
     })
+    return () => { cancelled = true }
   }, [business])
 
   const clients = useMemo(() => groupClients(appointments, contacts), [appointments, contacts])
@@ -218,7 +234,7 @@ export default function Clienti({ business }) {
     })
 
     if (toInsert.length > 0) {
-      await supabase.from('contacts').insert(
+      const { error } = await supabase.from('contacts').insert(
         toInsert.map(c => ({
           business_id: business.id,
           name:        c.name,
@@ -226,6 +242,7 @@ export default function Clienti({ business }) {
           source,
         }))
       )
+      if (error) throw new Error('Errore durante l\'importazione. Riprova.')
     }
 
     // Ricarica contacts
@@ -274,10 +291,15 @@ export default function Clienti({ business }) {
 
   const confirmImport = async () => {
     setImporting(true)
-    const result = await doImport(previewList, previewSource)
-    setImportResult(result)
-    setImportStep('done')
-    setImporting(false)
+    try {
+      const result = await doImport(previewList, previewSource)
+      setImportResult(result)
+    } catch (err) {
+      setImportResult({ error: err.message ?? 'Errore durante l\'importazione.' })
+    } finally {
+      setImportStep('done')
+      setImporting(false)
+    }
   }
 
   if (loading) return <div className="db-section"><p className="db-card-empty">Caricamento…</p></div>
@@ -436,15 +458,26 @@ export default function Clienti({ business }) {
               {/* Step 3 — risultato */}
               {importStep === 'done' && importResult && (
                 <div className="cl-import-result">
-                  <div className="cl-import-result-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  </div>
-                  <p className="cl-import-result-text">
-                    Importati <strong>{importResult.imported}</strong> {importResult.imported === 1 ? 'contatto' : 'contatti'}
-                    {importResult.skipped > 0 && (
-                      <>, <span className="cl-import-result-skipped">{importResult.skipped} già presenti saltati</span></>
-                    )}
-                  </p>
+                  {importResult.error ? (
+                    <>
+                      <div className="cl-import-result-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      </div>
+                      <p className="cl-import-result-text">{importResult.error}</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="cl-import-result-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      </div>
+                      <p className="cl-import-result-text">
+                        Importati <strong>{importResult.imported}</strong> {importResult.imported === 1 ? 'contatto' : 'contatti'}
+                        {importResult.skipped > 0 && (
+                          <>, <span className="cl-import-result-skipped">{importResult.skipped} già presenti saltati</span></>
+                        )}
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -486,24 +519,30 @@ function ClientDrawer({ client, business, onClose, onReload }) {
   const [editPhone, setEditPhone] = useState(client.phone || '')
   const [editNotes, setEditNotes] = useState(client.notes || '')
   const [saving,    setSaving]    = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   const apts = [...client.appointments]
     .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : b.start_time > a.start_time ? 1 : -1))
 
   const handleSave = async () => {
     setSaving(true)
-    const payload = {
-      name:  editName.trim() || client.name,
-      phone: phoneKey(editPhone) || null,
-      notes: editNotes.trim() || null,
+    setSaveError(null)
+    try {
+      const payload = {
+        name:  editName.trim() || client.name,
+        phone: phoneKey(editPhone) || null,
+        notes: editNotes.trim() || null,
+      }
+      const { error } = client.contactId
+        ? await supabase.from('contacts').update(payload).eq('id', client.contactId)
+        : await supabase.from('contacts').insert({ ...payload, business_id: business.id, source: 'manual' })
+      if (error) throw error
+      await onReload()
+    } catch {
+      setSaveError('Errore nel salvataggio. Riprova.')
+    } finally {
+      setSaving(false)
     }
-    if (client.contactId) {
-      await supabase.from('contacts').update(payload).eq('id', client.contactId)
-    } else {
-      await supabase.from('contacts').insert({ ...payload, business_id: business.id, source: 'manual' })
-    }
-    await onReload()
-    setSaving(false)
   }
 
   useEffect(() => {
@@ -598,6 +637,10 @@ function ClientDrawer({ client, business, onClose, onReload }) {
                   placeholder="Preferenze, allergie, informazioni utili…"
                 />
               </div>
+              {!editPhone.trim() && (
+                <p className="sv-field-hint">Aggiungi un numero di telefono per evitare duplicati tra omonimi.</p>
+              )}
+              {saveError && <p className="sv-field-error" style={{ marginTop: 0 }}>{saveError}</p>}
               <button className="sv-btn-save" style={{ width: '100%' }} onClick={handleSave} disabled={saving}>
                 {saving ? 'Salvataggio…' : 'Salva modifiche'}
               </button>

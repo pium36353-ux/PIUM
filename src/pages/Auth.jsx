@@ -48,6 +48,10 @@ export default function Auth() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (pendingRef.current) return
+
+    if (!values.email.includes('@')) { setError('Inserisci un\'email valida.'); return }
+    if (values.password.length < 6)  { setError('La password deve essere di almeno 6 caratteri.'); return }
+
     pendingRef.current = true
     setLoading(true)
     setError(null)

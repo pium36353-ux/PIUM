@@ -156,7 +156,7 @@ export default function Agenda({ business, initialView = 'day' }) {
     setServicesLoading(false)
   }, [business])
 
-  const loadAppointments = useCallback(async () => {
+  const loadAppointments = useCallback(async (signal = null) => {
     if (!business) return
     setLoading(true)
     let q = supabase.from('appointments')
@@ -169,6 +169,7 @@ export default function Agenda({ business, initialView = 'day' }) {
       q = q.eq('date', formatDate(selectedDay))
     }
     const { data } = await q.order('date').order('start_time')
+    if (signal?.cancelled) return
     setAppointments(data ?? [])
     scheduleAllTodayNotifications(data ?? [])
     setLoading(false)
@@ -186,7 +187,11 @@ export default function Agenda({ business, initialView = 'day' }) {
   }, [business])
 
   useEffect(() => { loadEmployees() },       [loadEmployees])
-  useEffect(() => { loadAppointments() },    [loadAppointments])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadAppointments(signal)
+    return () => { signal.cancelled = true }
+  }, [loadAppointments])
   useEffect(() => { loadPendingBookings() }, [loadPendingBookings])
 
   /* ── Modal helpers ── */
@@ -1122,7 +1127,8 @@ function buildClosedOverlays(openRanges) {
 }
 
 function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName, scrollToTimeRef }) {
-  const wrapRef = useRef(null)
+  const wrapRef      = useRef(null)
+  const touchStartY  = useRef(null)
 
   useEffect(() => {
     if (loading || !wrapRef.current) return
@@ -1245,7 +1251,13 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                     zIndex: 1,
                     boxSizing: 'border-box',
                   }}
+                  onTouchStart={e => { touchStartY.current = e.touches[0].clientY }}
                   onClick={(e) => {
+                    if (touchStartY.current !== null && Math.abs(e.clientY - touchStartY.current) > 10) {
+                      touchStartY.current = null
+                      return
+                    }
+                    touchStartY.current = null
                     const offsetY = e.clientY - e.currentTarget.getBoundingClientRect().top
                     const tappedMin = apt.startMin + Math.round(offsetY / SLOT_H) * 30
                     const th = Math.floor(tappedMin / 60)
