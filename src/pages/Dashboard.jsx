@@ -10,10 +10,12 @@ import Social      from '../components/dashboard/Social'
 import Recensioni  from '../components/dashboard/Recensioni'
 import Promemoria  from '../components/dashboard/Promemoria'
 import Agenda      from '../components/dashboard/Agenda'
+import Clienti     from '../components/dashboard/Clienti'
 
 const NAV = [
   { id: 'panoramica', label: 'Panoramica',  icon: IconGrid },
   { id: 'agenda',     label: 'Agenda',      icon: IconCalendar },
+  { id: 'clienti',    label: 'Clienti',     icon: IconUsers },
   { id: 'promemoria', label: 'Promemoria',  icon: IconBell },
   { id: 'social',     label: 'Social',      icon: IconShare },
   { id: 'recensioni', label: 'Recensioni',  icon: IconStar },
@@ -139,6 +141,7 @@ export default function Dashboard() {
     recensioni: Recensioni,
     promemoria: Promemoria,
     agenda:     Agenda,
+    clienti:    Clienti,
   }[section]
 
   useEffect(() => {
@@ -371,6 +374,9 @@ function IconMenu() {
 }
 function IconCalendar() {
   return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+}
+function IconUsers() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 }
 function IconChevronLeft() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>

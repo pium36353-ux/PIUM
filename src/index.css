@@ -8571,3 +8571,276 @@ code {
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Clienti ── */
+.cl-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.cl-search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.cl-search-input {
+  width: 100%;
+  padding: 9px 36px 9px 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.cl-search-input:focus { border-color: var(--accent); }
+.cl-search-clear {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.cl-search-clear:hover { color: var(--text); }
+
+.cl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.cl-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  background: var(--surface);
+  transition: background 0.12s;
+  border-bottom: 1px solid var(--border);
+}
+.cl-row:last-child { border-bottom: none; }
+.cl-row:hover { background: var(--surface-hover, #f8f8f8); }
+.cl-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cl-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cl-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-phone {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cl-wa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #25D366;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 18px;
+}
+.cl-wa-btn:hover { background: #1ebe5d; }
+.cl-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.cl-meta-appt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.cl-meta-spent {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cl-meta-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.cl-row-chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Drawer — Clienti specifics */
+.cl-drawer-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cl-drawer-phone {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.cl-drawer-wa {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #25D366;
+  color: #fff;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.cl-drawer-wa:hover { background: #1ebe5d; }
+
+/* Stats grid */
+.cl-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.cl-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 8px;
+}
+.cl-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.cl-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Appointment history */
+.cl-apt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cl-apt-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg);
+}
+.cl-apt-item--done {
+  border-color: #22c55e33;
+  background: #f0fdf4;
+}
+.cl-apt-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.cl-apt-date {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.cl-apt-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cl-apt-done-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: #16a34a;
+  background: #dcfce7;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.cl-apt-details {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cl-apt-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cl-apt-detail--price {
+  color: var(--accent);
+  font-weight: 600;
+}
+.cl-emp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.cl-apt-notes {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+@media (max-width: 480px) {
+  .cl-stats-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .cl-stat-value { font-size: 16px; }
+  .cl-row { padding: 10px 12px; }
+}
