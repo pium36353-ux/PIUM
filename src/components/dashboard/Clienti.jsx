@@ -37,7 +37,9 @@ function phoneKey(phone) {
 // Parsa il testo di un file .vcf e restituisce array { name, phone }
 function parseVcfText(text) {
   try {
-    const cards = VCard.parse(text)
+    // La libreria vcf richiede CRLF; normalizza LF → CRLF prima di parsare
+    const normalized = text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n')
+    const cards = VCard.parse(normalized)
     return cards.map(card => {
       const fnProp  = card.get('fn')
       const telProp = card.get('tel')
