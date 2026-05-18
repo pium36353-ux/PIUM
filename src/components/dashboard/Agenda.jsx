@@ -104,6 +104,9 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [addAnotherTime, setAddAnotherTime] = useState(null)
   const [taxRate,       setTaxRate]       = useState(22)
 
+  const [suggestions,     setSuggestions]     = useState([])
+  const [dropdownVisible, setDropdownVisible] = useState(false)
+
   const [showDatePicker,        setShowDatePicker]        = useState(false)
 
   const [pendingBookings,       setPendingBookings]       = useState([])
@@ -111,7 +114,8 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [confirmedWa,           setConfirmedWa]           = useState(null)
   const [showOutOfHoursConfirm, setShowOutOfHoursConfirm] = useState(false)
 
-  const scrollToTimeRef = useRef(null)
+  const scrollToTimeRef  = useRef(null)
+  const suggestTimerRef  = useRef(null)
 
   // Read location state after mount: set selected date/time, then clear state
   useEffect(() => {
@@ -192,11 +196,15 @@ export default function Agenda({ business, initialView = 'day' }) {
     setForm({ ...EMPTY_FORM, date, start_time: time })
     setEditingId(null)
     setErrors({})
+    setSuggestions([])
+    setDropdownVisible(false)
     setShowModal(true)
   }
   const openEditModal = async (apt, tappedTime = null) => {
     loadEmployees()
     loadServices()
+    setSuggestions([])
+    setDropdownVisible(false)
     const { data: aptSvcs } = await supabase
       .from('appointment_services')
       .select('service_id')
@@ -219,6 +227,57 @@ export default function Agenda({ business, initialView = 'day' }) {
   }
   const closeModal = () => { setShowModal(false); setEditingId(null); setAddAnotherTime(null) }
   const setField = (f) => (e) => { setForm(p => ({ ...p, [f]: e.target.value })); setErrors(p => ({ ...p, [f]: null })) }
+
+  const handleNameChange = (e) => {
+    const val = e.target.value
+    setForm(p => ({ ...p, client_name: val }))
+    setErrors(p => ({ ...p, client_name: null }))
+    try {
+      clearTimeout(suggestTimerRef.current)
+      if (val.trim().length < 2) {
+        setSuggestions([])
+        setDropdownVisible(false)
+        return
+      }
+      suggestTimerRef.current = setTimeout(async () => {
+        try {
+          const [{ data: cts }, { data: apts }] = await Promise.all([
+            supabase.from('contacts')
+              .select('name, phone')
+              .eq('business_id', business.id)
+              .ilike('name', `%${val.trim()}%`)
+              .limit(5),
+            supabase.from('appointments')
+              .select('client_name, client_phone')
+              .eq('business_id', business.id)
+              .ilike('client_name', `%${val.trim()}%`)
+              .limit(5),
+          ])
+          const seen = new Map()
+          for (const ct of (cts ?? [])) {
+            const key = ct.phone?.replace(/\s+/g, '') || '__' + ct.name.trim().toLowerCase()
+            if (!seen.has(key)) seen.set(key, { name: ct.name, phone: ct.phone ?? null })
+          }
+          for (const apt of (apts ?? [])) {
+            const key = apt.client_phone?.replace(/\s+/g, '') || '__' + apt.client_name.trim().toLowerCase()
+            if (!seen.has(key)) seen.set(key, { name: apt.client_name, phone: apt.client_phone ?? null })
+          }
+          const results = Array.from(seen.values()).slice(0, 3)
+          setSuggestions(results)
+          setDropdownVisible(results.length > 0)
+        } catch { /* silently fail */ }
+      }, 200)
+    } catch { /* silently fail */ }
+  }
+
+  const selectSuggestion = (s) => {
+    try {
+      setForm(p => ({ ...p, client_name: s.name, client_phone: s.phone ?? p.client_phone }))
+      setErrors(p => ({ ...p, client_name: null }))
+      setSuggestions([])
+      setDropdownVisible(false)
+    } catch { /* silently fail */ }
+  }
 
   const toggleService = (svc) => {
     setForm(prev => {
@@ -718,17 +777,34 @@ export default function Agenda({ business, initialView = 'day' }) {
               </div>
 
               {/* Client */}
-              <div className="sv-field">
+              <div className="sv-field" style={{ position: 'relative' }}>
                 <label className="sv-label">Nome cliente <span className="sv-required">*</span></label>
                 <input
                   className={`sv-input ${errors.client_name ? 'sv-input--error' : ''}`}
                   type="text"
                   value={form.client_name}
-                  onChange={setField('client_name')}
+                  onChange={handleNameChange}
+                  onBlur={() => setTimeout(() => setDropdownVisible(false), 150)}
+                  onKeyDown={e => { if (e.key === 'Escape') { setSuggestions([]); setDropdownVisible(false) } }}
                   placeholder="es. Mario Rossi"
                   enterKeyHint="next"
+                  autoComplete="off"
                 />
                 {errors.client_name && <p className="sv-field-error">{errors.client_name}</p>}
+                {dropdownVisible && suggestions.length > 0 && (
+                  <div className="ag-suggest-dropdown">
+                    {suggestions.map((s, i) => (
+                      <div
+                        key={i}
+                        className="ag-suggest-item"
+                        onMouseDown={() => selectSuggestion(s)}
+                      >
+                        <span className="ag-suggest-name">{s.name}</span>
+                        {s.phone && <span className="ag-suggest-phone">{s.phone}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Phone */}

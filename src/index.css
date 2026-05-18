@@ -9067,6 +9067,49 @@ code {
   font-weight: 400;
 }
 
+/* Agenda — autocomplete suggerimenti nome cliente */
+.ag-suggest-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 200;
+  overflow: hidden;
+}
+.ag-suggest-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ag-suggest-item:hover,
+.ag-suggest-item:active {
+  background: var(--accent-bg);
+}
+.ag-suggest-item + .ag-suggest-item {
+  border-top: 1px solid var(--border);
+}
+.ag-suggest-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-h);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ag-suggest-phone {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 /* Clienti — edit form nel drawer */
 .cl-edit-form {
   display: flex;
