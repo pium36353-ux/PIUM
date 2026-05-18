@@ -759,7 +759,7 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
               <button className="adm-drawer-action-btn" onClick={() => onCopyLink(biz)}>
                 {copied === biz.id ? <><IconCheck /> Link copiato</> : <><IconCopy /> Copia link sito</>}
               </button>
-              <a className="adm-drawer-action-btn adm-drawer-action-btn--outline" href={`/${biz.slug}`} target="_blank" rel="noreferrer">
+              <a className="adm-drawer-action-btn adm-drawer-action-btn--outline" href={`https://${biz.slug}.piumapp.com`} target="_blank" rel="noreferrer">
                 <IconExternalLink /> Apri sito pubblico
               </a>
             </div>
