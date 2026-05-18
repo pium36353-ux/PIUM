@@ -25,7 +25,7 @@ const MONTHS      = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott'
 const DAY_FULL    = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato']
 const DAY_LETTER  = ['L','M','M','G','V','S','D']
 
-const EMPTY_FORM = { date: '', client_name: '', client_phone: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '' }
+const EMPTY_FORM = { date: '', client_name: '', client_phone: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '', selected_services: [] }
 const EMPTY_EMP  = { name: '', color: COLORS[0] }
 
 const SLOT_H = 40 // px per 30-minute slot
@@ -98,6 +98,8 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [deletingEmpId, setDeletingEmpId] = useState(null)
   const [togglingId,    setTogglingId]    = useState(null)
   const [confirmDelId,  setConfirmDelId]  = useState(null)
+  const [services,      setServices]      = useState([])
+  const [servicesLoading, setServicesLoading] = useState(false)
   const [editingId,     setEditingId]     = useState(null)
   const [addAnotherTime, setAddAnotherTime] = useState(null)
   const [taxRate,       setTaxRate]       = useState(22)
@@ -137,10 +139,25 @@ export default function Agenda({ business, initialView = 'day' }) {
     setEmployees(data ?? [])
   }, [business])
 
+  const loadServices = useCallback(async () => {
+    if (!business) return
+    setServicesLoading(true)
+    const { data } = await supabase
+      .from('services')
+      .select('id, name, price, duration_min')
+      .eq('business_id', business.id)
+      .eq('is_available', true)
+      .order('sort_order')
+    setServices(data ?? [])
+    setServicesLoading(false)
+  }, [business])
+
   const loadAppointments = useCallback(async () => {
     if (!business) return
     setLoading(true)
-    let q = supabase.from('appointments').select('*, employees(name, color), bookings(customer_phone, services(name))').eq('business_id', business.id)
+    let q = supabase.from('appointments')
+      .select('*, employees(name, color), bookings(customer_phone, services(name)), appointment_services(service_id, price_snapshot, duration_snapshot, services(name))')
+      .eq('business_id', business.id)
     if (view === 'month') {
       const lastOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0)
       q = q.gte('date', formatDate(monthDate)).lte('date', formatDate(lastOfMonth))
@@ -171,13 +188,19 @@ export default function Agenda({ business, initialView = 'day' }) {
   /* ── Modal helpers ── */
   const openModal = (date = formatDate(selectedDay), time = '09:00') => {
     loadEmployees()
+    loadServices()
     setForm({ ...EMPTY_FORM, date, start_time: time })
     setEditingId(null)
     setErrors({})
     setShowModal(true)
   }
-  const openEditModal = (apt, tappedTime = null) => {
+  const openEditModal = async (apt, tappedTime = null) => {
     loadEmployees()
+    loadServices()
+    const { data: aptSvcs } = await supabase
+      .from('appointment_services')
+      .select('service_id')
+      .eq('appointment_id', apt.id)
     setForm({
       date:             apt.date,
       client_name:      apt.client_name,
@@ -187,6 +210,7 @@ export default function Agenda({ business, initialView = 'day' }) {
       duration_minutes: apt.duration_minutes ?? 60,
       price:            apt.price != null ? String(apt.price) : '',
       notes:            apt.notes ?? '',
+      selected_services: aptSvcs?.map(s => s.service_id) ?? [],
     })
     setEditingId(apt.id)
     setAddAnotherTime(tappedTime ?? apt.start_time?.slice(0, 5) ?? '09:00')
@@ -195,6 +219,24 @@ export default function Agenda({ business, initialView = 'day' }) {
   }
   const closeModal = () => { setShowModal(false); setEditingId(null); setAddAnotherTime(null) }
   const setField = (f) => (e) => { setForm(p => ({ ...p, [f]: e.target.value })); setErrors(p => ({ ...p, [f]: null })) }
+
+  const toggleService = (svc) => {
+    setForm(prev => {
+      const already = prev.selected_services.includes(svc.id)
+      const selected = already
+        ? prev.selected_services.filter(id => id !== svc.id)
+        : [...prev.selected_services, svc.id]
+      const svcsData = services.filter(s => selected.includes(s.id))
+      const totalPrice    = svcsData.reduce((sum, s) => sum + (Number(s.price) || 0), 0)
+      const totalDuration = svcsData.reduce((sum, s) => sum + (Number(s.duration_min) || 0), 0)
+      return {
+        ...prev,
+        selected_services: selected,
+        price:            selected.length > 0 ? String(totalPrice) : prev.price,
+        duration_minutes: selected.length > 0 && totalDuration > 0 ? totalDuration : prev.duration_minutes,
+      }
+    })
+  }
 
   /* ── Validation ── */
   const validate = () => {
@@ -237,12 +279,37 @@ export default function Agenda({ business, initialView = 'day' }) {
       price:            form.price !== '' ? Number(form.price) : null,
       notes:            form.notes.trim() || null,
     }
+
+    let appointmentId = editingId
     if (editingId) {
       await supabase.from('appointments').update(payload).eq('id', editingId)
     } else {
-      await supabase.from('appointments').insert({ ...payload, business_id: business.id, completed: false })
+      const { data: newApt } = await supabase
+        .from('appointments')
+        .insert({ ...payload, business_id: business.id, completed: false })
+        .select('id')
+        .single()
+      appointmentId = newApt?.id
       logActivity(business.id, business.user_id, 'appointment_created', `Appuntamento creato: ${form.client_name.trim()} il ${form.date}`)
     }
+
+    // Sync appointment_services (delete-all + re-insert)
+    if (appointmentId) {
+      await supabase.from('appointment_services').delete().eq('appointment_id', appointmentId)
+      if (form.selected_services.length > 0) {
+        const rows = form.selected_services.map(svcId => {
+          const svc = services.find(s => s.id === svcId)
+          return {
+            appointment_id:    appointmentId,
+            service_id:        svcId,
+            price_snapshot:    svc?.price ?? null,
+            duration_snapshot: svc?.duration_min ?? null,
+          }
+        })
+        await supabase.from('appointment_services').insert(rows)
+      }
+    }
+
     setSaving(false)
     closeModal()
     loadAppointments()
@@ -690,6 +757,37 @@ export default function Agenda({ business, initialView = 'day' }) {
                   )}
                 </div>
               </div>
+
+              {/* Services */}
+              {(services.length > 0 || servicesLoading) && (
+                <div className="sv-field">
+                  <label className="sv-label">Servizi <span className="sv-optional">(facoltativo)</span></label>
+                  {servicesLoading ? (
+                    <p className="sv-field-hint">Caricamento…</p>
+                  ) : (
+                    <div className="ag-svc-list">
+                      {services.map(svc => {
+                        const checked = form.selected_services.includes(svc.id)
+                        return (
+                          <label key={svc.id} className={`ag-svc-item ${checked ? 'ag-svc-item--checked' : ''}`}>
+                            <input
+                              type="checkbox"
+                              className="ag-svc-checkbox"
+                              checked={checked}
+                              onChange={() => toggleService(svc)}
+                            />
+                            <span className="ag-svc-name">{svc.name}</span>
+                            <span className="ag-svc-meta">
+                              {svc.duration_min != null && <span>{fmtDuration(svc.duration_min)}</span>}
+                              {svc.price != null && <span>{fmtCurrency(svc.price)}</span>}
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Employee + Duration */}
               <div className="sv-fields-row">

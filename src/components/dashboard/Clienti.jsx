@@ -79,7 +79,7 @@ export default function Clienti({ business }) {
     if (!business) return
     supabase
       .from('appointments')
-      .select('id, client_name, client_phone, date, start_time, duration_minutes, price, notes, completed, employees(name, color)')
+      .select('id, client_name, client_phone, date, start_time, duration_minutes, price, notes, completed, employees(name, color), appointment_services(service_id, price_snapshot, duration_snapshot, services(name))')
       .eq('business_id', business.id)
       .order('date', { ascending: false })
       .then(({ data }) => {
@@ -258,20 +258,35 @@ function ClientDrawer({ client, onClose }) {
                     )}
                     {apt.completed && <span className="cl-apt-done-badge">✓</span>}
                   </div>
-                  <div className="cl-apt-details">
-                    {apt.duration_minutes && (
-                      <span className="cl-apt-detail">{fmtDuration(apt.duration_minutes)}</span>
-                    )}
-                    {apt.price != null && (
-                      <span className="cl-apt-detail cl-apt-detail--price">{fmtCurrency(apt.price)}</span>
-                    )}
-                    {apt.employees?.name && (
+                  {apt.appointment_services?.length > 0 ? (
+                    <div className="cl-apt-services">
+                      {apt.appointment_services.map((s, i) => (
+                        <span key={s.service_id ?? i} className="cl-apt-svc-tag">
+                          {s.services?.name ?? '—'}
+                        </span>
+                      ))}
+                      {apt.price != null && (
+                        <span className="cl-apt-detail cl-apt-detail--price">{fmtCurrency(apt.price)}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="cl-apt-details">
+                      {apt.duration_minutes && (
+                        <span className="cl-apt-detail">{fmtDuration(apt.duration_minutes)}</span>
+                      )}
+                      {apt.price != null && (
+                        <span className="cl-apt-detail cl-apt-detail--price">{fmtCurrency(apt.price)}</span>
+                      )}
+                    </div>
+                  )}
+                  {apt.employees?.name && (
+                    <div className="cl-apt-details" style={{ marginTop: 2 }}>
                       <span className="cl-apt-detail">
                         <span className="cl-emp-dot" style={{ background: apt.employees.color }} />
                         {apt.employees.name}
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   {apt.notes && <p className="cl-apt-notes">{apt.notes}</p>}
                 </div>
               ))}
