@@ -1,7 +1,12 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import VCard from 'vcf'
 
 const MONTHS = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic']
+
+const PICKER_SUPPORTED = typeof navigator !== 'undefined'
+  && 'contacts' in navigator
+  && 'ContactsManager' in window
 
 function fmtDate(dateStr) {
   if (!dateStr) return '—'
@@ -29,8 +34,23 @@ function phoneKey(phone) {
   return phone?.trim().replace(/\s+/g, '') || null
 }
 
+// Parsa il testo di un file .vcf e restituisce array { name, phone }
+function parseVcfText(text) {
+  try {
+    const cards = VCard.parse(text)
+    return cards.map(card => {
+      const fnProp  = card.get('fn')
+      const telProp = card.get('tel')
+      const name = (Array.isArray(fnProp) ? fnProp[0] : fnProp)?.valueOf()?.trim() || null
+      const tel  = (Array.isArray(telProp) ? telProp[0] : telProp)?.valueOf()?.trim() || null
+      return { name: name || '—', phone: tel }
+    }).filter(c => c.name && c.name !== '—')
+  } catch {
+    return []
+  }
+}
+
 // Merge contatti importati + appuntamenti in un'unica lista deduplicata.
-// Chiave: telefono pulito se presente, altrimenti __name__ + nome lowercase.
 // Gli appuntamenti hanno priorità su nome e telefono rispetto ai contatti.
 function groupClients(appointments, contacts = []) {
   const map = new Map()
@@ -106,6 +126,15 @@ export default function Clienti({ business }) {
   const [search,       setSearch]       = useState('')
   const [drawer,       setDrawer]       = useState(null)
 
+  // Import modal state
+  const [showImport,     setShowImport]     = useState(false)
+  const [importStep,     setImportStep]     = useState('choose') // 'choose' | 'preview' | 'done'
+  const [previewList,    setPreviewList]    = useState([])       // { name, phone }[]
+  const [previewSource,  setPreviewSource]  = useState('')
+  const [importing,      setImporting]      = useState(false)
+  const [importResult,   setImportResult]   = useState(null)     // { imported, skipped }
+  const fileInputRef = useRef(null)
+
   useEffect(() => {
     if (!business) return
     Promise.all([
@@ -137,11 +166,104 @@ export default function Clienti({ business }) {
     )
   }, [clients, search])
 
-  // Blocca scroll body quando drawer aperto
+  // Blocca scroll body quando drawer o modal import sono aperti
   useEffect(() => {
-    document.body.style.overflow = drawer ? 'hidden' : ''
+    document.body.style.overflow = (drawer || showImport) ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [drawer])
+  }, [drawer, showImport])
+
+  /* ── Import handlers ── */
+
+  const openImport = () => {
+    setImportStep('choose')
+    setPreviewList([])
+    setImportResult(null)
+    setShowImport(true)
+  }
+
+  const closeImport = () => {
+    setShowImport(false)
+  }
+
+  // Dedup + INSERT in batch; restituisce { imported, skipped }
+  const doImport = async (list, source) => {
+    const { data: existing } = await supabase
+      .from('contacts')
+      .select('phone')
+      .eq('business_id', business.id)
+      .not('phone', 'is', null)
+
+    const existingKeys = new Set(
+      (existing ?? []).map(c => phoneKey(c.phone)).filter(Boolean)
+    )
+
+    const toInsert = list.filter(c => {
+      if (!phoneKey(c.phone)) return true   // senza telefono: importa sempre
+      return !existingKeys.has(phoneKey(c.phone))
+    })
+
+    if (toInsert.length > 0) {
+      await supabase.from('contacts').insert(
+        toInsert.map(c => ({
+          business_id: business.id,
+          name:        c.name,
+          phone:       phoneKey(c.phone) ?? null,
+          source,
+        }))
+      )
+    }
+
+    // Ricarica contacts
+    const { data: updated } = await supabase
+      .from('contacts')
+      .select('id, name, phone, email, notes, source')
+      .eq('business_id', business.id)
+      .order('name')
+    setContacts(updated ?? [])
+
+    return { imported: toInsert.length, skipped: list.length - toInsert.length }
+  }
+
+  // Metodo 1 — Contact Picker API (Android Chrome)
+  const handlePickerImport = async () => {
+    try {
+      const results = await navigator.contacts.select(['name', 'tel'], { multiple: true })
+      const parsed = results
+        .map(r => ({
+          name:  r.name?.[0]?.trim() || '—',
+          phone: r.tel?.[0]?.trim()  || null,
+        }))
+        .filter(c => c.name && c.name !== '—')
+      setPreviewList(parsed)
+      setPreviewSource('android_picker')
+      setImportStep('preview')
+    } catch {
+      // Utente ha annullato — non fare nulla
+    }
+  }
+
+  // Metodo 2 — file .vcf
+  const handleVcfChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const parsed = parseVcfText(ev.target.result)
+      setPreviewList(parsed)
+      setPreviewSource('vcf_import')
+      setImportStep('preview')
+    }
+    reader.readAsText(file, 'UTF-8')
+    e.target.value = ''   // reset per permettere ri-selezione dello stesso file
+  }
+
+  const confirmImport = async () => {
+    setImporting(true)
+    const result = await doImport(previewList, previewSource)
+    setImportResult(result)
+    setImportStep('done')
+    setImporting(false)
+  }
 
   if (loading) return <div className="db-section"><p className="db-card-empty">Caricamento…</p></div>
 
@@ -163,11 +285,7 @@ export default function Clienti({ business }) {
             <button className="cl-search-clear" onClick={() => setSearch('')}>✕</button>
           )}
         </div>
-        <button
-          className="cl-import-btn"
-          onClick={() => alert('Funzione in arrivo')}
-          title="Importa contatti"
-        >
+        <button className="cl-import-btn" onClick={openImport} title="Importa contatti">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="21" y1="11" x2="15" y2="11"/><line x1="18" y1="8" x2="18" y2="14"/></svg>
           Importa
         </button>
@@ -229,6 +347,115 @@ export default function Clienti({ business }) {
       {/* Drawer scheda cliente */}
       {drawer && (
         <ClientDrawer client={drawer} onClose={() => setDrawer(null)} />
+      )}
+
+      {/* Modal importazione contatti */}
+      {showImport && (
+        <div className="sv-modal-overlay" onClick={e => e.target === e.currentTarget && closeImport()}>
+          <div className="sv-modal cl-import-modal">
+            <div className="sv-modal-header">
+              <h2 className="sv-modal-title">
+                {importStep === 'done' ? 'Importazione completata' : 'Importa contatti'}
+              </h2>
+              <button className="sv-modal-close" onClick={closeImport}><IconX /></button>
+            </div>
+
+            <div className="sv-modal-body">
+
+              {/* Step 1 — scelta metodo */}
+              {importStep === 'choose' && (
+                <div className="cl-import-methods">
+                  {PICKER_SUPPORTED && (
+                    <button className="cl-import-method-btn" onClick={handlePickerImport}>
+                      <div className="cl-import-method-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                      </div>
+                      <div className="cl-import-method-text">
+                        <div className="cl-import-method-title">Importa dalla rubrica</div>
+                        <div className="cl-import-method-desc">Seleziona i contatti direttamente dalla tua rubrica telefonica</div>
+                      </div>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                  )}
+
+                  <label className="cl-import-method-btn">
+                    <div className="cl-import-method-icon">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                    </div>
+                    <div className="cl-import-method-text">
+                      <div className="cl-import-method-title">Importa file vCard (.vcf)</div>
+                      <div className="cl-import-method-desc">Esporta i contatti da iPhone o Android come file .vcf</div>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".vcf,text/vcard"
+                      onChange={handleVcfChange}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* Step 2 — anteprima */}
+              {importStep === 'preview' && (
+                <>
+                  <p className="cl-import-preview-summary">
+                    Trovati <strong>{previewList.length}</strong> {previewList.length === 1 ? 'contatto' : 'contatti'}
+                    {previewList.length === 0 && ' — nessun contatto valido nel file.'}
+                  </p>
+                  {previewList.length > 0 && (
+                    <div className="cl-import-preview-list">
+                      {previewList.map((c, i) => (
+                        <div key={i} className="cl-import-preview-row">
+                          <span className="cl-import-preview-name">{c.name}</span>
+                          {c.phone && <span className="cl-import-preview-phone">{c.phone}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Step 3 — risultato */}
+              {importStep === 'done' && importResult && (
+                <div className="cl-import-result">
+                  <div className="cl-import-result-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <p className="cl-import-result-text">
+                    Importati <strong>{importResult.imported}</strong> {importResult.imported === 1 ? 'contatto' : 'contatti'}
+                    {importResult.skipped > 0 && (
+                      <>, <span className="cl-import-result-skipped">{importResult.skipped} già presenti saltati</span></>
+                    )}
+                  </p>
+                </div>
+              )}
+
+            </div>
+
+            {/* Footer */}
+            {importStep === 'preview' && previewList.length > 0 && (
+              <div className="sv-modal-footer">
+                <button className="sv-btn-cancel" onClick={() => setImportStep('choose')}>Indietro</button>
+                <button className="sv-btn-save" onClick={confirmImport} disabled={importing}>
+                  {importing ? 'Importazione…' : `Importa tutti (${previewList.length})`}
+                </button>
+              </div>
+            )}
+            {importStep === 'preview' && previewList.length === 0 && (
+              <div className="sv-modal-footer">
+                <button className="sv-btn-cancel" onClick={() => setImportStep('choose')}>Indietro</button>
+              </div>
+            )}
+            {importStep === 'done' && (
+              <div className="sv-modal-footer">
+                <button className="sv-btn-save" onClick={closeImport}>Chiudi</button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
     </div>
@@ -308,49 +535,49 @@ function ClientDrawer({ client, onClose }) {
             {apts.length === 0 ? (
               <p className="cl-apt-empty">Nessuna visita ancora.</p>
             ) : (
-            <div className="cl-apt-list">
-              {apts.map(apt => (
-                <div key={apt.id} className={`cl-apt-item ${apt.completed ? 'cl-apt-item--done' : ''}`}>
-                  <div className="cl-apt-header">
-                    <span className="cl-apt-date">{fmtDate(apt.date)}</span>
-                    {apt.start_time && (
-                      <span className="cl-apt-time">{apt.start_time.slice(0, 5)}</span>
+              <div className="cl-apt-list">
+                {apts.map(apt => (
+                  <div key={apt.id} className={`cl-apt-item ${apt.completed ? 'cl-apt-item--done' : ''}`}>
+                    <div className="cl-apt-header">
+                      <span className="cl-apt-date">{fmtDate(apt.date)}</span>
+                      {apt.start_time && (
+                        <span className="cl-apt-time">{apt.start_time.slice(0, 5)}</span>
+                      )}
+                      {apt.completed && <span className="cl-apt-done-badge">✓</span>}
+                    </div>
+                    {apt.appointment_services?.length > 0 ? (
+                      <div className="cl-apt-services">
+                        {apt.appointment_services.map((s, i) => (
+                          <span key={s.service_id ?? i} className="cl-apt-svc-tag">
+                            {s.services?.name ?? '—'}
+                          </span>
+                        ))}
+                        {apt.price != null && (
+                          <span className="cl-apt-detail cl-apt-detail--price">{fmtCurrency(apt.price)}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="cl-apt-details">
+                        {apt.duration_minutes && (
+                          <span className="cl-apt-detail">{fmtDuration(apt.duration_minutes)}</span>
+                        )}
+                        {apt.price != null && (
+                          <span className="cl-apt-detail cl-apt-detail--price">{fmtCurrency(apt.price)}</span>
+                        )}
+                      </div>
                     )}
-                    {apt.completed && <span className="cl-apt-done-badge">✓</span>}
-                  </div>
-                  {apt.appointment_services?.length > 0 ? (
-                    <div className="cl-apt-services">
-                      {apt.appointment_services.map((s, i) => (
-                        <span key={s.service_id ?? i} className="cl-apt-svc-tag">
-                          {s.services?.name ?? '—'}
+                    {apt.employees?.name && (
+                      <div className="cl-apt-details" style={{ marginTop: 2 }}>
+                        <span className="cl-apt-detail">
+                          <span className="cl-emp-dot" style={{ background: apt.employees.color }} />
+                          {apt.employees.name}
                         </span>
-                      ))}
-                      {apt.price != null && (
-                        <span className="cl-apt-detail cl-apt-detail--price">{fmtCurrency(apt.price)}</span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="cl-apt-details">
-                      {apt.duration_minutes && (
-                        <span className="cl-apt-detail">{fmtDuration(apt.duration_minutes)}</span>
-                      )}
-                      {apt.price != null && (
-                        <span className="cl-apt-detail cl-apt-detail--price">{fmtCurrency(apt.price)}</span>
-                      )}
-                    </div>
-                  )}
-                  {apt.employees?.name && (
-                    <div className="cl-apt-details" style={{ marginTop: 2 }}>
-                      <span className="cl-apt-detail">
-                        <span className="cl-emp-dot" style={{ background: apt.employees.color }} />
-                        {apt.employees.name}
-                      </span>
-                    </div>
-                  )}
-                  {apt.notes && <p className="cl-apt-notes">{apt.notes}</p>}
-                </div>
-              ))}
-            </div>
+                      </div>
+                    )}
+                    {apt.notes && <p className="cl-apt-notes">{apt.notes}</p>}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -358,4 +585,8 @@ function ClientDrawer({ client, onClose }) {
       </div>
     </div>
   )
+}
+
+function IconX() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 }
