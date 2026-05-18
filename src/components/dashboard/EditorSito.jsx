@@ -59,7 +59,7 @@ export default function EditorSito({ business }) {
         <p className="db-section-desc">Personalizza i contenuti del tuo sito pubblico.</p>
         {business.slug && (
           <a
-            href={`https://${business.slug}.piumapp.com`}
+            href={`https://www.piumapp.com/site/${business.slug}`}
             target="_blank"
             rel="noopener noreferrer"
             className="ed-view-btn"
