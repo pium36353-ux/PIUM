@@ -46,6 +46,10 @@
 - [ ] **Reset password cliente** dal pannello admin
 - [ ] **Pulizia slug vecchi clienti** — migrazione da formato `bar-roma-xxxx` a `bar-roma`
 
+### Dopo il lancio
+- [ ] **Sistema di monitoraggio**: avviso automatico se il webhook Supabase smette di rispondere, se le notifiche push falliscono sistematicamente, o se Stripe webhook non processa pagamenti. Priorità: media (dopo il lancio dei primi clienti)
+- [ ] **Miglioramento bot FAQ**: ampliare le domande coperte, migliorare le risposte esistenti, aggiungere categoria "Notifiche e prenotazioni" che copre i problemi più comuni segnalati dai clienti reali. Priorità: alta (prima di scalare gli affiliati)
+
 ### Nice to have
 - [ ] Template visivi per categoria attività (ristorante, parrucchiere, estetica, ecc.)
 - [ ] Opuscolo venditori PDF
