@@ -1,11 +1,13 @@
 -- Add service_names to bookings for multi-service display
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS service_names text;
 
--- Drop old signature (parametri in ordine diverso) prima di ricreare
+-- Drop tutte le firme esistenti di create_booking (evita conflitti di overload)
 DROP FUNCTION IF EXISTS create_booking(uuid, uuid, text, text, text, date, time);
+DROP FUNCTION IF EXISTS create_booking(uuid, uuid, text, text, date, time, text, text);
+DROP FUNCTION IF EXISTS create_booking(uuid, uuid, text, text, text, date, time, text);
 
--- Update create_booking: parametri senza default prima, con default dopo
-CREATE OR REPLACE FUNCTION create_booking(
+-- Nuova create_booking: parametri senza DEFAULT prima, con DEFAULT alla fine
+CREATE FUNCTION create_booking(
   p_business_id    uuid,
   p_service_id     uuid,
   p_customer_name  text,
@@ -31,7 +33,6 @@ BEGIN
     RAISE EXCEPTION 'Servizio non disponibile';
   END IF;
 
-  -- Antiabuse: 1 pending per email per business
   IF EXISTS (
     SELECT 1 FROM bookings
     WHERE business_id = p_business_id
