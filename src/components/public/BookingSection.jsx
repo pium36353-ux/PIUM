@@ -325,7 +325,7 @@ export default function BookingSection({ business, services }) {
           <h3 className="bk-success-title">Richiesta inviata!</h3>
           <p className="bk-success-detail">
             A breve riceverai un messaggio WhatsApp al numero {form.phone}. Rispondi al messaggio per confermare il tuo appuntamento.<br />
-            Se non ricevi nulla entro qualche ora, contatta direttamente <strong>{business.name}</strong>{business.phone ? <> al {business.phone}</> : ''}.
+            Se non ricevi nulla entro qualche ora, contatta direttamente <strong>{business.name}</strong>{(business.whatsapp || business.phone) ? <> al {business.whatsapp || business.phone}</> : ''}.
           </p>
           <p className="bk-success-recap">{servicesSummary} — {formattedDate} alle {slot}</p>
           <button className="bk-back bk-back--reset" onClick={reset}>
