@@ -1,15 +1,18 @@
 -- Add service_names to bookings for multi-service display
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS service_names text;
 
--- Update create_booking to accept optional p_service_names
+-- Drop old signature (parametri in ordine diverso) prima di ricreare
+DROP FUNCTION IF EXISTS create_booking(uuid, uuid, text, text, text, date, time);
+
+-- Update create_booking: parametri senza default prima, con default dopo
 CREATE OR REPLACE FUNCTION create_booking(
   p_business_id    uuid,
   p_service_id     uuid,
   p_customer_name  text,
   p_customer_email text,
-  p_customer_phone text DEFAULT NULL,
   p_date           date,
   p_time           time,
+  p_customer_phone text DEFAULT NULL,
   p_service_names  text DEFAULT NULL
 ) RETURNS uuid
 LANGUAGE plpgsql
@@ -53,4 +56,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION create_booking(uuid, uuid, text, text, text, date, time, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION create_booking(uuid, uuid, text, text, date, time, text, text) TO anon, authenticated;
