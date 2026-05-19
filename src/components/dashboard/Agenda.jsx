@@ -118,7 +118,6 @@ export default function Agenda({ business, initialView = 'day' }) {
   })
   const [confirmDialogId,       setConfirmDialogId]       = useState(null)
   const [rejectDialogId,        setRejectDialogId]        = useState(null)
-  const [showBulkRejectDialog,  setShowBulkRejectDialog]  = useState(false)
   const [showOutOfHoursConfirm, setShowOutOfHoursConfirm] = useState(false)
 
   const scrollToTimeRef  = useRef(null)
@@ -447,14 +446,6 @@ export default function Agenda({ business, initialView = 'day' }) {
     loadPendingBookings()
   }
 
-  const bulkRejectPending = async () => {
-    setShowBulkRejectDialog(false)
-    await supabase.from('bookings')
-      .update({ status: 'cancelled' })
-      .eq('business_id', business.id)
-      .eq('status', 'pending')
-    loadPendingBookings()
-  }
 
   /* ── CRUD: employees ── */
   const handleSaveEmployee = async () => {
@@ -566,11 +557,6 @@ export default function Agenda({ business, initialView = 'day' }) {
           <div className="ag-pending-header">
             <span className="ag-pending-title">Prenotazioni in attesa</span>
             <span className="ag-pending-count">{pendingBookings.length}</span>
-            {pendingBookings.length > 5 && (
-              <button className="ag-pending-bulk-reject" onClick={() => setShowBulkRejectDialog(true)}>
-                Elimina tutte
-              </button>
-            )}
           </div>
           <div className="ag-pending-list">
             {pendingBookings.map(b => {
@@ -681,18 +667,6 @@ export default function Agenda({ business, initialView = 'day' }) {
         )
       })()}
 
-      {/* ── Bulk reject dialog overlay ── */}
-      {showBulkRejectDialog && (
-        <div className="ag-dialog-overlay" onClick={() => setShowBulkRejectDialog(false)}>
-          <div className="ag-dialog-box" onClick={e => e.stopPropagation()}>
-            <p className="ag-dialog-text">Eliminare tutte le <strong>{pendingBookings.length}</strong> prenotazioni in attesa?</p>
-            <div className="ag-dialog-actions">
-              <button className="ag-pending-btn ag-pending-btn--reject" onClick={bulkRejectPending}>Sì, elimina tutte</button>
-              <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setShowBulkRejectDialog(false)}>Annulla</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Month view ── */}
       {view === 'month' && (
