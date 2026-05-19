@@ -8211,6 +8211,7 @@ code {
   color: #92400e;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  flex: 1;
 }
 .ag-pending-count {
   display: inline-flex;
@@ -8225,24 +8226,33 @@ code {
   font-size: 0.75rem;
   font-weight: 700;
 }
+.ag-pending-bulk-reject {
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  cursor: pointer;
+}
+.ag-pending-bulk-reject:hover { background: #fecaca; }
 .ag-pending-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 .ag-pending-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
   border-bottom: 1px solid #fde68a;
 }
 .ag-pending-card:last-child { border-bottom: none; }
 .ag-pending-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 .ag-pending-name {
@@ -8256,6 +8266,9 @@ code {
 .ag-pending-detail {
   font-size: 0.82rem;
   color: #78350f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ag-pending-contact {
   font-size: 0.78rem;
@@ -8264,8 +8277,10 @@ code {
 }
 .ag-pending-actions {
   display: flex;
-  gap: 6px;
-  flex-shrink: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 .ag-pending-btn {
   padding: 5px 13px;
@@ -8274,20 +8289,66 @@ code {
   font-weight: 600;
   border: none;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: background 0.15s;
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .ag-pending-btn:disabled { opacity: 0.5; cursor: default; }
-.ag-pending-btn--confirm {
-  background: #22c55e;
-  color: #fff;
-}
+.ag-pending-btn--confirm { background: #22c55e; color: #fff; }
 .ag-pending-btn--confirm:hover:not(:disabled) { background: #16a34a; }
-.ag-pending-btn--reject {
-  background: #fff;
-  color: #dc2626;
-  border: 1.5px solid #fca5a5;
-}
+.ag-pending-btn--reject { background: #fff; color: #dc2626; border: 1.5px solid #fca5a5; }
 .ag-pending-btn--reject:hover:not(:disabled) { background: #fef2f2; }
+.ag-pending-btn--wa { background: #25d366; color: #fff; }
+.ag-pending-btn--wa:hover { background: #1ebe5b; }
+.ag-pending-btn--cancel { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+.ag-pending-btn--cancel:hover { background: #e5e7eb; }
+.ag-pending-wa-sent { font-size: 0.82rem; color: #16a34a; font-weight: 600; }
+.ag-pending-no-phone { font-size: 0.78rem; color: #9ca3af; }
+
+@media (max-width: 480px) {
+  .ag-pending-actions { flex-direction: column; }
+  .ag-pending-btn,
+  a.ag-pending-btn { width: 100%; }
+}
+
+/* ── Pending dialog overlay ── */
+.ag-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.ag-dialog-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px 20px;
+  max-width: 360px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.ag-dialog-text {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111;
+  text-align: center;
+  line-height: 1.4;
+}
+.ag-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 
 /* ── Agenda: WhatsApp conferma banner ── */
 .ag-wa-banner {

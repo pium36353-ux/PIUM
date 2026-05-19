@@ -118,6 +118,7 @@ export default function Agenda({ business, initialView = 'day' }) {
   })
   const [confirmDialogId,       setConfirmDialogId]       = useState(null)
   const [rejectDialogId,        setRejectDialogId]        = useState(null)
+  const [showBulkRejectDialog,  setShowBulkRejectDialog]  = useState(false)
   const [showOutOfHoursConfirm, setShowOutOfHoursConfirm] = useState(false)
 
   const scrollToTimeRef  = useRef(null)
@@ -446,6 +447,15 @@ export default function Agenda({ business, initialView = 'day' }) {
     loadPendingBookings()
   }
 
+  const bulkRejectPending = async () => {
+    setShowBulkRejectDialog(false)
+    await supabase.from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('business_id', business.id)
+      .eq('status', 'pending')
+    loadPendingBookings()
+  }
+
   /* ── CRUD: employees ── */
   const handleSaveEmployee = async () => {
     if (!empForm.name.trim()) return
@@ -556,6 +566,11 @@ export default function Agenda({ business, initialView = 'day' }) {
           <div className="ag-pending-header">
             <span className="ag-pending-title">Prenotazioni in attesa</span>
             <span className="ag-pending-count">{pendingBookings.length}</span>
+            {pendingBookings.length > 5 && (
+              <button className="ag-pending-bulk-reject" onClick={() => setShowBulkRejectDialog(true)}>
+                Elimina tutte
+              </button>
+            )}
           </div>
           <div className="ag-pending-list">
             {pendingBookings.map(b => {
@@ -596,8 +611,7 @@ export default function Agenda({ business, initialView = 'day' }) {
                     ) : (
                       <span className="ag-pending-no-phone">Nessun numero</span>
                     )}
-
-                    {waSent && confirmDialogId !== b.id && (
+                    {waSent && (
                       <button
                         className="ag-pending-btn ag-pending-btn--confirm"
                         onClick={() => setConfirmDialogId(b.id)}
@@ -606,48 +620,76 @@ export default function Agenda({ business, initialView = 'day' }) {
                         Conferma appuntamento
                       </button>
                     )}
-
-                    {confirmDialogId === b.id && (
-                      <div className="ag-pending-dialog">
-                        <span>Hai ricevuto conferma dal cliente?</span>
-                        <button
-                          className="ag-pending-btn ag-pending-btn--confirm"
-                          onClick={() => confirmPendingBooking(b.id)}
-                          disabled={processingId === b.id}
-                        >
-                          {processingId === b.id ? '…' : 'Sì, conferma'}
-                        </button>
-                        <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setConfirmDialogId(null)}>Annulla</button>
-                      </div>
-                    )}
-
-                    {rejectDialogId !== b.id && (
-                      <button
-                        className="ag-pending-btn ag-pending-btn--reject"
-                        onClick={() => setRejectDialogId(b.id)}
-                        disabled={processingId === b.id}
-                      >
-                        Rifiuta
-                      </button>
-                    )}
-
-                    {rejectDialogId === b.id && (
-                      <div className="ag-pending-dialog">
-                        <span>Rifiutare la prenotazione?</span>
-                        <button
-                          className="ag-pending-btn ag-pending-btn--reject"
-                          onClick={() => rejectPendingBooking(b.id)}
-                          disabled={processingId === b.id}
-                        >
-                          {processingId === b.id ? '…' : 'Sì, rifiuta'}
-                        </button>
-                        <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setRejectDialogId(null)}>Annulla</button>
-                      </div>
-                    )}
+                    <button
+                      className="ag-pending-btn ag-pending-btn--reject"
+                      onClick={() => setRejectDialogId(b.id)}
+                      disabled={processingId === b.id}
+                    >
+                      Rifiuta
+                    </button>
                   </div>
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm dialog overlay ── */}
+      {confirmDialogId && (() => {
+        const b = pendingBookings.find(x => x.id === confirmDialogId)
+        if (!b) return null
+        return (
+          <div className="ag-dialog-overlay" onClick={() => setConfirmDialogId(null)}>
+            <div className="ag-dialog-box" onClick={e => e.stopPropagation()}>
+              <p className="ag-dialog-text">Hai ricevuto conferma da <strong>{b.customer_name}</strong>?</p>
+              <div className="ag-dialog-actions">
+                <button
+                  className="ag-pending-btn ag-pending-btn--confirm"
+                  onClick={() => confirmPendingBooking(b.id)}
+                  disabled={processingId === b.id}
+                >
+                  {processingId === b.id ? '…' : 'Sì, conferma'}
+                </button>
+                <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setConfirmDialogId(null)}>Annulla</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Reject dialog overlay ── */}
+      {rejectDialogId && (() => {
+        const b = pendingBookings.find(x => x.id === rejectDialogId)
+        if (!b) return null
+        return (
+          <div className="ag-dialog-overlay" onClick={() => setRejectDialogId(null)}>
+            <div className="ag-dialog-box" onClick={e => e.stopPropagation()}>
+              <p className="ag-dialog-text">Rifiutare la prenotazione di <strong>{b.customer_name}</strong>?</p>
+              <div className="ag-dialog-actions">
+                <button
+                  className="ag-pending-btn ag-pending-btn--reject"
+                  onClick={() => rejectPendingBooking(b.id)}
+                  disabled={processingId === b.id}
+                >
+                  {processingId === b.id ? '…' : 'Sì, rifiuta'}
+                </button>
+                <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setRejectDialogId(null)}>Annulla</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Bulk reject dialog overlay ── */}
+      {showBulkRejectDialog && (
+        <div className="ag-dialog-overlay" onClick={() => setShowBulkRejectDialog(false)}>
+          <div className="ag-dialog-box" onClick={e => e.stopPropagation()}>
+            <p className="ag-dialog-text">Eliminare tutte le <strong>{pendingBookings.length}</strong> prenotazioni in attesa?</p>
+            <div className="ag-dialog-actions">
+              <button className="ag-pending-btn ag-pending-btn--reject" onClick={bulkRejectPending}>Sì, elimina tutte</button>
+              <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setShowBulkRejectDialog(false)}>Annulla</button>
+            </div>
           </div>
         </div>
       )}
