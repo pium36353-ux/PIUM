@@ -111,7 +111,13 @@ export default function Agenda({ business, initialView = 'day' }) {
 
   const [pendingBookings,       setPendingBookings]       = useState([])
   const [processingId,          setProcessingId]          = useState(null)
-  const [confirmedWa,           setConfirmedWa]           = useState(null)
+  const [waSentIds,             setWaSentIds]             = useState(() => {
+    try {
+      return new Set(Object.keys(localStorage).filter(k => k.startsWith('wa_sent_')).map(k => k.slice(8)))
+    } catch { return new Set() }
+  })
+  const [confirmDialogId,       setConfirmDialogId]       = useState(null)
+  const [rejectDialogId,        setRejectDialogId]        = useState(null)
   const [showOutOfHoursConfirm, setShowOutOfHoursConfirm] = useState(false)
 
   const scrollToTimeRef  = useRef(null)
@@ -414,11 +420,10 @@ export default function Agenda({ business, initialView = 'day' }) {
   }
 
   const confirmPendingBooking = async (id) => {
-    const booking = pendingBookings.find(b => b.id === id)
     setProcessingId(id)
+    setConfirmDialogId(null)
     await supabase.rpc('owner_confirm_booking', { p_booking_id: id })
     setProcessingId(null)
-    if (booking) setConfirmedWa(booking)
     loadPendingBookings()
     loadAppointments()
   }
@@ -435,6 +440,7 @@ export default function Agenda({ business, initialView = 'day' }) {
 
   const rejectPendingBooking = async (id) => {
     setProcessingId(id)
+    setRejectDialogId(null)
     await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id)
     setProcessingId(null)
     loadPendingBookings()
@@ -553,14 +559,17 @@ export default function Agenda({ business, initialView = 'day' }) {
           </div>
           <div className="ag-pending-list">
             {pendingBookings.map(b => {
-              const dateLabel = new Date(b.appointment_date + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })
+              const dateLabel    = new Date(b.appointment_date + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })
+              const serviceLabel = b.service_names ?? b.services?.name ?? 'servizio'
+              const waSent       = waSentIds.has(b.id)
+              const waMsg        = `Ciao ${b.customer_name}! Ho ricevuto la tua richiesta di appuntamento per ${serviceLabel} il ${dateLabel} alle ${b.appointment_time?.slice(0, 5)}. Puoi confermare rispondendo "Confermo" a questo messaggio. Grazie! — ${business.name}`
+              const waLink       = buildWaLink(b.customer_phone, waMsg)
               return (
                 <div key={b.id} className="ag-pending-card">
                   <div className="ag-pending-info">
                     <span className="ag-pending-name">{b.customer_name}</span>
                     <span className="ag-pending-detail">
-                      {b.services?.name && <>{b.services.name} · </>}
-                      {dateLabel} alle {b.appointment_time?.slice(0, 5)}
+                      {serviceLabel} · {dateLabel} alle {b.appointment_time?.slice(0, 5)}
                     </span>
                     {(b.customer_email || b.customer_phone) && (
                       <span className="ag-pending-contact">
@@ -569,20 +578,72 @@ export default function Agenda({ business, initialView = 'day' }) {
                     )}
                   </div>
                   <div className="ag-pending-actions">
-                    <button
-                      className="ag-pending-btn ag-pending-btn--confirm"
-                      onClick={() => confirmPendingBooking(b.id)}
-                      disabled={processingId === b.id}
-                    >
-                      {processingId === b.id ? '…' : 'Conferma'}
-                    </button>
-                    <button
-                      className="ag-pending-btn ag-pending-btn--reject"
-                      onClick={() => rejectPendingBooking(b.id)}
-                      disabled={processingId === b.id}
-                    >
-                      Rifiuta
-                    </button>
+                    {waSent ? (
+                      <span className="ag-pending-wa-sent">WhatsApp inviato ✓</span>
+                    ) : waLink ? (
+                      <a
+                        className="ag-pending-btn ag-pending-btn--wa"
+                        href={waLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          localStorage.setItem(`wa_sent_${b.id}`, '1')
+                          setWaSentIds(prev => new Set([...prev, b.id]))
+                        }}
+                      >
+                        Invia WhatsApp
+                      </a>
+                    ) : (
+                      <span className="ag-pending-no-phone">Nessun numero</span>
+                    )}
+
+                    {waSent && confirmDialogId !== b.id && (
+                      <button
+                        className="ag-pending-btn ag-pending-btn--confirm"
+                        onClick={() => setConfirmDialogId(b.id)}
+                        disabled={processingId === b.id}
+                      >
+                        Conferma appuntamento
+                      </button>
+                    )}
+
+                    {confirmDialogId === b.id && (
+                      <div className="ag-pending-dialog">
+                        <span>Hai ricevuto conferma dal cliente?</span>
+                        <button
+                          className="ag-pending-btn ag-pending-btn--confirm"
+                          onClick={() => confirmPendingBooking(b.id)}
+                          disabled={processingId === b.id}
+                        >
+                          {processingId === b.id ? '…' : 'Sì, conferma'}
+                        </button>
+                        <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setConfirmDialogId(null)}>Annulla</button>
+                      </div>
+                    )}
+
+                    {rejectDialogId !== b.id && (
+                      <button
+                        className="ag-pending-btn ag-pending-btn--reject"
+                        onClick={() => setRejectDialogId(b.id)}
+                        disabled={processingId === b.id}
+                      >
+                        Rifiuta
+                      </button>
+                    )}
+
+                    {rejectDialogId === b.id && (
+                      <div className="ag-pending-dialog">
+                        <span>Rifiutare la prenotazione?</span>
+                        <button
+                          className="ag-pending-btn ag-pending-btn--reject"
+                          onClick={() => rejectPendingBooking(b.id)}
+                          disabled={processingId === b.id}
+                        >
+                          {processingId === b.id ? '…' : 'Sì, rifiuta'}
+                        </button>
+                        <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setRejectDialogId(null)}>Annulla</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -590,28 +651,6 @@ export default function Agenda({ business, initialView = 'day' }) {
           </div>
         </div>
       )}
-
-      {/* ── WhatsApp conferma banner ── */}
-      {confirmedWa && (() => {
-        const dateLabel = new Date(confirmedWa.appointment_date + 'T12:00:00')
-          .toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
-        const msg = `Ciao ${confirmedWa.customer_name}, la tua prenotazione per ${confirmedWa.services?.name ?? 'il servizio'} è confermata per ${dateLabel} alle ${confirmedWa.appointment_time?.slice(0, 5)}. A presto! — ${business.name}`
-        const waLink = buildWaLink(confirmedWa.customer_phone, msg)
-        return (
-          <div className="ag-wa-banner">
-            <span className="ag-wa-banner-text">
-              ✓ Prenotazione di <strong>{confirmedWa.customer_name}</strong> confermata
-            </span>
-            <div className="ag-wa-banner-actions">
-              {waLink
-                ? <a className="ag-wa-btn" href={waLink} target="_blank" rel="noopener noreferrer">Invia conferma su WhatsApp</a>
-                : <span className="ag-wa-no-phone">Nessun numero disponibile</span>
-              }
-              <button className="ag-wa-dismiss" onClick={() => setConfirmedWa(null)}><IconX /></button>
-            </div>
-          </div>
-        )
-      })()}
 
       {/* ── Month view ── */}
       {view === 'month' && (
