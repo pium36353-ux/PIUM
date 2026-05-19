@@ -311,7 +311,7 @@ export default function BookingSection({ business, services }) {
             </div>
           </div>
           <p className="bk-confirm-disclaimer">
-            La tua richiesta verrà ricevuta da <strong>{business.name}</strong>. Riceverai una conferma su WhatsApp al numero {form.phone}.
+            La tua richiesta è stata ricevuta da <strong>{business.name}</strong>. Riceverai un messaggio WhatsApp al numero {form.phone} — dovrai rispondere per confermare l'appuntamento. Senza conferma la prenotazione non sarà valida.
           </p>
           <button className="bk-submit-btn" onClick={submitBooking} disabled={submitting}>
             {submitting ? 'Invio in corso...' : 'Invia richiesta'}
@@ -324,9 +324,10 @@ export default function BookingSection({ business, services }) {
           <div className="bk-success-icon">✓</div>
           <h3 className="bk-success-title">Richiesta inviata!</h3>
           <p className="bk-success-detail">
-            <strong>{business.name}</strong> ti confermerà via WhatsApp al numero {form.phone}.<br />
-            <span className="bk-success-recap">{servicesSummary} — {formattedDate} alle {slot}</span>
+            A breve riceverai un messaggio WhatsApp al numero {form.phone}. Rispondi al messaggio per confermare il tuo appuntamento.<br />
+            Se non ricevi nulla entro qualche ora, contatta direttamente <strong>{business.name}</strong>{business.phone ? <> al {business.phone}</> : ''}.
           </p>
+          <p className="bk-success-recap">{servicesSummary} — {formattedDate} alle {slot}</p>
           <button className="bk-back bk-back--reset" onClick={reset}>
             Prenota un altro appuntamento
           </button>
