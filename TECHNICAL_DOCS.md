@@ -1,6 +1,6 @@
 # PIUM — Documentazione Tecnica
 
-> Documento aggiornato al 2026-05-14. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
+> Documento aggiornato al 2026-05-18. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
 
 ---
 
@@ -380,6 +380,35 @@ Log attività titolare (es. "hai aggiunto un servizio", "hai risposto a una rece
 | `description` | text | Descrizione human-readable |
 | `created_at` | timestamptz | |
 
+#### `contacts`
+Contatti senza appuntamenti. Usata dalla sezione Clienti per gestire numeri importati da vCard, Android Contact Picker, o inseriti manualmente nel drawer. Merge con `appointments` per la rubrica unificata.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | uuid PK | |
+| `business_id` | uuid FK → `businesses` | `on delete cascade` |
+| `name` | text NOT NULL | |
+| `phone` | text | Usato come chiave di deduplicazione nella rubrica |
+| `notes` | text | Note libere del titolare |
+| `created_at` / `updated_at` | timestamptz | |
+| UNIQUE | `(business_id, phone)` | Previene duplicati per stesso numero |
+
+**RLS:** owner-only per tutte le operazioni. Migration: `20260527_create_contacts.sql`.
+
+#### `appointment_services`
+Collega più servizi a un singolo appuntamento. Congela il prezzo e la durata al momento della prenotazione (price/duration snapshot) per preservare lo storico anche se il servizio viene modificato successivamente.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | uuid PK | |
+| `appointment_id` | uuid FK → `appointments` | `on delete cascade` |
+| `service_id` | uuid FK → `services` | `on delete set null` |
+| `price_snapshot` | numeric(10,2) | Prezzo al momento della prenotazione |
+| `duration_snapshot` | int | Durata in minuti al momento della prenotazione |
+| `created_at` | timestamptz | |
+
+**RLS:** accesso tramite join con `appointments` → `businesses` (owner). Migration: `20260526_appointment_services.sql`.
+
 #### `faq`
 Domande e risposte per il SupportBot flottante. Read-only dal client.
 
@@ -413,6 +442,8 @@ Domande e risposte per il SupportBot flottante. Read-only dal client.
 | `analytics_events` | public insert | INSERT | `true` — chiunque può tracciare |
 | `employees` | owner access | ALL | business owner via join |
 | `appointments` | owner access | ALL | business owner via join |
+| `appointment_services` | owner access | ALL | business owner via join su `appointments` |
+| `contacts` | owner access | ALL | business owner via join |
 | `bookings` | owner read | SELECT | business owner via join |
 | `bookings` | owner update | UPDATE | business owner via join |
 | `push_subscriptions` | owner | ALL | `auth.uid() = user_id` |
@@ -591,6 +622,23 @@ Esegui `supabase/schema.sql` nella SQL Editor di Supabase. Crea:
   → CREATE INDEX idx_activity_log_business_id
   → ALTER TABLE: enable RLS
   → CREATE POLICY "owner read", "owner insert", "admin read all"
+
+20260524_client_phone.sql
+  → ALTER appointments: aggiunge colonna client_phone text
+  → CREATE OR REPLACE FUNCTION owner_confirm_booking: aggiornata per copiare customer_phone dalla prenotazione all'appuntamento creato
+
+20260526_appointment_services.sql
+  → CREATE TABLE appointment_services (id, appointment_id FK→appointments, service_id FK→services, price_snapshot numeric, duration_snapshot int, created_at)
+  → CREATE INDEX idx_appointment_services_appointment_id
+  → ALTER TABLE: enable RLS
+  → CREATE POLICY "owner access" (via join appointments→businesses)
+
+20260527_create_contacts.sql
+  → CREATE TABLE contacts (id, business_id FK→businesses, name, phone, notes, created_at, updated_at)
+  → UNIQUE (business_id, phone)
+  → CREATE INDEX idx_contacts_business_id
+  → ALTER TABLE: enable RLS
+  → CREATE POLICY "owner access" (auth.uid() = businesses.user_id via join)
 ```
 
 ### Step 3 — Tabelle non in migrations (create direttamente in Supabase)
@@ -997,8 +1045,107 @@ const parts = window.location.hostname.split('.')
 const slug = parts.length >= 3 && parts[0] !== 'www' ? parts[0] : paramSlug
 ```
 
+**Rilevamento sottodominio in `App.jsx` (fix sessione 2026-05-18):**
+
+Il Worker proxia in modo trasparente: il browser è a `mario.piumapp.com`, `window.location.hostname = 'mario.piumapp.com'`. `App.jsx` rileva questo prima del routing React:
+
+```js
+const hostParts = window.location.hostname.split('.')
+const isSubdomain = hostParts.length >= 3 && hostParts[0] !== 'www'
+
+if (isSubdomain) {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="*" element={<PublicSite />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
+```
+
+Senza questo fix, React Router matchava `/` su `<PublicRoute><Landing /></PublicRoute>`. Il localStorage di `mario.piumapp.com` è separato da quello di `www.piumapp.com` (origin-scoped), quindi la sessione non era disponibile → `PublicRoute` renderizzava `<Landing />` (pagina marketing) invece del sito dell'attività.
+
+**Preview da EditorSito:** usa `https://www.piumapp.com/site/${slug}` (non il sottodominio) — la route `/site/:slug` non è protetta da `PublicRoute`, quindi funziona anche senza Worker attivo.
+
 **Debug:** Se un sottodominio non funziona, verificare in ordine:
 1. DNS wildcard attivo (Cloudflare Dashboard → DNS)
 2. Worker deployato e route assegnata (Workers → Triggers)
 3. `window.location.hostname` nel browser mostra il sottodominio corretto
 4. Slug esiste in `businesses.slug` su Supabase
+
+---
+
+## 14. Rubrica Clienti — Architettura
+
+### 14.1 Fonti dati e merge
+
+La sezione Clienti (`Clienti.jsx`) aggrega da **due sorgenti** in parallelo via `Promise.all`:
+
+```js
+const [{ data: apts }, { data: contacts }] = await Promise.all([
+  supabase.from('appointments').select('...').eq('business_id', biz.id),
+  supabase.from('contacts').select('*').eq('business_id', biz.id),
+])
+```
+
+Le due liste vengono unite dalla funzione `groupClients(apts, contacts)`:
+- **Chiave primaria:** `phone` normalizzato (strip non-numerici). Appuntamenti con lo stesso numero → stesso cliente.
+- **Omonimi senza telefono:** risolti con `nameIndex = new Map()`. Alla prima occorrenza di un nome senza telefono, viene creata una chiave sintetica `__name__${cleanName}__${date}`. Le occorrenze successive dello stesso nome (stessa data) vengono aggiunte allo stesso gruppo.
+- **Contatti puri** (solo in `contacts`, zero appuntamenti): appaiono in fondo alla lista con badge "contatto".
+
+### 14.2 Tabella `appointment_services` — multi-servizio
+
+Il modal appuntamento in `Agenda.jsx` mostra una lista checkbox dei servizi attivi. Spuntare un servizio accumula `price` e `duration_minutes` nel form. Al salvataggio:
+
+```
+INSERT INTO appointments (client_name, price, duration_minutes, ...)
+INSERT INTO appointment_services (appointment_id, service_id, price_snapshot, duration_snapshot)
+  per ogni servizio selezionato
+```
+
+In modifica (`openEditModal`): viene eseguito `await loadServices()` **prima** di aprire il modal (fix bug: in precedenza la lista era vuota al mount), poi viene letta la join `appointment_services` per pre-spuntare i servizi già associati.
+
+Nel drawer Clienti, lo storico mostra i tag servizi: `"Taglio • Barba"`.
+
+### 14.3 Importazione contatti
+
+**vCard (.vcf):**
+1. Upload file → `FileReader.readAsText()`
+2. Normalizzazione obbligatoria: `text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n')` (la libreria `vcf` richiede CRLF)
+3. Parse con libreria `vcf` → array oggetti vCard
+4. Anteprima lista nomi + numeri (step modale 'preview')
+5. Deduplicazione per telefono prima dell'INSERT: se `(business_id, phone)` già esiste → skip
+
+**Contact Picker API (Android Chrome):**
+```js
+const PICKER_SUPPORTED = 'contacts' in navigator && 'ContactsManager' in window
+if (PICKER_SUPPORTED) {
+  const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true })
+}
+```
+Stesso flusso preview + deduplicazione della vCard. Il pulsante è visibile solo se `PICKER_SUPPORTED = true`.
+
+---
+
+## 15. Fix Anti-Bug — Sessione 2026-05-18
+
+15 fix pre-lancio implementati in questa sessione:
+
+| # | File | Problema | Fix |
+|---|---|---|---|
+| 1 | `Agenda.jsx` | `handleSave` senza try/catch — errori Supabase silenti | try/catch/finally; errore mostrato in `errors._global` nel modal che rimane aperto |
+| 2 | `Agenda.jsx` | `openEditModal` non await `loadServices()` — servizi vuoti al salvataggio | Aggiunto `await` |
+| 3 | `Agenda.jsx` | `suggestTimerRef` non pulito in `closeModal` — memory leak | `clearTimeout(suggestTimerRef.current)` in `closeModal` |
+| 4 | `Dashboard.jsx` | `handleCheckout` fallisce senza feedback visivo | try/catch con `setCheckoutError(msg)`, banner rosso sotto il trial banner |
+| 5 | `Dashboard.jsx` | Errore DB al caricamento business → redirect a `/onboarding` | `if (error) { setLoadError(true) }` con banner "Ricarica la pagina" |
+| 6 | `Auth.jsx` | Doppio submit se l'utente clicca due volte prima della risposta | `pendingRef = useRef(false)` blocca secondo invio; reset in `switchMode` |
+| 7 | `Clienti.jsx` | vCard: 0 contatti importati se il file ha LF invece di CRLF | Normalizzazione `\n → \r\n` prima del parse con libreria `vcf` |
+| 8 | `Clienti.jsx` | `groupClients`: omonimi senza telefono spezzati in gruppi separati | `nameIndex = new Map()` raggruppa per `name+date` al primo incontro |
+| 9 | `Agenda.jsx` | `loadAppointments` in useEffect: race condition su cambio data rapido | Signal pattern `{ cancelled: false }` — `if (signal?.cancelled) return` dopo ogni await |
+| 10 | `Agenda.jsx` | `DayTimeline`: click su appuntamento scatta durante scroll touch | `touchStartY` ref; in `onClick` ignora se delta Y > 10px |
+| 11 | `PublicSite.jsx` | `Carousel`: nessun swipe su mobile | `touchX` ref + `onTouchStart`/`onTouchEnd`, soglia 40px |
+| 12 | `PublicSite.jsx` | Immagini rotte nella galleria causano slot vuoti | `onError={e => e.currentTarget.closest('.ps-carousel-slide').style.display='none'}` |
+| 13 | `Clienti.jsx` | `handleSave` nel drawer: nessun errore mostrato su fallimento Supabase | try/catch/finally; `saveError` state mostrato sotto il form |
+| 14 | `Clienti.jsx` | `confirmImport`: errore INSERT non comunicato all'utente | try/catch; step 'done' mostra icona rossa + messaggio errore |
+| 15 | `Dashboard.jsx` | Realtime INSERT su `bookings`: `setPendingCount(c+1)` senza fetch → stale count | `setPendingCount(c => c + 1)` poi `fetchCount()` per conferma DB |
