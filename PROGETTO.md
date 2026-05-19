@@ -129,6 +129,9 @@
 - ✅ **Colonna `service_names` su `bookings`**: migration `20260519_booking_services.sql` aggiunge `service_names text` e aggiorna la firma di `create_booking` con parametro opzionale `p_service_names`
 - ✅ **Notifiche push diagnosticate e risolte**: causa del silenzio era `verify_jwt = true` (default) su `notify-new-booking` senza `config.toml` → trigger riceveva 401. Creato `supabase/functions/notify-new-booking/config.toml` con `verify_jwt = false`. Creata tabella `push_subscriptions` (migration `20260516`). Aggiunti secrets VAPID su Supabase. Aggiunta `VITE_VAPID_PUBLIC_KEY` su Vercel. Trigger `on_new_booking` ricreato senza Authorization header
 - ✅ **Cloudflare DNS fix**: record CNAME `*` modificato con proxy arancione attivato — necessario per il Worker `pium-subdomain-proxy`
+- ✅ **Pannello prenotazioni in attesa** riprogettato: layout mobile corretto (card flex column, azioni flex-wrap row, pulsanti full-width su <480px), dialog conferma e rifiuto trasformati in modal overlay centrato con backdrop semitrasparente e nome cliente nel titolo ("Rifiutare la prenotazione di Mario?"), click sul backdrop chiude il dialog
+- ✅ **Rimosso pulsante "Elimina tutte"** da Agenda.jsx — non utile per il commerciante
+- ✅ **Pagina Impostazioni ridisegnata**: nuovo ordine sezioni (Notifiche → Account → Esci), icone 32×32 con sfondo colorato per ogni sezione, titoli più grandi (17px 700), badge "Attivo"/"Non attivo" accanto al titolo Notifiche, linguaggio semplificato ("Notifiche anche con il telefono in tasca", "Avvisami del prossimo appuntamento dopo aver completato uno"), test notifica diventato link testo piccolo, sezione Esci con sfondo rossastro, bottone "Attiva notifiche" a larghezza piena quando non attivo
 
 ---
 
