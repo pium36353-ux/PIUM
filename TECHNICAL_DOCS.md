@@ -1,6 +1,6 @@
 # PIUM — Documentazione Tecnica
 
-> Documento aggiornato al 2026-05-18. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
+> Documento aggiornato al 2026-05-19. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
 
 ---
 
@@ -350,6 +350,7 @@ Prenotazioni online inviate dai clienti. Il flusso è: `pending` → `confirmed`
 | `customer_phone` | text | Opzionale |
 | `appointment_date` | date NOT NULL | |
 | `appointment_time` | time NOT NULL | |
+| `service_names` | text | Nomi servizi selezionati separati da virgola (es. "Taglio, Barba"). Aggiunto con migration `20260519_booking_services.sql`. Visualizzato nel pannello pending di Agenda.jsx |
 | `status` | text | `pending \| confirmed \| cancelled`; default `pending` in V2 |
 | `created_at` | timestamptz | |
 
@@ -459,13 +460,23 @@ Domande e risposte per il SupportBot flottante. Read-only dal client.
 - **Grant:** `anon, authenticated`
 - **Cosa fa:** Restituisce `(start_time, duration_minutes)` degli appuntamenti esistenti per un business in una data, senza esporre nomi clienti o note. Usato da `BookingSection.jsx` per calcolare gli slot disponibili nel calendario booking pubblico.
 
-#### `create_booking(p_business_id, p_service_id, p_customer_name, p_customer_email, p_customer_phone, p_date, p_time)`
+#### `create_booking(p_business_id, p_service_id, p_customer_name, p_customer_email, p_date, p_time, p_customer_phone?, p_service_names?)`
 - **Tipo:** `SECURITY DEFINER`, PL/pgSQL
 - **Grant:** `anon, authenticated`
+- **Firma attuale** (dopo migration `20260519_booking_services.sql`):
+  ```
+  p_business_id uuid, p_service_id uuid,
+  p_customer_name text, p_customer_email text,
+  p_date date, p_time time,
+  p_customer_phone text DEFAULT NULL,
+  p_service_names text DEFAULT NULL
+  ```
+  ⚠️ I parametri con `DEFAULT` devono venire dopo quelli senza — vincolo PostgreSQL. La vecchia firma (con `p_customer_phone` prima di `p_date`) è stata droppata e ricreata.
 - **Cosa fa:** Crea una nuova prenotazione con `status='pending'`. Non richiede sessione autenticata. Validazioni interne:
   1. Servizio deve essere `is_available=true` e appartenere al business
   2. Antiabuse: un solo `pending` per email per business
 - **Restituisce:** UUID della nuova prenotazione
+- **`p_service_names`:** stringa opzionale con i nomi dei servizi selezionati (es. `"Taglio, Barba"`) — usata solo per display nel pannello pending
 
 #### `owner_confirm_booking(p_booking_id uuid)`
 - **Tipo:** `SECURITY DEFINER`, PL/pgSQL
@@ -504,14 +515,22 @@ Domande e risposte per il SupportBot flottante. Read-only dal client.
 
 #### `notify-new-booking`
 - **Path:** `supabase/functions/notify-new-booking/index.ts`
-- **Trigger:** Database Webhook su `bookings` evento `INSERT`
+- **Config:** `supabase/functions/notify-new-booking/config.toml` con `verify_jwt = false` — **obbligatorio**: il trigger PostgreSQL non invia JWT; senza questo file la funzione risponde 401 e non viene mai eseguita
+- **Trigger:** Trigger PostgreSQL `on_new_booking` su `bookings AFTER INSERT` — chiama la funzione via `supabase_functions.http_request()` **senza** Authorization header
+- **⚠️ Rideploy:** ogni volta che si modifica `index.ts` o `config.toml`, rieseguire:
+  ```bash
+  npx supabase functions deploy notify-new-booking --project-ref onkyhknchhlsmcknpinr --use-api --no-verify-jwt
+  ```
+  Dopo ogni rideploy, il titolare deve disattivare e riattivare il toggle "Notifiche push" in Settings per rinnovare la subscription (problema noto — da automatizzare in futuro)
 - **Cosa fa:**
-  1. Riceve il payload del webhook `{ record: booking }`
+  1. Legge `body.record ?? body` — il trigger invia `to_jsonb(NEW)` come body raw (senza wrapper `record`)
   2. Se `booking.status !== 'pending'` esce (skip)
-  3. Carica tutte le `push_subscriptions` per il `business_id`
-  4. Imposta VAPID credentials con `web-push`
-  5. Invia Web Push a ogni device del titolare con titolo "Nuova prenotazione" e nome cliente
-  6. Rimuove automaticamente le sottoscrizioni con risposta `410 Gone` (dispositivo non più registrato)
+  3. Verifica secrets VAPID — risponde 500 se mancanti (log `[notify] ERRORE: VAPID_PUBLIC_KEY...`)
+  4. Carica tutte le `push_subscriptions` per il `business_id`
+  5. Imposta VAPID credentials con `web-push`
+  6. Invia Web Push a ogni device del titolare con titolo "Nuova prenotazione" e nome cliente
+  7. Rimuove automaticamente le sottoscrizioni con risposta `410 Gone` (dispositivo non più registrato)
+  8. Risponde `{ sent, failed, stale }` — 500 solo se `sent=0` e `failed>0`
 - **Secrets necessari:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
 - **Payload notifica push:**
   ```json
@@ -639,6 +658,18 @@ Esegui `supabase/schema.sql` nella SQL Editor di Supabase. Crea:
   → CREATE INDEX idx_contacts_business_id
   → ALTER TABLE: enable RLS
   → CREATE POLICY "owner access" (auth.uid() = businesses.user_id via join)
+
+20260519_booking_services.sql
+  → ALTER bookings: aggiunge colonna service_names text
+  → DROP FUNCTION create_booking (vecchia firma con p_customer_phone prima di p_date)
+  → CREATE FUNCTION create_booking con nuova firma (p_date, p_time prima dei parametri con DEFAULT)
+  → GRANT EXECUTE sulla nuova firma ad anon, authenticated
+
+20260519_fix_trigger_notify.sql  ← solo documentazione, già applicata manualmente
+  → DROP TRIGGER IF EXISTS on_new_booking ON bookings
+  → CREATE TRIGGER on_new_booking AFTER INSERT ON bookings
+     che chiama supabase_functions.http_request() SENZA Authorization header
+     (la funzione ha verify_jwt = false in config.toml)
 ```
 
 ### Step 3 — Tabelle non in migrations (create direttamente in Supabase)
@@ -660,12 +691,26 @@ supabase functions deploy claude-proxy
 supabase functions deploy notify-new-booking
 ```
 
-### Step 6 — Database Webhook
-Dashboard Supabase → Database → Webhooks → Create:
-- **Nome:** `on-new-booking`
-- **Table:** `bookings`, evento `INSERT`
-- **URL:** `https://<project-ref>.supabase.co/functions/v1/notify-new-booking`
-- **HTTP Headers:** `Authorization: Bearer <service_role_key>`
+### Step 6 — Database Webhook / Trigger
+Il trigger è gestito via SQL (non tramite la UI Webhooks di Supabase). Esegui nella SQL Editor:
+
+```sql
+-- Da supabase/migrations/20260519_fix_trigger_notify.sql
+DROP TRIGGER IF EXISTS on_new_booking ON public.bookings;
+
+CREATE TRIGGER on_new_booking
+  AFTER INSERT ON public.bookings
+  FOR EACH ROW
+  EXECUTE FUNCTION supabase_functions.http_request(
+    'https://onkyhknchhlsmcknpinr.supabase.co/functions/v1/notify-new-booking',
+    'POST',
+    '{"Content-Type":"application/json"}',
+    '{}',
+    '5000'
+  );
+```
+
+**⚠️ Non aggiungere Authorization header** — la funzione ha `verify_jwt = false` in `config.toml`. Con il JWT il trigger andrebbe comunque in 401 perché il service role key non viene passato correttamente dal trigger PostgreSQL.
 
 ---
 
@@ -692,7 +737,7 @@ VAPID_PUBLIC_KEY  = <Public Key>
 VAPID_PRIVATE_KEY = <Private Key>
 ```
 
-**4. Configura il Database Webhook** (vedi §6, Step 6).
+**4. Crea il trigger SQL** (vedi §6, Step 6). Non usare la UI Database Webhooks — usare il trigger SQL direttamente.
 
 **Flusso completo:**
 ```
@@ -714,6 +759,8 @@ Click notifica → apre /dashboard?s=agenda
 ```
 
 **Parallelo:** Supabase Realtime aggiorna il badge pending nel tab aperto simultaneamente al Web Push, garantendo consistenza visiva se il titolare ha il browser aperto.
+
+**⚠️ Problema noto — re-subscription dopo rideploy:** ogni volta che si rideploya `notify-new-booking`, il titolare deve disattivare e riattivare il toggle "Notifiche push" in Settings per rinnovare la subscription. Da automatizzare in futuro con una logica di re-subscription automatica al mount di Settings.jsx.
 
 ---
 

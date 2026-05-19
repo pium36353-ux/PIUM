@@ -1,6 +1,6 @@
 # PIUM — Funzioni dell'app (v2)
 
-> Percorso reale dell'utente, dalla landing al sito pubblico. Aggiornato al 2026-05-18.
+> Percorso reale dell'utente, dalla landing al sito pubblico. Aggiornato al 2026-05-19.
 
 ---
 
@@ -131,7 +131,11 @@ Vista calendario con appuntamenti. Supporta due viste: giornaliera e mensile.
 - In modifica: caricamento servizi con `await loadServices()` + pre-selezione da `appointment_services`
 - Salvataggio con try/catch; errori mostrati in `errors._global` nel modal che rimane aperto
 
-**Prenotazioni pending:** pannello laterale (o sezione sotto su mobile) con lista prenotazioni in attesa di conferma. Click "Conferma" → RPC `owner_confirm_booking` (atomica: verifica ownership, aggiorna booking, crea appuntamento, copia telefono). Click "Rifiuta" → `status = 'cancelled'`.
+**Prenotazioni pending:** pannello con lista prenotazioni in attesa di conferma. Flusso in due step obbligatori:
+1. **"Invia WhatsApp"** → apre link `wa.me/` con messaggio precompilato ("Ciao [nome], ho ricevuto la tua richiesta per [servizi] il [data] alle [ora]..."). Dopo il click il pulsante diventa "WhatsApp inviato ✓" (stato persistito in `localStorage`)
+2. **"Conferma appuntamento"** (visibile solo dopo WA inviato) → dialog inline "Hai ricevuto conferma dal cliente?" → conferma chiama RPC `owner_confirm_booking` (atomica: verifica ownership, aggiorna booking, crea appuntamento, copia telefono)
+- **"Rifiuta"** sempre visibile → dialog inline "Rifiutare la prenotazione?" → aggiorna `status = 'cancelled'`
+- I nomi dei servizi vengono letti da `bookings.service_names` (multi-servizio) con fallback a `services.name` (singolo)
 
 **Dipendenti:** bottone "Dipendenti" apre modal centrato (backdrop blur) con CRUD nomi e colori. Chiudibile toccando fuori.
 
@@ -292,17 +296,21 @@ const slug = parts.length >= 3 && parts[0] !== 'www' ? parts[0] : paramSlug
 
 ## 14. Form prenotazione online (BookingSection)
 
-Wizard a 4-5 step integrato nel sito pubblico. Accessibile da chiunque senza login.
+Wizard a 6 step integrato nel sito pubblico. Accessibile da chiunque senza login.
 
-**Step SERVICE** (se più servizi disponibili): selezione servizio con durata e prezzo
+**Step SERVICE** (se più servizi disponibili): selezione multipla con checkbox. Ogni click alterna selezione/deselezione. Barra totale in tempo reale: "Totale: 45min — €50". Se c'è un solo servizio, questo step viene saltato automaticamente.
 
 **Step DATE:** `<input type="date">` con min = oggi, max = +60 giorni
 
-**Step SLOT:** carica slot liberi via RPC `get_taken_slots()` + `generateSlots()` che esclude i conflitti con appuntamenti esistenti. Rispetta gli orari di apertura del business (formato vecchio e nuovo)
+**Step SLOT:** carica slot liberi via RPC `get_taken_slots()` + `generateSlots()` che esclude i conflitti con appuntamenti esistenti. Rispetta entrambi i formati `opening_hours` (vecchio `open`/`close` e nuovo `morning`/`afternoon` con flag `active`)
 
-**Step FORM:** nome, email, telefono (opzionale)
+**Step FORM:** nome *, email *, telefono * (ora obbligatorio — necessario per la conferma WhatsApp)
 
-**Step SUCCESS:** conferma prenotazione inviata. Il titolare riceve Web Push push + aggiornamento badge in dashboard.
+**Step CONFIRM** (nuovo): riepilogo completo prima dell'invio — servizi, durata totale, prezzo totale, data, ora, nome, telefono. Disclaimer: "La tua richiesta è stata ricevuta da [attività]. Riceverai un messaggio WhatsApp al numero [tel] — dovrai rispondere per confermare. Senza conferma la prenotazione non sarà valida."
+
+**Step SUCCESS:** "Richiesta inviata!" con istruzioni risposta WhatsApp e contatto diretto dell'attività (usa `business.whatsapp ?? business.phone`). Il titolare riceve notifica push + aggiornamento badge in dashboard.
+
+**Parametri passati a `create_booking`:** `p_service_id` (primo servizio selezionato), `p_service_names` (nomi separati da virgola di tutti i servizi).
 
 **Anti-abuso:** RPC `create_booking` controlla che non esista già un `pending` per la stessa email + business.
 
@@ -368,7 +376,15 @@ Accesso riservato a utenti con `app_metadata.role = 'admin'`.
 - Anticipo configurabile: 0, 1 o 5 minuti (salvato in `localStorage`)
 - `notifyNextAppointment()`: ricalcola dopo ogni completamento
 
-**Web Push server-side** (`notify-new-booking` Edge Function): triggered da Database Webhook su `bookings INSERT` → invia push a tutti i dispositivi del titolare tramite VAPID.
+**Web Push server-side** (`notify-new-booking` Edge Function): triggered da trigger PostgreSQL `on_new_booking` su `bookings AFTER INSERT` → invia push a tutti i dispositivi del titolare tramite VAPID.
+
+**Setup VAPID (una tantum):**
+- `VITE_VAPID_PUBLIC_KEY` su Vercel (frontend)
+- `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` nei secrets di Supabase Edge Functions
+- `config.toml` nella cartella della funzione con `verify_jwt = false` (il trigger non invia JWT)
+- Trigger SQL su `bookings` senza Authorization header
+
+**⚠️ Re-subscription dopo rideploy:** dopo ogni `supabase functions deploy notify-new-booking`, il titolare deve disattivare e riattivare il toggle notifiche in Settings per rinnovare la subscription push.
 
 ---
 
