@@ -149,29 +149,34 @@ export default function Dashboard() {
   }[section]
 
   useEffect(() => {
-    if (!business) return
+    if (!business?.id) return
+
+    let mounted = true
+    const businessId = business.id
 
     const fetchCount = () =>
       supabase
         .from('bookings')
         .select('*', { count: 'exact', head: true })
-        .eq('business_id', business.id)
+        .eq('business_id', businessId)
         .eq('status', 'pending')
-        .then(({ count }) => setPendingCount(count ?? 0))
+        .then(({ count }) => { if (mounted) setPendingCount(count ?? 0) })
 
     fetchCount()
 
-    // Rifai il count ogni volta che il titolare torna sul tab
+    // Rifai il count solo quando il tab torna visibile
     // (cattura eventi Realtime mancati durante tab in background)
-    const onFocus = () => fetchCount()
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') fetchCount()
+    }
     document.addEventListener('visibilitychange', onFocus)
 
-    const channel = supabase.channel(`pending-bookings-${business.id}`)
+    const channel = supabase.channel(`pending-bookings-${businessId}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'bookings',
-        filter: `business_id=eq.${business.id}`,
+        filter: `business_id=eq.${businessId}`,
       }, async (payload) => {
         if (payload.new?.status !== 'pending') return
         let serviceName = 'un servizio'
@@ -180,6 +185,7 @@ export default function Dashboard() {
             .from('services').select('name').eq('id', payload.new.service_id).maybeSingle()
           if (svc?.name) serviceName = svc.name
         }
+        if (!mounted) return
         notifyNewBooking(payload.new.customer_name, serviceName, payload.new.appointment_date, payload.new.appointment_time)
         fetchCount()
       })
@@ -187,17 +193,18 @@ export default function Dashboard() {
         event: 'UPDATE',
         schema: 'public',
         table: 'bookings',
-        filter: `business_id=eq.${business.id}`,
+        filter: `business_id=eq.${businessId}`,
       }, () => { fetchCount() })
       .subscribe((status, err) => {
         if (status === 'CHANNEL_ERROR') console.error('[Realtime] bookings:', err)
       })
 
     return () => {
+      mounted = false
       document.removeEventListener('visibilitychange', onFocus)
       supabase.removeChannel(channel)
     }
-  }, [business])
+  }, [business?.id]) // primitivo stabile — evita reconnessioni su ogni refresh dell'oggetto business
 
   const navigate_section = (id, opts = {}) => {
     if (id === 'agenda') setAgendaInitialView(opts.view ?? 'day')
