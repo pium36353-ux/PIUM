@@ -70,10 +70,13 @@ export default function Onboarding() {
   useEffect(() => () => { mountedRef.current = false }, [])
 
   useEffect(() => {
+    let alive = true
     supabase.auth.getUser().then(({ data }) => {
+      if (!alive) return
       if (!data.user) navigate('/auth', { replace: true })
       else if (data.user.app_metadata?.role === 'admin') navigate('/admin', { replace: true })
     })
+    return () => { alive = false }
   }, [navigate])
 
   const set = (field) => (e) => {

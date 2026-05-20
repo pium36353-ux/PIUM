@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { generateWithClaude } from '../../lib/claude'
 import { logActivity } from '../../lib/activityLog'
@@ -99,7 +99,7 @@ export default function Social({ business }) {
   const [deletedToast, setDeletedToast] = useState(false)
 
   /* ── Load ── */
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal = null) => {
     if (!business) return
     setLoading(true)
     const { data } = await supabase
@@ -107,18 +107,23 @@ export default function Social({ business }) {
       .select('*')
       .eq('business_id', business.id)
       .order('created_at', { ascending: false })
+    if (signal?.cancelled) return
     setDrafts(data ?? [])
     setLoading(false)
   }, [business])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    load(signal)
+    return () => { signal.cancelled = true }
+  }, [load])
 
   /* ── Filtered drafts ── */
-  const filtered = drafts.filter(d => {
+  const filtered = useMemo(() => drafts.filter(d => {
     if (filterPlatform !== 'tutti' && d.platform !== filterPlatform) return false
     if (filterStatus   !== 'tutti' && d.status   !== filterStatus)   return false
     return true
-  })
+  }), [drafts, filterPlatform, filterStatus])
 
   /* ── Generate ── */
   const handleGenerate = async () => {

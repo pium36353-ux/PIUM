@@ -36,8 +36,14 @@ Deno.serve(async (req) => {
     }
 
     const { prompt } = await req.json()
-    if (!prompt || typeof prompt !== 'string') {
+    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
       return new Response(JSON.stringify({ error: 'Missing prompt' }), {
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+    if (prompt.length > 20_000) {
+      return new Response(JSON.stringify({ error: 'Prompt too long' }), {
         status: 400,
         headers: { ...CORS, 'Content-Type': 'application/json' },
       })

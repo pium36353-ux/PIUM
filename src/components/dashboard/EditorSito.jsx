@@ -24,19 +24,21 @@ export default function EditorSito({ business }) {
 
   useEffect(() => {
     if (!business) return
+    let alive = true
     async function load() {
       setLoading(true)
       const { data: rows } = await supabase
         .from('site_content')
         .select('*')
         .eq('business_id', business.id)
-      // Indicizza per block_key
+      if (!alive) return
       const byBlock = {}
       for (const row of rows ?? []) byBlock[row.block_key] = row
       setContent(byBlock)
       setLoading(false)
     }
     load()
+    return () => { alive = false }
   }, [business])
 
   if (!business) {

@@ -8,6 +8,10 @@ async function verifyStripeSignature(body: string, sigHeader: string, secret: st
     const v1        = parts['v1']
     if (!timestamp || !v1) return false
 
+    // Reject webhooks older than 5 minutes to prevent replay attacks
+    const now = Math.floor(Date.now() / 1000)
+    if (Math.abs(now - parseInt(timestamp, 10)) > 300) return false
+
     const payload   = `${timestamp}.${body}`
     const key       = await crypto.subtle.importKey(
       'raw',

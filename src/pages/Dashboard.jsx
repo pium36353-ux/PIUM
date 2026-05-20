@@ -45,7 +45,9 @@ export default function Dashboard() {
   const [loadError,          setLoadError]          = useState(false)
 
   useEffect(() => {
+    let alive = true
     supabase.auth.getUser().then(({ data }) => {
+      if (!alive) return
       if (!data.user) { navigate('/auth'); return }
       setUser(data.user)
       supabase
@@ -54,11 +56,13 @@ export default function Dashboard() {
         .eq('user_id', data.user.id)
         .maybeSingle()
         .then(({ data: biz, error }) => {
+          if (!alive) return
           if (error) { setLoadError(true); return }
           if (!biz) { navigate('/onboarding'); return }
           setBusiness(biz)
         })
     })
+    return () => { alive = false }
   }, [navigate])
 
   const handleSignOut = async () => {

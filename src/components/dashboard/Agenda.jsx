@@ -1137,7 +1137,7 @@ function WheelColumn({ items, value, onChange }) {
 /* ── WhatsApp helper ── */
 function buildWaLink(phone, message) {
   const clean = phone?.replace(/\D/g, '')
-  if (!clean) return null
+  if (!clean || clean.length < 6) return null
   return `https://wa.me/${clean}?text=${encodeURIComponent(message)}`
 }
 

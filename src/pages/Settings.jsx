@@ -33,10 +33,13 @@ export default function Settings() {
   const [pushStatus, setPushStatus]   = useState('idle')
 
   useEffect(() => {
+    let alive = true
     supabase.auth.getUser().then(({ data }) => {
+      if (!alive) return
       if (!data.user) { navigate('/auth', { replace: true }); return }
       setUser(data.user)
     })
+    return () => { alive = false }
   }, [navigate])
 
   useEffect(() => {

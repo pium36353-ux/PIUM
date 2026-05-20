@@ -30,11 +30,13 @@ export default function Auth() {
     const ref = new URLSearchParams(window.location.search).get('ref')
     if (ref) localStorage.setItem('pium_ref', ref)
 
+    let alive = true
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return
+      if (!alive || !session) return
       const role = session.user?.app_metadata?.role
       navigate(role === 'admin' ? '/admin' : '/dashboard', { replace: true })
     })
+    return () => { alive = false }
   }, [navigate])
 
   const set = (id) => (e) => setValues((v) => ({ ...v, [id]: e.target.value }))

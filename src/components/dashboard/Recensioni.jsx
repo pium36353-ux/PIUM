@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { generateWithClaude } from '../../lib/claude'
 import { logActivity } from '../../lib/activityLog'
@@ -110,9 +110,12 @@ export default function Recensioni({ business }) {
   }, [load])
 
   /* ── Filtered + stats ── */
-  const filtered = filterRating === 0 ? reviews : reviews.filter(r => r.rating === filterRating)
-  const avg      = avgRating(reviews)
-  const counts   = [5,4,3,2,1].map(n => reviews.filter(r => r.rating === n).length)
+  const filtered = useMemo(
+    () => filterRating === 0 ? reviews : reviews.filter(r => r.rating === filterRating),
+    [reviews, filterRating]
+  )
+  const avg      = useMemo(() => avgRating(reviews), [reviews])
+  const counts   = useMemo(() => [5,4,3,2,1].map(n => reviews.filter(r => r.rating === n).length), [reviews])
 
   /* ── Reply helpers ── */
   const setReply = (id, patch) =>

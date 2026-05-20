@@ -132,8 +132,19 @@ export default function BookingSection({ business, services }) {
   }
 
   function goToConfirm() {
-    if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
+    const name  = form.name.trim()
+    const email = form.email.trim()
+    const phone = form.phone.trim()
+    if (!name || !email || !phone) {
       setError('Nome, email e telefono sono obbligatori')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Inserisci un indirizzo email valido')
+      return
+    }
+    if (!/^[\d\s\+\-\(\)]{6,20}$/.test(phone)) {
+      setError('Inserisci un numero di telefono valido')
       return
     }
     setError(null)
@@ -157,7 +168,7 @@ export default function BookingSection({ business, services }) {
     })
     submittingRef.current = false
     setSubmitting(false)
-    if (e) { setError(e.message); return }
+    if (e) { setError('Si è verificato un errore. Riprova tra qualche istante.'); return }
     setStep(STEPS.SUCCESS)
   }
 

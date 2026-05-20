@@ -24,9 +24,11 @@ export default function AffiliatesAuth() {
   const [registered, setRegistered] = useState(false)
 
   useEffect(() => {
+    let alive = true
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate('/affiliates', { replace: true })
+      if (alive && session) navigate('/affiliates', { replace: true })
     })
+    return () => { alive = false }
   }, [navigate])
 
   const set = (id) => (e) => setValues(v => ({ ...v, [id]: e.target.value }))

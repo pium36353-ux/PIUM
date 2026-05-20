@@ -71,22 +71,26 @@ export default function Admin() {
 
   /* ── Auth + role check ── */
   useEffect(() => {
+    let alive = true
     supabase.auth.getUser().then(({ data }) => {
+      if (!alive) return
       if (!data.user) { navigate('/x-admin-login'); return }
       const role = data.user.app_metadata?.role
       if (role !== 'admin') { setDenied(true); setLoading(false); return }
       setUser(data.user)
     })
+    return () => { alive = false }
   }, [navigate])
 
   /* ── Load businesses ── */
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal = null) => {
     if (!user) return
     setLoading(true)
     const { data, error } = await supabase
       .from('businesses')
       .select('id, name, email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
       .order('created_at', { ascending: false })
+    if (signal?.cancelled) return
     if (error) {
       setLoadError('Errore nel caricamento dei clienti. Riprova o controlla la connessione.')
     } else {
@@ -96,7 +100,11 @@ export default function Admin() {
     setLoading(false)
   }, [user])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    load(signal)
+    return () => { signal.cancelled = true }
+  }, [load])
 
   /* ── Drawer ── */
   const openDrawer = useCallback(async (biz) => {

@@ -5,7 +5,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const APP_URL = 'https://www.piumapp.com'
+const APP_URL = Deno.env.get('APP_URL') ?? 'https://www.piumapp.com'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

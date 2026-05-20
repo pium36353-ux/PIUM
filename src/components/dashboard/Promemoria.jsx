@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 
@@ -94,13 +94,13 @@ export default function Promemoria({ business }) {
   }, [load])
 
   /* ── Filtered ── */
-  const filtered = reminders.filter(r => {
+  const filtered = useMemo(() => reminders.filter(r => {
     if (filterStatus   !== 'tutti' && r.status   !== filterStatus)   return false
     if (filterPriority !== 'tutti' && r.priority !== filterPriority) return false
     return true
-  })
+  }), [reminders, filterStatus, filterPriority])
 
-  const pending = reminders.filter(r => r.status === 'pending').length
+  const pending = useMemo(() => reminders.filter(r => r.status === 'pending').length, [reminders])
 
   /* ── Modal helpers ── */
   const openAdd = () => {

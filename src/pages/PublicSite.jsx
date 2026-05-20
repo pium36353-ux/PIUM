@@ -20,6 +20,7 @@ export default function PublicSite() {
   const [isOwner,     setIsOwner]     = useState(false)
 
   useEffect(() => {
+    let alive = true
     async function load() {
       const [{ data: biz, error }, { data: { session } }] = await Promise.all([
         supabase
@@ -38,6 +39,7 @@ export default function PublicSite() {
         supabase.auth.getSession(),
       ])
 
+      if (!alive) return
       if (error || !biz) { setStatus('notfound'); return }
 
       const svcs = (biz.services ?? [])
@@ -72,7 +74,7 @@ export default function PublicSite() {
       document.title = `${biz.name} — PIUM`
     }
     load()
-    return () => { document.title = 'PIUM' }
+    return () => { alive = false; document.title = 'PIUM' }
   }, [slug])
 
   useEffect(() => {
