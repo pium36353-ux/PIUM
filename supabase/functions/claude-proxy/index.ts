@@ -84,6 +84,7 @@ Deno.serve(async (req) => {
         max_tokens: 1000,
         messages: [{ role: 'user', content: prompt }],
       }),
+      signal: AbortSignal.timeout(25_000),
     })
 
     if (!response.ok) {

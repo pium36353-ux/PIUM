@@ -145,21 +145,23 @@ export default function Agenda({ business, initialView = 'day' }) {
   /* ── Load ── */
   const loadEmployees = useCallback(async () => {
     if (!business) return
-    const { data } = await supabase.from('employees').select('*').eq('business_id', business.id).order('created_at')
+    const { data, error } = await supabase.from('employees').select('*').eq('business_id', business.id).order('created_at')
+    if (error) { console.error('[loadEmployees]', error); return }
     setEmployees(data ?? [])
   }, [business])
 
   const loadServices = useCallback(async () => {
     if (!business) return
     setServicesLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('services')
       .select('id, name, price, duration_min')
       .eq('business_id', business.id)
       .eq('is_available', true)
       .order('sort_order')
-    setServices(data ?? [])
     setServicesLoading(false)
+    if (error) { console.error('[loadServices]', error); return }
+    setServices(data ?? [])
   }, [business])
 
   const loadAppointments = useCallback(async (signal = null) => {
@@ -174,21 +176,23 @@ export default function Agenda({ business, initialView = 'day' }) {
     } else {
       q = q.eq('date', formatDate(selectedDay))
     }
-    const { data } = await q.order('date').order('start_time')
+    const { data, error } = await q.order('date').order('start_time')
     if (signal?.cancelled) return
+    setLoading(false)
+    if (error) { console.error('[loadAppointments]', error); return }
     setAppointments(data ?? [])
     scheduleAllTodayNotifications(data ?? [])
-    setLoading(false)
   }, [business, view, monthDate, selectedDay])
 
   const loadPendingBookings = useCallback(async () => {
     if (!business) return
-    const { data } = await supabase.from('bookings')
+    const { data, error } = await supabase.from('bookings')
       .select('*, services(name)')
       .eq('business_id', business.id)
       .eq('status', 'pending')
       .order('appointment_date')
       .order('appointment_time')
+    if (error) { console.error('[loadPendingBookings]', error); return }
     setPendingBookings(data ?? [])
   }, [business])
 
@@ -406,15 +410,17 @@ export default function Agenda({ business, initialView = 'day' }) {
   const toggleCompleted = async (apt) => {
     setTogglingId(apt.id)
     const newCompleted = !apt.completed
-    await supabase.from('appointments').update({ completed: newCompleted }).eq('id', apt.id)
+    const { error } = await supabase.from('appointments').update({ completed: newCompleted }).eq('id', apt.id)
+    setTogglingId(null)
+    if (error) { console.error('[toggleCompleted]', error); return }
     const updated = appointments.map(a => a.id === apt.id ? { ...a, completed: newCompleted } : a)
     setAppointments(updated)
     if (newCompleted) notifyNextAppointment(updated)
-    setTogglingId(null)
   }
 
   const deleteAppointment = async (id) => {
-    await supabase.from('appointments').delete().eq('id', id)
+    const { error } = await supabase.from('appointments').delete().eq('id', id)
+    if (error) { console.error('[deleteAppointment]', error); return }
     setAppointments(prev => prev.filter(a => a.id !== id))
     setConfirmDelId(null)
   }
@@ -422,8 +428,9 @@ export default function Agenda({ business, initialView = 'day' }) {
   const confirmPendingBooking = async (id) => {
     setProcessingId(id)
     setConfirmDialogId(null)
-    await supabase.rpc('owner_confirm_booking', { p_booking_id: id })
+    const { error } = await supabase.rpc('owner_confirm_booking', { p_booking_id: id })
     setProcessingId(null)
+    if (error) { console.error('[confirmPendingBooking]', error); return }
     loadPendingBookings()
     loadAppointments()
   }
@@ -441,8 +448,9 @@ export default function Agenda({ business, initialView = 'day' }) {
   const rejectPendingBooking = async (id) => {
     setProcessingId(id)
     setRejectDialogId(null)
-    await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id)
+    const { error } = await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id)
     setProcessingId(null)
+    if (error) { console.error('[rejectPendingBooking]', error); return }
     loadPendingBookings()
   }
 
@@ -451,14 +459,16 @@ export default function Agenda({ business, initialView = 'day' }) {
   const handleSaveEmployee = async () => {
     if (!empForm.name.trim()) return
     setSavingEmp(true)
-    await supabase.from('employees').insert({ business_id: business.id, name: empForm.name.trim(), color: empForm.color })
+    const { error } = await supabase.from('employees').insert({ business_id: business.id, name: empForm.name.trim(), color: empForm.color })
     setSavingEmp(false)
+    if (error) { console.error('[handleSaveEmployee]', error); return }
     setEmpForm(EMPTY_EMP)
     loadEmployees()
   }
   const handleDeleteEmployee = async (id) => {
     setDeletingEmpId(id)
-    await supabase.from('employees').delete().eq('id', id)
+    const { error } = await supabase.from('employees').delete().eq('id', id)
+    if (error) { console.error('[handleDeleteEmployee]', error); setDeletingEmpId(null); return }
     setEmployees(prev => prev.filter(e => e.id !== id))
     setDeletingEmpId(null)
   }

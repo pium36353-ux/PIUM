@@ -36,14 +36,15 @@ export default function Servizi({ business }) {
   const load = useCallback(async () => {
     if (!business) return
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('services')
       .select('*')
       .eq('business_id', business.id)
       .order('sort_order')
       .order('created_at')
-    setServices(data ?? [])
     setLoading(false)
+    if (error) { console.error('[loadServices]', error); return }
+    setServices(data ?? [])
   }, [business])
 
   useEffect(() => { load() }, [load])
@@ -104,14 +105,16 @@ export default function Servizi({ business }) {
     }
 
     if (modal === 'add') {
-      await supabase.from('services').insert({
+      const { error } = await supabase.from('services').insert({
         ...payload,
         business_id: business.id,
         sort_order:  services.length,
       })
+      if (error) { console.error('[handleSave insert]', error); setSaving(false); return }
       logActivity(business.id, business.user_id, 'service_added', `Servizio aggiunto: ${payload.name}`)
     } else {
-      await supabase.from('services').update(payload).eq('id', editingId)
+      const { error } = await supabase.from('services').update(payload).eq('id', editingId)
+      if (error) { console.error('[handleSave update]', error); setSaving(false); return }
       logActivity(business.id, business.user_id, 'service_updated', `Servizio modificato: ${payload.name}`)
     }
 
@@ -122,10 +125,11 @@ export default function Servizi({ business }) {
 
   /* ── Toggle availability ── */
   const toggleAvailable = async (s) => {
-    await supabase
+    const { error } = await supabase
       .from('services')
       .update({ is_available: !s.is_available })
       .eq('id', s.id)
+    if (error) { console.error('[toggleAvailable]', error); return }
     setServices((prev) =>
       prev.map((x) => x.id === s.id ? { ...x, is_available: !x.is_available } : x)
     )
@@ -135,7 +139,8 @@ export default function Servizi({ business }) {
   /* ── Delete ── */
   const handleDelete = async (id) => {
     setDeletingId(id)
-    await supabase.from('services').delete().eq('id', id)
+    const { error } = await supabase.from('services').delete().eq('id', id)
+    if (error) { console.error('[handleDelete]', error); setDeletingId(null); return }
     setServices((prev) => prev.filter((s) => s.id !== id))
     setDeletingId(null)
     setConfirmId(null)

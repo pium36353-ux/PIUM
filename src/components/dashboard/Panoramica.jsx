@@ -76,47 +76,54 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
     const sevenDaysLater = new Date(); sevenDaysLater.setDate(sevenDaysLater.getDate() + 7)
     const sevenDaysStr = sevenDaysLater.toISOString().split('T')[0]
 
-    const [
-      { count: cServizi },
-      { count: cRecensioni },
-      { count: cAppuntamenti },
-      { count: cSocial },
-      { count: cPromemoria },
-      { data: apts },
-      { data: rems },
-      { data: doneApts },
-      { data: doneRems },
-    ] = await Promise.all([
-      supabase.from('services').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
-      supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
-      supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('date', today).eq('completed', false),
-      supabase.from('social_drafts').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'draft'),
-      supabase.from('reminders').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'pending').lte('due_at', sevenDaysStr),
-      supabase.from('appointments').select('id, client_name, date, start_time, employees(name, color)').eq('business_id', business.id).gte('date', today).eq('completed', false).order('date').order('start_time').limit(5),
-      supabase.from('reminders').select('id, title, due_at, priority').eq('business_id', business.id).eq('status', 'pending').gte('due_at', today).order('due_at').limit(5),
-      supabase.from('appointments').select('id, client_name, date, updated_at').eq('business_id', business.id).eq('completed', true).order('updated_at', { ascending: false }).limit(5),
-      supabase.from('reminders').select('id, title, updated_at').eq('business_id', business.id).eq('status', 'done').order('updated_at', { ascending: false }).limit(5),
-    ])
+    try {
+      const [
+        { count: cServizi,      error: e1 },
+        { count: cRecensioni,   error: e2 },
+        { count: cAppuntamenti, error: e3 },
+        { count: cSocial,       error: e4 },
+        { count: cPromemoria,   error: e5 },
+        { data: apts,           error: e6 },
+        { data: rems,           error: e7 },
+        { data: doneApts,       error: e8 },
+        { data: doneRems,       error: e9 },
+      ] = await Promise.all([
+        supabase.from('services').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
+        supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
+        supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('date', today).eq('completed', false),
+        supabase.from('social_drafts').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'draft'),
+        supabase.from('reminders').select('*', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'pending').lte('due_at', sevenDaysStr),
+        supabase.from('appointments').select('id, client_name, date, start_time, employees(name, color)').eq('business_id', business.id).gte('date', today).eq('completed', false).order('date').order('start_time').limit(5),
+        supabase.from('reminders').select('id, title, due_at, priority').eq('business_id', business.id).eq('status', 'pending').gte('due_at', today).order('due_at').limit(5),
+        supabase.from('appointments').select('id, client_name, date, updated_at').eq('business_id', business.id).eq('completed', true).order('updated_at', { ascending: false }).limit(5),
+        supabase.from('reminders').select('id, title, updated_at').eq('business_id', business.id).eq('status', 'done').order('updated_at', { ascending: false }).limit(5),
+      ])
 
-    setCounts({
-      servizi:      cServizi      ?? 0,
-      recensioni:   cRecensioni   ?? 0,
-      appuntamenti: cAppuntamenti ?? 0,
-      bozzeSocial:  cSocial       ?? 0,
-      promemoria:   cPromemoria   ?? 0,
-    })
-    setUpcoming(apts ?? [])
-    setReminders(rems ?? [])
+      const firstError = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9
+      if (firstError) console.error('[Panoramica load]', firstError)
 
-    const merged = [
-      ...(doneApts ?? []).map(a => ({ id: 'a-' + a.id, icon: '📅', desc: `Appuntamento: ${a.client_name}`, section: 'agenda',     ts: a.updated_at })),
-      ...(doneRems ?? []).map(r => ({ id: 'r-' + r.id, icon: '🔔', desc: `Promemoria: ${r.title}`,         section: 'promemoria', ts: r.updated_at })),
-    ]
-    merged.sort((a, b) => (b.ts > a.ts ? 1 : -1))
-    setActivity(merged.slice(0, 5))
+      setCounts({
+        servizi:      cServizi      ?? 0,
+        recensioni:   cRecensioni   ?? 0,
+        appuntamenti: cAppuntamenti ?? 0,
+        bozzeSocial:  cSocial       ?? 0,
+        promemoria:   cPromemoria   ?? 0,
+      })
+      setUpcoming(apts ?? [])
+      setReminders(rems ?? [])
 
-    setLoading(false)
-    setCardsLoading(false)
+      const merged = [
+        ...(doneApts ?? []).map(a => ({ id: 'a-' + a.id, icon: '📅', desc: `Appuntamento: ${a.client_name}`, section: 'agenda',     ts: a.updated_at })),
+        ...(doneRems ?? []).map(r => ({ id: 'r-' + r.id, icon: '🔔', desc: `Promemoria: ${r.title}`,         section: 'promemoria', ts: r.updated_at })),
+      ]
+      merged.sort((a, b) => (b.ts > a.ts ? 1 : -1))
+      setActivity(merged.slice(0, 5))
+    } catch (err) {
+      console.error('[Panoramica load] unexpected', err)
+    } finally {
+      setLoading(false)
+      setCardsLoading(false)
+    }
   }, [business]) // eslint-disable-line
 
   useEffect(() => { load() }, [load])

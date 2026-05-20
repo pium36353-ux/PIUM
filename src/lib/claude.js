@@ -16,6 +16,7 @@ export async function generateWithClaude(prompt) {
       'Authorization': `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({ prompt }),
+    signal: AbortSignal.timeout(30_000),
   })
 
   if (!response.ok) {
