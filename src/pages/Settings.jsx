@@ -39,7 +39,11 @@ export default function Settings() {
     })
   }, [navigate])
 
-  useEffect(() => { isPushSubscribed().then(v => setPushSub(v)) }, [])
+  useEffect(() => {
+    let alive = true
+    isPushSubscribed().then(v => { if (alive) setPushSub(v) })
+    return () => { alive = false }
+  }, [])
 
   const handleSubscribePush = async () => {
     setPushStatus('saving')

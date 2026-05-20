@@ -19,13 +19,16 @@ export default function Affiliates() {
   const [copied,    setCopied]    = useState(false)
 
   useEffect(() => {
+    let alive = true
     supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (!alive) return
       if (s?.user?.app_metadata?.role === 'admin') {
         navigate('/admin', { replace: true })
         return
       }
       setSession(s ?? null)
     })
+    return () => { alive = false }
   }, [navigate])
 
   const loadData = useCallback(async (userId) => {

@@ -73,7 +73,7 @@ export default function Promemoria({ business }) {
   const [deletingId, setDeletingId] = useState(null)
 
   /* ── Load ── */
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal = null) => {
     if (!business) return
     setLoading(true)
     const { data } = await supabase
@@ -82,11 +82,16 @@ export default function Promemoria({ business }) {
       .eq('business_id', business.id)
       .order('due_at', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false })
+    if (signal?.cancelled) return
     setReminders(data ?? [])
     setLoading(false)
   }, [business])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    load(signal)
+    return () => { signal.cancelled = true }
+  }, [load])
 
   /* ── Filtered ── */
   const filtered = reminders.filter(r => {

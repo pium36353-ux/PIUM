@@ -77,7 +77,7 @@ export default function Recensioni({ business }) {
   const [deletedToast, setDeletedToast] = useState(false)
 
   /* ── Load ── */
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal = null) => {
     if (!business) return
     setLoading(true)
     const { data } = await supabase
@@ -85,6 +85,7 @@ export default function Recensioni({ business }) {
       .select('*')
       .eq('business_id', business.id)
       .order('reviewed_at', { ascending: false })
+    if (signal?.cancelled) return
     const list = data ?? []
     setReviews(list)
     // Init reply state from DB
@@ -102,7 +103,11 @@ export default function Recensioni({ business }) {
     setLoading(false)
   }, [business])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    load(signal)
+    return () => { signal.cancelled = true }
+  }, [load])
 
   /* ── Filtered + stats ── */
   const filtered = filterRating === 0 ? reviews : reviews.filter(r => r.rating === filterRating)

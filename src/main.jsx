@@ -36,9 +36,13 @@ if (isMainApp) {
   document.head.appendChild(appleIcon)
 
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
+    if (document.readyState === 'complete') {
       navigator.serviceWorker.register('/sw.js').catch(() => {})
-    })
+    } else {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {})
+      }, { once: true })
+    }
   }
 } else {
   // Public subdomain: unregister any previously installed SW to clean up

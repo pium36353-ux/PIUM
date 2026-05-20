@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { generateWithClaude } from '../lib/claude'
@@ -66,6 +66,8 @@ export default function Onboarding() {
   const [loading, setLoading]       = useState(false)
   const [loadingMsg, setLoadingMsg] = useState('')
   const [serverError, setServerError] = useState(null)
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -138,6 +140,7 @@ export default function Onboarding() {
       .single()
 
     if (error) {
+      if (!mountedRef.current) return
       setServerError('Errore nel salvataggio. Riprova tra qualche istante.')
       setLoading(false)
       return
@@ -146,6 +149,7 @@ export default function Onboarding() {
     if (affiliateCode) localStorage.removeItem('pium_ref')
 
     // 2. Generate AI description
+    if (!mountedRef.current) return
     setLoadingMsg('Generazione descrizione AI…')
     try {
       const prompt = buildDescriptionPrompt(form)

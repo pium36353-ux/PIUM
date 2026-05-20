@@ -143,9 +143,10 @@ export default function Agenda({ business, initialView = 'day' }) {
   }, []) // eslint-disable-line
 
   /* ── Load ── */
-  const loadEmployees = useCallback(async () => {
+  const loadEmployees = useCallback(async (signal = null) => {
     if (!business) return
     const { data, error } = await supabase.from('employees').select('*').eq('business_id', business.id).order('created_at')
+    if (signal?.cancelled) return
     if (error) { console.error('[loadEmployees]', error); return }
     setEmployees(data ?? [])
   }, [business])
@@ -184,7 +185,7 @@ export default function Agenda({ business, initialView = 'day' }) {
     scheduleAllTodayNotifications(data ?? [])
   }, [business, view, monthDate, selectedDay])
 
-  const loadPendingBookings = useCallback(async () => {
+  const loadPendingBookings = useCallback(async (signal = null) => {
     if (!business) return
     const { data, error } = await supabase.from('bookings')
       .select('*, services(name)')
@@ -192,17 +193,26 @@ export default function Agenda({ business, initialView = 'day' }) {
       .eq('status', 'pending')
       .order('appointment_date')
       .order('appointment_time')
+    if (signal?.cancelled) return
     if (error) { console.error('[loadPendingBookings]', error); return }
     setPendingBookings(data ?? [])
   }, [business])
 
-  useEffect(() => { loadEmployees() },       [loadEmployees])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadEmployees(signal)
+    return () => { signal.cancelled = true }
+  }, [loadEmployees])
   useEffect(() => {
     const signal = { cancelled: false }
     loadAppointments(signal)
     return () => { signal.cancelled = true }
   }, [loadAppointments])
-  useEffect(() => { loadPendingBookings() }, [loadPendingBookings])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadPendingBookings(signal)
+    return () => { signal.cancelled = true }
+  }, [loadPendingBookings])
 
   /* ── Modal helpers ── */
   const openModal = (date = formatDate(selectedDay), time = '09:00') => {

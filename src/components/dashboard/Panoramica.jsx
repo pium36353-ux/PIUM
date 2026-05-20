@@ -68,13 +68,14 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
   const [cardsLoading, setCardsLoading] = useState(true)
   const [completingId, setCompletingId] = useState(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal = null) => {
     if (!business) return
     setLoading(true)
     setCardsLoading(true)
-    const today = new Date().toISOString().split('T')[0]
-    const sevenDaysLater = new Date(); sevenDaysLater.setDate(sevenDaysLater.getDate() + 7)
-    const sevenDaysStr = sevenDaysLater.toISOString().split('T')[0]
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const sevenDaysLater = new Date(now); sevenDaysLater.setDate(sevenDaysLater.getDate() + 7)
+    const sevenDaysStr = `${sevenDaysLater.getFullYear()}-${String(sevenDaysLater.getMonth() + 1).padStart(2, '0')}-${String(sevenDaysLater.getDate()).padStart(2, '0')}`
 
     try {
       const [
@@ -99,6 +100,8 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
         supabase.from('reminders').select('id, title, updated_at').eq('business_id', business.id).eq('status', 'done').order('updated_at', { ascending: false }).limit(5),
       ])
 
+      if (signal?.cancelled) return
+
       const firstError = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9
       if (firstError) console.error('[Panoramica load]', firstError)
 
@@ -119,14 +122,21 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
       merged.sort((a, b) => (b.ts > a.ts ? 1 : -1))
       setActivity(merged.slice(0, 5))
     } catch (err) {
+      if (signal?.cancelled) return
       console.error('[Panoramica load] unexpected', err)
     } finally {
-      setLoading(false)
-      setCardsLoading(false)
+      if (!signal?.cancelled) {
+        setLoading(false)
+        setCardsLoading(false)
+      }
     }
   }, [business]) // eslint-disable-line
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    load(signal)
+    return () => { signal.cancelled = true }
+  }, [load])
 
   const markComplete = async (id) => {
     setCompletingId(id)

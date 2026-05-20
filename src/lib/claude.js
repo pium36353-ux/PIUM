@@ -27,6 +27,7 @@ export async function generateWithClaude(prompt) {
     throw new Error('Errore di connessione. Riprova.')
   }
 
-  const { text } = await response.json()
-  return text
+  const body = await response.json()
+  if (typeof body?.text !== 'string') throw new Error('Risposta non valida dal servizio AI.')
+  return body.text
 }

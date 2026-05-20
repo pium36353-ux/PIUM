@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 
 const STEPS = { SERVICE: 0, DATE: 1, SLOT: 2, FORM: 3, CONFIRM: 4, SUCCESS: 5 }
@@ -80,6 +80,7 @@ export default function BookingSection({ business, services }) {
   const [form, setForm]                   = useState({ name: '', email: '', phone: '' })
   const [submitting, setSubmitting]       = useState(false)
   const [error, setError]                 = useState(null)
+  const submittingRef                     = useRef(false)
 
   const totalDuration = selectedServices.reduce((acc, s) => acc + s.duration_min, 0)
   const totalPrice    = selectedServices.reduce((acc, s) => acc + (s.price ?? 0), 0)
@@ -140,6 +141,8 @@ export default function BookingSection({ business, services }) {
   }
 
   async function submitBooking() {
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
     setError(null)
     const { error: e } = await supabase.rpc('create_booking', {
@@ -152,6 +155,7 @@ export default function BookingSection({ business, services }) {
       p_time:           slot,
       p_service_names:  selectedServices.map(s => s.name).join(', '),
     })
+    submittingRef.current = false
     setSubmitting(false)
     if (e) { setError(e.message); return }
     setStep(STEPS.SUCCESS)

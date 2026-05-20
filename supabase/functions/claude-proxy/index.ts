@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
           }
 
       supabase.from('businesses').update(updates).eq('id', biz.id)
-        .then(() => {}).catch(() => {})
+        .then(() => {}).catch((err) => console.error('[claude-proxy] counter update failed:', err?.message ?? err))
     }
 
     return new Response(JSON.stringify({ text }), {

@@ -84,21 +84,24 @@ export default function Dashboard() {
   useEffect(() => {
     if (!pendingActivation || !user) return
 
+    let mounted = true
     let attempts = 0
     const MAX   = 5     // 5 × 2s = 10s max
     const DELAY = 2000
     let timer
+    let successTimer
 
     const poll = () => {
       attempts++
       supabase.from('businesses').select('*').eq('user_id', user.id).maybeSingle()
         .then(({ data: biz }) => {
+          if (!mounted) return
           if (!biz) return
           if (biz.status === 'active') {
             setBusiness(biz)
             setPendingActivation(false)
             setStripeSuccess(true)
-            setTimeout(() => setStripeSuccess(false), 6000)
+            successTimer = setTimeout(() => { if (mounted) setStripeSuccess(false) }, 6000)
             return
           }
           if (attempts < MAX) timer = setTimeout(poll, DELAY)
@@ -106,7 +109,11 @@ export default function Dashboard() {
     }
 
     timer = setTimeout(poll, DELAY)
-    return () => clearTimeout(timer)
+    return () => {
+      mounted = false
+      clearTimeout(timer)
+      clearTimeout(successTimer)
+    }
   }, [pendingActivation, user]) // eslint-disable-line
 
   const handleCheckout = async () => {
@@ -164,10 +171,12 @@ export default function Dashboard() {
 
     fetchCount()
 
-    // Rifai il count solo quando il tab torna visibile
-    // (cattura eventi Realtime mancati durante tab in background)
+    // Rifai il count solo quando il tab torna visibile — debounced per evitare refetch multipli
+    let focusTimer = null
     const onFocus = () => {
-      if (document.visibilityState === 'visible') fetchCount()
+      if (document.visibilityState !== 'visible') return
+      clearTimeout(focusTimer)
+      focusTimer = setTimeout(fetchCount, 400)
     }
     document.addEventListener('visibilitychange', onFocus)
 
@@ -201,8 +210,9 @@ export default function Dashboard() {
 
     return () => {
       mounted = false
+      clearTimeout(focusTimer)
       document.removeEventListener('visibilitychange', onFocus)
-      supabase.removeChannel(channel)
+      try { supabase.removeChannel(channel) } catch { /* già rimosso o non ancora connesso */ }
     }
   }, [business?.id]) // primitivo stabile — evita reconnessioni su ogni refresh dell'oggetto business
 

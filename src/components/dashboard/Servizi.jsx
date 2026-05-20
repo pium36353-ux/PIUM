@@ -33,7 +33,7 @@ export default function Servizi({ business }) {
   const [errors, setErrors]         = useState({})
   const [deletedToast, setDeletedToast] = useState(false)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal = null) => {
     if (!business) return
     setLoading(true)
     const { data, error } = await supabase
@@ -42,12 +42,17 @@ export default function Servizi({ business }) {
       .eq('business_id', business.id)
       .order('sort_order')
       .order('created_at')
+    if (signal?.cancelled) return
     setLoading(false)
     if (error) { console.error('[loadServices]', error); return }
     setServices(data ?? [])
   }, [business])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    load(signal)
+    return () => { signal.cancelled = true }
+  }, [load])
 
   /* ── Modal helpers ── */
   const openAdd = () => {

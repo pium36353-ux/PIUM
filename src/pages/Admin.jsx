@@ -1,7 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+
+/* ── Security helper: slug deve contenere solo [a-z0-9-] prima di essere usato in href ── */
+function safePublicUrl(slug) {
+  if (!slug || !/^[a-z0-9-]+$/.test(slug)) return null
+  return `https://${slug}.piumapp.com`
+}
 
 /* ── Constants ── */
 const PLANS = [
@@ -223,24 +229,26 @@ export default function Admin() {
     navigate('/auth')
   }
 
-  /* ── Filter + search ── */
-  const visible = businesses.filter(b => {
+  /* ── Filter + search — memoized to avoid re-scanning on every render ── */
+  const visible = useMemo(() => businesses.filter(b => {
     if (statusFilter !== 'tutti' && getStatus(b) !== statusFilter) return false
     if (search.trim()) {
       const q = search.toLowerCase()
       if (!b.name?.toLowerCase().includes(q) && !b.email?.toLowerCase().includes(q) && !b.city?.toLowerCase().includes(q)) return false
     }
     return true
-  })
+  }), [businesses, statusFilter, search])
 
-  /* ── Computed stats ── */
-  const total     = businesses.length
-  const attivi    = businesses.filter(b => getStatus(b) === 'active').length
-  const inTrial   = businesses.filter(b => getStatus(b) === 'trial').length
-  const scaduti   = businesses.filter(b => getStatus(b) === 'expired').length
-  const mrr       = businesses.filter(b => getStatus(b) === 'active').reduce((s, b) => s + Number(b.plan_price ?? 99), 0)
-  const convBase  = attivi + scaduti
-  const convRate  = convBase > 0 ? Math.round((attivi / convBase) * 100) : null
+  /* ── Computed stats — memoized ── */
+  const { total, attivi, inTrial, scaduti, mrr, convRate } = useMemo(() => {
+    const tot     = businesses.length
+    const act     = businesses.filter(b => getStatus(b) === 'active').length
+    const tri     = businesses.filter(b => getStatus(b) === 'trial').length
+    const exp     = businesses.filter(b => getStatus(b) === 'expired').length
+    const revenue = businesses.filter(b => getStatus(b) === 'active').reduce((s, b) => s + Number(b.plan_price ?? 99), 0)
+    const base    = act + exp
+    return { total: tot, attivi: act, inTrial: tri, scaduti: exp, mrr: revenue, convRate: base > 0 ? Math.round((act / base) * 100) : null }
+  }, [businesses])
 
   if (denied) return (
     <div className="adm-denied">
@@ -759,9 +767,7 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
               <button className="adm-drawer-action-btn" onClick={() => onCopyLink(biz)}>
                 {copied === biz.id ? <><IconCheck /> Link copiato</> : <><IconCopy /> Copia link sito</>}
               </button>
-              <a className="adm-drawer-action-btn adm-drawer-action-btn--outline" href={`https://${biz.slug}.piumapp.com`} target="_blank" rel="noreferrer">
-                <IconExternalLink /> Apri sito pubblico
-              </a>
+              {(() => { const url = safePublicUrl(biz.slug); return url ? <a className="adm-drawer-action-btn adm-drawer-action-btn--outline" href={url} target="_blank" rel="noreferrer"><IconExternalLink /> Apri sito pubblico</a> : null })()}
             </div>
           )}
 
