@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
         'Content-Type':   'application/x-www-form-urlencoded',
       },
       body: params.toString(),
+      signal: AbortSignal.timeout(10_000),
     })
 
     if (!stripeRes.ok) {

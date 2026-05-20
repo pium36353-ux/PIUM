@@ -62,7 +62,12 @@ Deno.serve(async (req) => {
     await Promise.all(
       subs.map(async (row: { id: string; subscription: webpush.PushSubscription }) => {
         try {
-          await webpush.sendNotification(row.subscription, payload)
+          await Promise.race([
+            webpush.sendNotification(row.subscription, payload),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('push_timeout')), 5_000)
+            ),
+          ])
           sent++
           console.log('[notify] Push inviato OK — sub_id:', row.id)
         } catch (err: unknown) {
