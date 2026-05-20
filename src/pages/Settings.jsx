@@ -12,6 +12,10 @@ export default function Settings() {
   const navigate = useNavigate()
   const [user, setUser] = useState(null)
 
+  const [email, setEmail]           = useState('')
+  const [emailStatus, setEmailStatus] = useState('idle')
+  const [emailError, setEmailError]   = useState('')
+
   const [pwd, setPwd]           = useState({ current: '', next: '', confirm: '' })
   const [pwdStatus, setPwdStatus] = useState('idle')
   const [pwdError, setPwdError] = useState('')
@@ -71,6 +75,18 @@ export default function Settings() {
     const ok = await testNotification()
     setTestStatus(ok ? 'sent' : 'error')
     setTimeout(() => setTestStatus('idle'), 3000)
+  }
+
+  const handleEmailSave = async (e) => {
+    e.preventDefault()
+    const trimmed = email.trim()
+    if (!trimmed) { setEmailError('Inserisci la nuova email.'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) { setEmailError('Email non valida.'); return }
+    if (trimmed === user?.email) { setEmailError('È già la tua email attuale.'); return }
+    setEmailStatus('saving')
+    const { error } = await supabase.auth.updateUser({ email: trimmed })
+    if (error) { setEmailError(error.message); setEmailStatus('error') }
+    else { setEmailStatus('ok'); setEmail('') }
   }
 
   const setP = (k, v) => { setPwd(p => ({ ...p, [k]: v })); setPwdError('') }
@@ -203,9 +219,34 @@ export default function Settings() {
           </div>
 
           <div className="sett-field">
-            <label className="sett-label">Email</label>
+            <label className="sett-label">Email attuale</label>
             <div className="sett-email">{user?.email ?? '…'}</div>
           </div>
+
+          <h3 className="sett-subsection-title">Cambia email</h3>
+          <form onSubmit={handleEmailSave} noValidate className="sett-pwd-form">
+            <div className="sett-field">
+              <label className="sett-label" htmlFor="sett-email-new">Nuova email</label>
+              <input
+                id="sett-email-new"
+                className="sett-input"
+                type="email"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setEmailError(''); setEmailStatus('idle') }}
+                placeholder="nuova@email.com"
+                autoComplete="email"
+              />
+            </div>
+            {emailError && <p className="sett-error"><IconAlert /> {emailError}</p>}
+            {emailStatus === 'ok' && (
+              <p className="sett-success">
+                <IconCheck /> Controlla la tua nuova email: ti abbiamo inviato un link di conferma. Il cambio sarà attivo dopo la conferma.
+              </p>
+            )}
+            <button className="sett-btn-primary" type="submit" disabled={emailStatus === 'saving'}>
+              {emailStatus === 'saving' ? 'Salvataggio…' : 'Aggiorna email'}
+            </button>
+          </form>
 
           <div className="sett-divider" />
 
