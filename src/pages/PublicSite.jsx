@@ -21,24 +21,36 @@ export default function PublicSite() {
 
   useEffect(() => {
     async function load() {
-      const { data: biz, error } = await supabase
-        .from('businesses')
-        .select('id, user_id, name, slug, category, business_type_custom, description, phone, whatsapp, email, address, city, profile_image, instagram_url, facebook_url, opening_hours')
-        .eq('slug', slug)
-        .eq('is_active', true)
-        .maybeSingle()
+      const [{ data: biz, error }, { data: { session } }] = await Promise.all([
+        supabase
+          .from('businesses')
+          .select(`
+            id, user_id, name, slug, category, business_type_custom, description,
+            phone, whatsapp, email, address, city, profile_image,
+            instagram_url, facebook_url, opening_hours,
+            services(*),
+            reviews(id, author_name, rating, body, reply, reviewed_at, is_visible),
+            site_content(*)
+          `)
+          .eq('slug', slug)
+          .eq('is_active', true)
+          .maybeSingle(),
+        supabase.auth.getSession(),
+      ])
 
       if (error || !biz) { setStatus('notfound'); return }
 
-      const [{ data: svcs }, { data: rvs }, { data: sc }] = await Promise.all([
-        supabase.from('services').select('*').eq('business_id', biz.id).eq('is_available', true).order('sort_order'),
-        supabase.from('reviews').select('id,author_name,rating,body,reply,reviewed_at').eq('business_id', biz.id).eq('is_visible', true).order('reviewed_at', { ascending: false }),
-        supabase.from('site_content').select('*').eq('business_id', biz.id),
-      ])
+      const svcs = (biz.services ?? [])
+        .filter(s => s.is_available)
+        .sort((a, b) => a.sort_order - b.sort_order)
+
+      const rvs = (biz.reviews ?? [])
+        .filter(r => r.is_visible)
+        .sort((a, b) => new Date(b.reviewed_at) - new Date(a.reviewed_at))
 
       // Indicizza per block_key, poi estrae solo i campi rilevanti per blocco
       const byBlock = {}
-      for (const row of sc ?? []) byBlock[row.block_key] = row
+      for (const row of biz.site_content ?? []) byBlock[row.block_key] = row
       let gallery_images = []
       try { if (byBlock.gallery?.body) gallery_images = JSON.parse(byBlock.gallery.body) } catch {}
 
@@ -50,23 +62,18 @@ export default function PublicSite() {
         cover_image_url: byBlock.cover?.cover_image_url ?? null,
         gallery_images,
       }
+
       setBusiness(biz)
       setSiteContent(scFlat)
-      setServices(svcs ?? [])
-      setReviews(rvs ?? [])
+      setServices(svcs)
+      setReviews(rvs)
+      setIsOwner(session?.user?.id === biz.user_id)
       setStatus('found')
       document.title = `${biz.name} — PIUM`
     }
     load()
     return () => { document.title = 'PIUM' }
   }, [slug])
-
-  useEffect(() => {
-    if (!business) return
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.id === business.user_id) setIsOwner(true)
-    })
-  }, [business])
 
   useEffect(() => {
     if (status !== 'found' || !business) return
