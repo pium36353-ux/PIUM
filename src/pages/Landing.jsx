@@ -201,7 +201,7 @@ export default function Landing() {
             <div className="ln-brand-icon ln-brand-icon--sm"><IconHome /></div>
             <Logo className="ln-footer-name" />
           </div>
-          <p className="ln-footer-copy">© {new Date().getFullYear()} <Logo /> · Tutti i diritti riservati</p>
+          <div className="ln-footer-copy">© {new Date().getFullYear()} <Logo /> · Tutti i diritti riservati</div>
           <div className="ln-footer-links">
             <a href="#" className="ln-footer-link">Privacy</a>
             <a href="#" className="ln-footer-link">Termini</a>
