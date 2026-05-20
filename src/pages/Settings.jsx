@@ -223,65 +223,69 @@ export default function Settings() {
             <div className="sett-email">{user?.email ?? '…'}</div>
           </div>
 
-          <h3 className="sett-subsection-title">Cambia email</h3>
-          <form onSubmit={handleEmailSave} noValidate className="sett-pwd-form">
-            <div className="sett-field">
-              <label className="sett-label" htmlFor="sett-email-new">Nuova email</label>
-              <input
-                id="sett-email-new"
-                className="sett-input"
-                type="email"
-                value={email}
-                onChange={e => { setEmail(e.target.value); setEmailError(''); setEmailStatus('idle') }}
-                placeholder="nuova@email.com"
-                autoComplete="email"
-              />
-            </div>
-            {emailError && <p className="sett-error"><IconAlert /> {emailError}</p>}
-            {emailStatus === 'ok' && (
-              <p className="sett-success">
-                <IconCheck /> Controlla la tua nuova email: ti abbiamo inviato un link di conferma. Il cambio sarà attivo dopo la conferma.
-              </p>
-            )}
-            <button className="sett-btn-primary" type="submit" disabled={emailStatus === 'saving'}>
-              {emailStatus === 'saving' ? 'Salvataggio…' : 'Aggiorna email'}
-            </button>
-          </form>
+          <div className="sett-account-block">
+            <h3 className="sett-subsection-title">Cambia email</h3>
+            <form onSubmit={handleEmailSave} noValidate className="sett-pwd-form">
+              <div className="sett-field">
+                <label className="sett-label" htmlFor="sett-email-new">Nuova email</label>
+                <input
+                  id="sett-email-new"
+                  className="sett-input"
+                  type="email"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); setEmailError(''); setEmailStatus('idle') }}
+                  placeholder="nuova@email.com"
+                  autoComplete="email"
+                />
+              </div>
+              {emailError && <p className="sett-error"><IconAlert /> {emailError}</p>}
+              {emailStatus === 'ok' && (
+                <p className="sett-success">
+                  <IconCheck /> Controlla la tua nuova email: ti abbiamo inviato un link di conferma. Il cambio sarà attivo dopo la conferma.
+                </p>
+              )}
+              <button className="sett-btn-primary sett-btn-primary--full" type="submit" disabled={emailStatus === 'saving'}>
+                {emailStatus === 'saving' ? 'Salvataggio…' : 'Aggiorna email'}
+              </button>
+            </form>
+          </div>
 
           <div className="sett-divider" />
 
-          <h3 className="sett-subsection-title">Cambia password</h3>
-          <form onSubmit={handlePasswordSave} noValidate className="sett-pwd-form">
-            <div className="sett-field">
-              <label className="sett-label" htmlFor="sett-pwd-next">Nuova password</label>
-              <input
-                id="sett-pwd-next"
-                className="sett-input"
-                type="password"
-                value={pwd.next}
-                onChange={e => setP('next', e.target.value)}
-                placeholder="Minimo 6 caratteri"
-                autoComplete="new-password"
-              />
-            </div>
-            <div className="sett-field">
-              <label className="sett-label" htmlFor="sett-pwd-confirm">Conferma nuova password</label>
-              <input
-                id="sett-pwd-confirm"
-                className="sett-input"
-                type="password"
-                value={pwd.confirm}
-                onChange={e => setP('confirm', e.target.value)}
-                placeholder="Ripeti la nuova password"
-                autoComplete="new-password"
-              />
-            </div>
-            {pwdError && <p className="sett-error"><IconAlert /> {pwdError}</p>}
-            {pwdStatus === 'ok' && <p className="sett-success"><IconCheck /> Password aggiornata.</p>}
-            <button className="sett-btn-primary" type="submit" disabled={pwdStatus === 'saving'}>
-              {pwdStatus === 'saving' ? 'Salvataggio…' : 'Aggiorna password'}
-            </button>
-          </form>
+          <div className="sett-account-block">
+            <h3 className="sett-subsection-title">Cambia password</h3>
+            <form onSubmit={handlePasswordSave} noValidate className="sett-pwd-form">
+              <div className="sett-field">
+                <label className="sett-label" htmlFor="sett-pwd-next">Nuova password</label>
+                <input
+                  id="sett-pwd-next"
+                  className="sett-input"
+                  type="password"
+                  value={pwd.next}
+                  onChange={e => setP('next', e.target.value)}
+                  placeholder="Minimo 6 caratteri"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="sett-field">
+                <label className="sett-label" htmlFor="sett-pwd-confirm">Conferma nuova password</label>
+                <input
+                  id="sett-pwd-confirm"
+                  className="sett-input"
+                  type="password"
+                  value={pwd.confirm}
+                  onChange={e => setP('confirm', e.target.value)}
+                  placeholder="Ripeti la nuova password"
+                  autoComplete="new-password"
+                />
+              </div>
+              {pwdError && <p className="sett-error"><IconAlert /> {pwdError}</p>}
+              {pwdStatus === 'ok' && <p className="sett-success"><IconCheck /> Password aggiornata.</p>}
+              <button className="sett-btn-primary sett-btn-primary--full" type="submit" disabled={pwdStatus === 'saving'}>
+                {pwdStatus === 'saving' ? 'Salvataggio…' : 'Aggiorna password'}
+              </button>
+            </form>
+          </div>
         </section>
 
         {/* ── Esci ── */}
