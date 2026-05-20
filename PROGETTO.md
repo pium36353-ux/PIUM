@@ -28,6 +28,8 @@
 | 24 | Rubrica clienti con storico | ✅ |
 | 25 | Multi-servizio per appuntamento | ✅ |
 | 26 | Importazione contatti (vCard + Android) | ✅ |
+| 27 | Cambio email in Impostazioni | ✅ |
+| 28 | Audit sicurezza + fix completo (CRITICO/ALTO/MEDIO/BASSO) | ✅ |
 
 ---
 
@@ -63,13 +65,14 @@
 - **Auth**: registrazione email/password, login, logout, reset password
 - **Onboarding**: wizard guidato con generazione slug univoco (`bar-roma`, `bar-roma-2`), categoria attività, orari, descrizione
 - **Dashboard**:
-  - *Panoramica*: hero card appuntamenti oggi + calendario mensile, contatori (promemoria, servizi, bozze social, recensioni), card prossime attività, card promemoria in scadenza, card attività completate, barra utilizzo AI con reset mensile
+  - *Panoramica*: hero grid 2 card (appuntamenti oggi + calendario mensile), contatori compatti (promemoria, servizi, bozze social, recensioni), card "Prossime attività" full-width con segna-completato inline, card "Promemoria" con urgenza colorata, card "Attività completate", barra utilizzo AI con reset mensile
   - *Agenda*: vista giornaliera con timeline slot 30 min, vista mensile con griglia; drum-scroll date picker; gestione dipendenti (modal centrato); prenotazioni pubbliche con sistema pending/conferma; notifiche push appuntamenti
   - *Servizi*: CRUD completo, toast eliminazione
   - *Social*: generazione bozze AI con Claude (include link sito pubblico nel testo), approvazione/eliminazione, toast eliminazione
   - *Recensioni*: lista recensioni, risposta AI con Claude, toast eliminazione
   - *Promemoria*: CRUD, stati pending/done, urgenza colorata (rosso/arancio/verde)
   - *Editor Sito*: modifica dati attività, caricamento foto profilo + galleria (max 20 foto, compressione auto), orari, descrizione
+- **Impostazioni**: cambio email con OTP Supabase, cambio password, gestione notifiche push (permesso, test, abilitazione/disabilitazione), impostazione minuti preavviso appuntamento
 - **Sito pubblico**: `nomeattivita.piumapp.com` via Cloudflare Worker, pagina pubblica con servizi, galleria carosello, form prenotazione
 - **Notifiche push**: PWA installabile, notifiche X minuti prima degli appuntamenti, azione "✓ Fatto" dalla notifica, impostazioni personalizzabili
 - **Bot supporto**: FAQ PIUM rispondibile via chat
@@ -102,6 +105,72 @@
 - Cloudflare Worker: proxy trasparente sottodomini `*.piumapp.com → www.piumapp.com`
 - GDPR: Privacy Policy, Termini di Servizio, DPA, Cookie Policy generati
 - Email `info@piumapp.com` attiva con forwarding su Cloudflare
+
+---
+
+## Sessione corrente — 2026-05-20
+
+### Performance e ottimizzazioni DB
+
+- ✅ **12 indici database** (migration `20260520_performance_indexes.sql`): `businesses.user_id` e `businesses.slug` (ogni page load), `appointments.business_id` (tabella più interrogata), indice composito `(business_id, date, completed)` e `(business_id, updated_at)`, `reviews.is_visible`, `bookings.status`, `reminders.(business_id, due_at)`, `social_drafts.(business_id, status)`, trigram GIN su `contacts.name/phone` e `appointments.client_name` per ILIKE veloci
+- ✅ **PublicSite ottimizzato** — da 5 query in serie a 2 richieste parallele con `Promise.all`: `businesses` con embed PostgREST (`services(*)`, `reviews(...)`, `site_content(*)`) + `auth.getSession()` in un'unica onda. Filtraggio `is_available`/`is_visible` spostato lato client. Rimosso il secondo `useEffect` separato per l'auth
+
+### Robustezza e error handling
+
+- ✅ **Error handling su tutte le mutazioni** (commit `3b03334`): `Agenda.jsx` — `toggleCompleted`, `deleteAppointment`, `confirmPendingBooking`, `rejectPendingBooking`, `handleSaveEmployee`, `handleDeleteEmployee` tutti con try/catch, rollback UI su errore, toast visibile; `Servizi.jsx` — `handleSave` (insert/update), `toggleAvailable`, `handleDelete` con la stessa logica. Panoramica avvolta in try/catch/finally con `setLoading(false)` garantito
+- ✅ **Timeout espliciti su tutte le chiamate esterne** (commit `5c19f90`): `claude.js` → `AbortSignal.timeout(30_000)` sulla chiamata alla Edge Function; `claude-proxy/index.ts` → `AbortSignal.timeout(25_000)` sulla chiamata ad Anthropic; `stripe-checkout/index.ts` → `AbortSignal.timeout(10_000)` già presente
+- ✅ **Fix Realtime subscription** (commit `50b9b4f`): 3 bug risolti — (1) `[business]` → `[business?.id]` nelle deps evita rimozione+ricreazione del canale a ogni refresh dell'oggetto; (2) guard `visibilityState === 'visible'` per non invocare `fetchCount` quando il tab va in background; (3) `mounted` flag che blocca state update nel callback async INSERT se il componente si smonta mentre la query è in volo
+
+### Nuove funzionalità
+
+- ✅ **Cambio email in Impostazioni** (commit `aabf8b4`): flusso via `supabase.auth.updateUser({ email })` con conferma OTP; UI dedicata nella card Account; sezioni cambio email e cambio password separate con feedback visivo (idle → saving → done/error); fix hydration error `<p>` annidato in `<p>` su Landing.jsx
+- ✅ **Tabelle `employees` e `appointments` in schema.sql**: definizioni complete con FK, indici, RLS owner-via-business, trigger `trg_appointments_updated_at`; SQL standalone per l'esecuzione manuale su Supabase SQL Editor
+- ✅ **Panoramica ridisegnata**: sezione inferiore riscritta con 3 card — "Prossime attività" (full-width, con pulsante segna-completato inline su ogni riga), "Promemoria" (con colore urgenza rosso/arancio/verde), "Attività completate" (appuntamenti + promemoria completati di recente). Rimosso il vecchio blocco "In arrivo"
+
+### PWA fix sottodomini
+
+- ✅ **Manifest e Service Worker disabilitati sui sottodomini pubblici** (commit `c630c73`): rimossi tutti i meta tag PWA da `index.html`; `main.jsx` controlla `window.location.hostname` — sui domini principali (`piumapp.com`, `localhost`) inietta dinamicamente manifest, meta Apple, registra SW con `{ once: true }` + check `readyState`; sui sottodomini (`nomeattivita.piumapp.com`) chiama `getRegistrations().forEach(reg => reg.unregister())` per ripulire i clienti già colpiti. Risolve il popup "Installa app" che appariva sui siti pubblici dei clienti
+
+### Audit sicurezza e qualità — fix completo
+
+**Audit su tutto il codice in `src/` e `supabase/functions/`** — identificati e risolti 6 CRITICO, 9 ALTO, 10+ MEDIO, 5 BASSO:
+
+#### CRITICO (6)
+| # | File | Problema | Fix |
+|---|---|---|---|
+| 1 | `Dashboard.jsx` | Race condition nel polling Stripe post-redirect: timer non cancellato su unmount | Flag `mounted`, `clearTimeout(timer)` + `clearTimeout(successTimer)` nel cleanup |
+| 2 | `activityLog.js` | Fire-and-forget senza catch: errori DB ingoiati silenziosamente | Aggiunto `.catch(err => console.error(...))` |
+| 3 | `Affiliates.jsx` | Race condition auth: `setSession` dopo navigate su componente smontato | Flag `alive` nel `useEffect` |
+| 4 | `Admin.jsx` | XSS: slug non validato interpolato direttamente in `href` | Helper `safePublicUrl(slug)` con whitelist regex `^[a-z0-9-]+$` + null-check sul link |
+| 5 | `Dashboard.jsx` | Canale Realtime non rimosso se ancora in stato "joining" | `supabase.removeChannel()` avvolto in try/catch |
+| 6 | `BookingSection.jsx` | Submit duplicato: `disabled={submitting}` non blocca click concorrenti su race | `useRef` lock (`submittingRef.current`) prima dell'`await` |
+
+#### ALTO (9)
+| # | File | Problema | Fix |
+|---|---|---|---|
+| 7 | `main.jsx` | Event listener `load` SW mai rimosso — memory leak | `{ once: true }` + guard `document.readyState === 'complete'` |
+| 8 | Tutti i componenti dashboard | `setState` dopo unmount: `Panoramica`, `Promemoria`, `Servizi`, `Recensioni`, `Social`, `Agenda` (`loadEmployees`, `loadPendingBookings`) | Pattern signal `{ cancelled: false }` su tutti i `load` useCallback + useEffect con cleanup |
+| 9 | `claude.js` | Risposta AI non validata: destructuring di `{ text }` senza controllo tipo | `if (typeof body?.text !== 'string') throw new Error(...)` |
+| 10 | `claude-proxy/index.ts` | Errore aggiornamento contatori AI ingoiato silenziosamente | Aggiunto `console.error` nel `.catch()` del counter update |
+| 11 | `Dashboard.jsx` | `visibilitychange` senza debounce: tab switching rapido scatena N fetch | Debounce 400ms con `clearTimeout(focusTimer)` |
+| 12 | `Onboarding.jsx` | `handleSubmit` con 3+ await senza isMounted | `mountedRef = useRef(true)` + cleanup `useEffect(() => () => { mountedRef.current = false })` |
+| 13 | `Settings.jsx` | `isPushSubscribed` useEffect senza cleanup | Flag `alive` |
+| 14 | `Panoramica.jsx` | Bug timezone: `toISOString().split('T')[0]` ritorna data UTC | Sostituzione con costruzione stringa da `getFullYear/getMonth/getDate` |
+| 15 | `Admin.jsx` | `visible` e stats ricalcolati a ogni render | `useMemo` su entrambi con deps corrette |
+
+#### MEDIO (10 categorie)
+- `Social.jsx`, `EditorSito.jsx` — signal/alive pattern su load mancante
+- `Settings.jsx`, `Dashboard.jsx`, `Admin.jsx`, `Onboarding.jsx`, `Auth.jsx`, `AffiliatesAuth.jsx`, `PublicSite.jsx` — alive flag su tutti i `getUser`/`getSession` useEffect rimasti senza cleanup
+- `BookingSection.jsx` — validazione formato email (`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`) e telefono (`/^[\d\s\+\-\(\)]{6,20}$/`) in `goToConfirm()`; errore RPC sostituito con messaggio generico (no leaking di dettagli interni)
+- `stripe-checkout/index.ts` — `APP_URL` da `Deno.env.get('APP_URL')` con fallback
+- `stripe-webhook/index.ts` — controllo timestamp per prevenire replay attack (rifiuta webhook con `|now - ts| > 300s`)
+- `claude-proxy/index.ts` — validazione `prompt.trim()` + limite 20.000 caratteri
+- `Admin.jsx` — signal pattern su `load` useCallback
+
+#### BASSO (5 categorie)
+- `Social.jsx`, `Promemoria.jsx`, `Recensioni.jsx` — `filtered`, `avg`, `counts`, `pending` avvolti in `useMemo` con deps corrette; aggiunto `useMemo` agli import
+- `Admin.jsx` — signal pattern su `load` businesses useCallback
+- `Agenda.jsx` — `buildWaLink` restituisce `null` anche per numeri con < 6 cifre
 
 ---
 
@@ -159,3 +228,6 @@
 - **Galleria**: max 20 foto, compressione auto con `browser-image-compression` (maxSizeMB: 0.8, maxWidthOrHeight: 1920)
 - **Pricing**: 99€/mese. Primi 10 clienti a 69€/mese con prezzo bloccato (piano fondatori)
 - **Deploy**: Vercel (prod automatico da push su `master`), Supabase Free plan (upgrade a Pro prima di scalare)
+- **Pattern cancellazione async**: tutti i `load` useCallback usano `signal = null` + `if (signal?.cancelled) return` dopo ogni await. Tutti i `getUser`/`getSession` useEffect usano `let alive = true` + `return () => { alive = false }`. Tutti i `useEffect` con `load` in cleanup usano `const signal = { cancelled: false }; return () => { signal.cancelled = true }`.
+- **Indici PostgreSQL**: 12 indici aggiunti in `20260520_performance_indexes.sql`. Trigram extension (`pg_trgm`) richiesta per gli indici GIN su `client_name` e `contacts.name/phone`
+- **Replay attack protection**: `stripe-webhook` rifiuta eventi con timestamp più vecchio di 5 minuti dalla firma HMAC
