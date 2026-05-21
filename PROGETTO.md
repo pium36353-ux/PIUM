@@ -172,6 +172,14 @@
 - `Admin.jsx` — signal pattern su `load` businesses useCallback
 - `Agenda.jsx` — `buildWaLink` restituisce `null` anche per numeri con < 6 cifre
 
+### Sicurezza TLS — 2026-05-22
+
+- ✅ **Grado SSL migliorato da B ad A+** su Cloudflare — impostazioni applicate sul dominio `piumapp.com`:
+  - **TLS 1.3** abilitato (alongside 1.2)
+  - **Minimum TLS Version** impostata a 1.2 (disabilita TLS 1.0 e 1.1)
+  - **HSTS** abilitato: `max-age` 6 mesi (15.768.000s), `includeSubDomains` On, `Preload` On
+  - **X-Content-Type-Options: nosniff** header abilitato (No-Sniff Header)
+
 ---
 
 ## Fatto nelle ultime sessioni
@@ -231,3 +239,4 @@
 - **Pattern cancellazione async**: tutti i `load` useCallback usano `signal = null` + `if (signal?.cancelled) return` dopo ogni await. Tutti i `getUser`/`getSession` useEffect usano `let alive = true` + `return () => { alive = false }`. Tutti i `useEffect` con `load` in cleanup usano `const signal = { cancelled: false }; return () => { signal.cancelled = true }`.
 - **Indici PostgreSQL**: 12 indici aggiunti in `20260520_performance_indexes.sql`. Trigram extension (`pg_trgm`) richiesta per gli indici GIN su `client_name` e `contacts.name/phone`
 - **Replay attack protection**: `stripe-webhook` rifiuta eventi con timestamp più vecchio di 5 minuti dalla firma HMAC
+- **TLS/SSL**: grado A+ su Cloudflare — TLS min 1.2, TLS 1.3 abilitato, HSTS `max-age=15768000; includeSubDomains; preload`, X-Content-Type-Options nosniff
