@@ -43,6 +43,13 @@ const EXTRA_FEATURES = [
   'Sempre aggiornato',
 ]
 
+const TRUST_PILLS = [
+  'Zero tracciamento',
+  'Dati non in vendita',
+  'Zero pubblicità',
+  'GDPR compliant',
+]
+
 /* ── Component ── */
 export default function Landing() {
   const navigate = useNavigate()
@@ -82,11 +89,14 @@ export default function Landing() {
               per la tua <span className="ln-accent-text">attività locale</span>
             </h1>
 
-            <p className="ln-hero-sub">
-              PIUM genera il tuo sito web in automatico, ti aiuta a rispondere alle recensioni
-              e a creare post social con l'intelligenza artificiale.
-              Tutto da un'unica dashboard semplice.
-            </p>
+            <div className="ln-hero-sub-row">
+              <SslBadge size={44} />
+              <p className="ln-hero-sub">
+                PIUM genera il tuo sito web in automatico, ti aiuta a rispondere alle recensioni
+                e a creare post social con l'intelligenza artificiale.
+                Tutto da un'unica dashboard semplice.
+              </p>
+            </div>
 
             <div className="ln-hero-ctas">
               <button className="ln-btn-hero-primary" onClick={() => navigate('/auth')}>
@@ -189,6 +199,25 @@ export default function Landing() {
                 <p>Se entro 30 giorni non sei soddisfatto, ti rimborsiamo integralmente, senza fare domande.</p>
               </div>
             </div>
+
+            <div className="ln-price-ssl">
+              <SslBadge size={68} />
+              <span>SSL A+ · Connessione sicura e dati protetti</span>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Trust ── */}
+        <section className="ln-trust">
+          <SslBadge size={96} />
+          <h2 className="ln-trust-title">La tua fiducia non è in vendita</h2>
+          <div className="ln-trust-pills">
+            {TRUST_PILLS.map(t => (
+              <span key={t} className="ln-trust-pill">
+                <span className="ln-trust-pill-dot" />
+                {t}
+              </span>
+            ))}
           </div>
         </section>
 
@@ -201,7 +230,10 @@ export default function Landing() {
             <div className="ln-brand-icon ln-brand-icon--sm"><IconHome /></div>
             <Logo className="ln-footer-name" />
           </div>
-          <div className="ln-footer-copy">© {new Date().getFullYear()} <Logo /> · Tutti i diritti riservati</div>
+          <div className="ln-footer-copy">
+            <SslBadge size={36} />
+            © {new Date().getFullYear()} <Logo /> · Tutti i diritti riservati
+          </div>
           <div className="ln-footer-links">
             <a href="#" className="ln-footer-link">Privacy</a>
             <a href="#" className="ln-footer-link">Termini</a>
@@ -211,6 +243,37 @@ export default function Landing() {
       </footer>
 
     </div>
+  )
+}
+
+/* ── SslBadge ── */
+function SslBadge({ size = 64 }) {
+  const cx      = size / 2
+  const cy      = size / 2
+  const outerR  = size / 2 - 1.5
+  const petalD  = outerR / 1.38
+  const petalR  = outerR - petalD
+  const innerR  = petalD - petalR * 0.6
+  const backR   = innerR + petalR * 0.42
+  const hasLbl  = size >= 56
+  const aFont   = innerR * 0.92
+  const aY      = cy + aFont * 0.36 - (hasLbl ? innerR * 0.08 : 0)
+  const lFont   = Math.max(6, innerR * 0.32)
+  const lY      = cy + innerR * 0.72
+
+  const petals = Array.from({ length: 12 }, (_, k) => {
+    const angle = (k * Math.PI * 2) / 12 - Math.PI / 2
+    return { x: cx + petalD * Math.cos(angle), y: cy + petalD * Math.sin(angle) }
+  })
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="SSL A+" style={{ flexShrink: 0 }}>
+      {petals.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={petalR} fill="#F5C518" />)}
+      <circle cx={cx} cy={cy} r={backR}  fill="#E8A000" />
+      <circle cx={cx} cy={cy} r={innerR} fill="#fff" />
+      <text x={cx} y={aY} textAnchor="middle" fontFamily="system-ui,sans-serif" fontWeight="700" fontSize={aFont} fill="#1a1a1a">A+</text>
+      {hasLbl && <text x={cx} y={lY} textAnchor="middle" fontFamily="system-ui,sans-serif" fontSize={lFont} fill="#888">SSL Labs</text>}
+    </svg>
   )
 }
 

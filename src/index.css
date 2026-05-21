@@ -5998,6 +5998,9 @@ code {
   font-size: 13px;
   color: var(--text);
   margin: 0 !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 
   @media (max-width: 560px) { order: 3; width: 100%; text-align: center; }
 }
@@ -6014,6 +6017,79 @@ code {
   text-decoration: none;
   transition: color 0.12s;
   &:hover { color: var(--text-h); }
+}
+
+/* ── Hero sub row (SSL badge + subtitle) ── */
+.ln-hero-sub-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.ln-hero-sub-row .ln-hero-sub {
+  margin: 0;
+  text-align: left;
+}
+
+/* ── Pricing SSL badge ── */
+.ln-price-ssl {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 20px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* ── Trust section ── */
+.ln-trust {
+  background: #0a0a0f;
+  padding: 80px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+
+  @media (max-width: 640px) { padding: 60px 24px; gap: 24px; }
+}
+
+.ln-trust-title {
+  color: #fff;
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  text-align: center;
+  margin: 0;
+}
+
+.ln-trust-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.ln-trust-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 100px;
+  color: rgba(255,255,255,0.85);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ln-trust-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #F5C518;
+  flex-shrink: 0;
 }
 
 /* ============================================================
