@@ -9,6 +9,7 @@ import PublicSite from './pages/PublicSite'
 import Admin      from './pages/Admin'
 import AdminLogin from './pages/AdminLogin'
 import Settings   from './pages/Settings'
+import ResetPassword from './pages/ResetPassword'
 import Affiliates     from './pages/Affiliates'
 import AffiliatesAuth from './pages/AffiliatesAuth'
 import Privacy from './pages/legal/Privacy'
@@ -89,6 +90,7 @@ export default function App() {
         <Route path="/admin"           element={<Admin />} />
         <Route path="/x-admin-login"   element={<AdminLogin />} />
         <Route path="/settings"   element={<Settings />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/site/:slug"   element={<PublicSite />} />
         <Route path="/affiliates"      element={<Affiliates />} />
         <Route path="/affiliates/auth" element={<AffiliatesAuth />} />
