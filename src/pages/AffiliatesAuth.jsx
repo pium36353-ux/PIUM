@@ -22,6 +22,7 @@ export default function AffiliatesAuth() {
   const [loading, setLoading] = useState(false)
   const [error,      setError]      = useState(null)
   const [registered, setRegistered] = useState(false)
+  const [legalAccepted, setLegalAccepted] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -32,10 +33,14 @@ export default function AffiliatesAuth() {
   }, [navigate])
 
   const set = (id) => (e) => setValues(v => ({ ...v, [id]: e.target.value }))
-  const switchMode = (next) => { setMode(next); setError(null) }
+  const switchMode = (next) => { setMode(next); setError(null); setLegalAccepted(false) }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (mode === 'register' && !legalAccepted) {
+      setError('Devi accettare il Contratto di Affiliazione PIUM e confermare la presa visione della Privacy Policy.')
+      return
+    }
     setLoading(true)
     setError(null)
 
@@ -54,9 +59,35 @@ export default function AffiliatesAuth() {
       if (error) {
         setError(error.status === 422 ? error.message : translateError(error.message))
       } else {
+        const userId = authData?.user?.id
+        if (!userId) {
+          setError('Account creato, ma non è stato possibile salvare l\'accettazione dei documenti. Riprova o contatta l\'assistenza.')
+          setLoading(false)
+          return
+        }
+
+        const { error: acceptanceError } = await supabase
+          .from('legal_acceptances')
+          .upsert({
+            user_id: userId,
+            context: 'affiliate',
+            acceptance_type: 'affiliate_contract_privacy',
+            document_versions: {
+              contratto_affiliazione: '2026-05-28',
+              privacy: '2026-05-28',
+            },
+            source: 'affiliate_register',
+          }, { onConflict: 'user_id,acceptance_type', ignoreDuplicates: true })
+
+        if (acceptanceError) {
+          setError('Account creato, ma non è stato possibile salvare l\'accettazione dei documenti. Riprova o contatta l\'assistenza.')
+          setLoading(false)
+          return
+        }
+
         const code = generateCode(values.name)
         await supabase.from('affiliates').insert({
-          user_id: authData.user.id,
+          user_id: userId,
           code,
           name:    values.name.trim(),
           email:   values.email.trim(),
@@ -140,6 +171,19 @@ export default function AffiliatesAuth() {
               </div>
             </div>
           </div>
+
+          {mode === 'register' && (
+            <label className="auth-legal-check">
+              <input
+                type="checkbox"
+                checked={legalAccepted}
+                onChange={(e) => setLegalAccepted(e.target.checked)}
+              />
+              <span>
+                Dichiaro di aver letto e accetto il <Link to="/contratto-affiliazione">Contratto di Affiliazione PIUM</Link> e dichiaro di aver preso visione della <Link to="/privacy">Privacy Policy</Link>.
+              </span>
+            </label>
+          )}
 
           {error && (
             <div className="auth-error" role="alert">

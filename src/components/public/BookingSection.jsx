@@ -328,6 +328,9 @@ export default function BookingSection({ business, services }) {
           <p className="bk-confirm-disclaimer">
             La tua richiesta è stata ricevuta da <strong>{business.name}</strong>. Riceverai un messaggio WhatsApp al numero {form.phone} — dovrai rispondere per confermare l'appuntamento. Senza conferma la prenotazione non sarà valida.
           </p>
+          <p className="bk-privacy-note">
+            Inserendo i dati e inviando la richiesta di prenotazione, dichiari di aver preso visione della <a href="https://www.piumapp.com/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>. I dati saranno trattati per gestire la prenotazione presso l'attivit&agrave; selezionata.
+          </p>
           <button className="bk-submit-btn" onClick={submitBooking} disabled={submitting}>
             {submitting ? 'Invio in corso...' : 'Invia richiesta'}
           </button>

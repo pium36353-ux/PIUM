@@ -11,6 +11,11 @@ import AdminLogin from './pages/AdminLogin'
 import Settings   from './pages/Settings'
 import Affiliates     from './pages/Affiliates'
 import AffiliatesAuth from './pages/AffiliatesAuth'
+import Privacy from './pages/legal/Privacy'
+import Termini from './pages/legal/Termini'
+import Cookie from './pages/legal/Cookie'
+import Dpa from './pages/legal/Dpa'
+import ContrattoAffiliazione from './pages/legal/ContrattoAffiliazione'
 import PWABanner      from './components/PWABanner'
 import SupportBot     from './components/SupportBot'
 import { scheduleAllTodayNotifications } from './lib/notifications'
@@ -85,10 +90,15 @@ export default function App() {
         <Route path="/x-admin-login"   element={<AdminLogin />} />
         <Route path="/settings"   element={<Settings />} />
         <Route path="/site/:slug"   element={<PublicSite />} />
-        <Route path="/:slug"        element={<PublicSite />} />
         <Route path="/affiliates"      element={<Affiliates />} />
         <Route path="/affiliates/auth" element={<AffiliatesAuth />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/termini" element={<Termini />} />
+        <Route path="/cookie" element={<Cookie />} />
+        <Route path="/dpa" element={<Dpa />} />
+        <Route path="/contratto-affiliazione" element={<ContrattoAffiliazione />} />
         <Route path="/ref/:code"    element={<RefRedirect />} />
+        <Route path="/:slug"        element={<PublicSite />} />
       </Routes>
     </BrowserRouter>
   )

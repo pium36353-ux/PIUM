@@ -151,6 +151,27 @@ export default function Onboarding() {
 
     if (affiliateCode) localStorage.removeItem('pium_ref')
 
+    const { error: acceptanceError } = await supabase
+      .from('legal_acceptances')
+      .upsert({
+        user_id: user.id,
+        context: 'merchant',
+        acceptance_type: 'merchant_terms_dpa_privacy',
+        document_versions: {
+          termini: '2026-05-28',
+          dpa: '2026-05-28',
+          privacy: '2026-05-28',
+        },
+        source: 'onboarding_create_business',
+      }, { onConflict: 'user_id,acceptance_type', ignoreDuplicates: true })
+
+    if (acceptanceError) {
+      if (!mountedRef.current) return
+      setServerError('Non è stato possibile salvare l\'accettazione dei documenti. Riprova o contatta l\'assistenza.')
+      setLoading(false)
+      return
+    }
+
     // 2. Generate AI description
     if (!mountedRef.current) return
     setLoadingMsg('Generazione descrizione AI…')

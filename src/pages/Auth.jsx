@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 
@@ -23,6 +23,7 @@ export default function Auth() {
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState(null)
   const [confirmed, setConfirmed] = useState(false)
+  const [legalAccepted, setLegalAccepted] = useState(false)
   const pendingRef = useRef(false)
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export default function Auth() {
     pendingRef.current = false
     setMode(next)
     setError(null)
+    setLegalAccepted(false)
   }
 
   const handleSubmit = async (e) => {
@@ -53,6 +55,10 @@ export default function Auth() {
 
     if (!values.email.includes('@')) { setError('Inserisci un\'email valida.'); return }
     if (values.password.length < 6)  { setError('La password deve essere di almeno 6 caratteri.'); return }
+    if (mode === 'register' && !legalAccepted) {
+      setError('Devi accettare i Termini di Servizio, il DPA e confermare la presa visione della Privacy Policy.')
+      return
+    }
 
     pendingRef.current = true
     setLoading(true)
@@ -178,6 +184,19 @@ export default function Auth() {
             </div>
           )}
 
+          {mode === 'register' && (
+            <label className="auth-legal-check">
+              <input
+                type="checkbox"
+                checked={legalAccepted}
+                onChange={(e) => setLegalAccepted(e.target.checked)}
+              />
+              <span>
+                Accetto i <Link to="/termini">Termini di Servizio</Link> e il <Link to="/dpa">DPA</Link>, inclusi gli obblighi relativi al caricamento di dati dei miei clienti, rubriche telefoniche e immagini, e dichiaro di aver preso visione della <Link to="/privacy">Privacy Policy</Link>.
+              </span>
+            </label>
+          )}
+
           {error && (
             <div className="auth-error" role="alert">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -268,3 +287,4 @@ function Spinner() {
     </svg>
   )
 }
+

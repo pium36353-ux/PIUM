@@ -235,9 +235,9 @@ export default function Landing() {
             © {new Date().getFullYear()} <Logo /> · Tutti i diritti riservati
           </div>
           <div className="ln-footer-links">
-            <a href="#" className="ln-footer-link">Privacy</a>
-            <a href="#" className="ln-footer-link">Termini</a>
-            <a href="#" className="ln-footer-link">Contatti</a>
+            <a href="/privacy" className="ln-footer-link">Privacy</a>
+            <a href="/termini" className="ln-footer-link">Termini</a>
+            <a href="/cookie" className="ln-footer-link">Cookie</a>
           </div>
         </div>
       </footer>

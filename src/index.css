@@ -275,6 +275,26 @@ body {
   }
 }
 
+.auth-legal-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.auth-legal-check input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.auth-legal-check a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .auth-error {
   display: flex;
   align-items: center;
@@ -8304,6 +8324,16 @@ code {
   text-decoration: underline;
   text-align: center;
   align-self: center;
+}
+.bk-privacy-note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #666;
+}
+.bk-privacy-note a {
+  color: #4f46e5;
+  text-decoration: underline;
 }
 .bk-step--success { align-items: center; text-align: center; padding: 20px 0; gap: 12px; }
 .bk-success-icon {
