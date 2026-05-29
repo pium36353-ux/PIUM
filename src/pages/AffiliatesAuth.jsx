@@ -59,7 +59,10 @@ export default function AffiliatesAuth() {
     const { data: authData, error } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,
-      options: { data: { full_name: values.name } },
+      options: {
+        data: { full_name: values.name },
+        emailRedirectTo: `${window.location.origin}/affiliates`,
+      },
     })
 
     if (error) {

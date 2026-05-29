@@ -80,7 +80,10 @@ export default function Auth() {
         const { error } = await supabase.auth.signUp({
           email: values.email,
           password: values.password,
-          options: { data: { full_name: values.name } },
+          options: {
+            data: { full_name: values.name },
+            emailRedirectTo: `${window.location.origin}/onboarding`,
+          },
         })
         if (error) {
           setError(translateError(error.message))
