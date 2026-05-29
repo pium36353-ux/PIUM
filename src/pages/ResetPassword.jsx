@@ -41,6 +41,12 @@ export default function ResetPassword() {
       return
     }
 
+    try {
+      await supabase.auth.signOut()
+    } catch {
+      // La password e' gia' stata aggiornata: il logout non deve bloccare il flusso.
+    }
+
     setStatus('success')
     setPassword('')
     setConfirm('')
@@ -125,12 +131,10 @@ export default function ResetPassword() {
         {status === 'success' && (
           <>
             <div className="auth-success" role="status">
-              Password aggiornata correttamente.
+              Password aggiornata correttamente. Ora accedi con la nuova password.
             </div>
             <p className="auth-switch">
-              <Link className="auth-link-btn auth-link-btn--accent" to="/dashboard">Vai alla dashboard</Link>
-              {' oppure '}
-              <Link className="auth-link-btn" to="/auth">torna al login</Link>
+              <Link className="auth-link-btn auth-link-btn--accent" to="/auth">Torna al login</Link>
             </p>
           </>
         )}
