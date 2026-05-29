@@ -16,11 +16,11 @@ function generateCode(name) {
 
 export default function AffiliatesAuth() {
   const navigate = useNavigate()
-  const [mode,    setMode]    = useState('login')
-  const [values,  setValues]  = useState({ name: '', email: '', password: '' })
+  const [mode, setMode] = useState('login')
+  const [values, setValues] = useState({ name: '', email: '', password: '' })
   const [showPwd, setShowPwd] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error,      setError]      = useState(null)
+  const [error, setError] = useState(null)
   const [registered, setRegistered] = useState(false)
   const [legalAccepted, setLegalAccepted] = useState(false)
 
@@ -41,62 +41,49 @@ export default function AffiliatesAuth() {
       setError('Devi accettare il Contratto di Affiliazione PIUM e confermare la presa visione della Privacy Policy.')
       return
     }
+
     setLoading(true)
     setError(null)
 
     if (mode === 'login') {
       const { error } = await supabase.auth.signInWithPassword({
-        email: values.email, password: values.password,
-      })
-      if (error) setError(translateError(error.message))
-      else       navigate('/affiliates', { replace: true })
-    } else {
-      const { data: authData, error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
-        options: { data: { full_name: values.name } },
       })
-      if (error) {
-        setError(error.status === 422 ? error.message : translateError(error.message))
-      } else {
-        const userId = authData?.user?.id
-        if (!userId) {
-          setError('Account creato, ma non è stato possibile salvare l\'accettazione dei documenti. Riprova o contatta l\'assistenza.')
-          setLoading(false)
-          return
-        }
+      if (error) setError(translateError(error.message))
+      else navigate('/affiliates', { replace: true })
+      setLoading(false)
+      return
+    }
 
-        const { error: acceptanceError } = await supabase
-          .from('legal_acceptances')
-          .upsert({
-            user_id: userId,
-            context: 'affiliate',
-            acceptance_type: 'affiliate_contract_privacy',
-            document_versions: {
-              contratto_affiliazione: '2026-05-28',
-              privacy: '2026-05-28',
-            },
-            source: 'affiliate_register',
-          }, { onConflict: 'user_id,acceptance_type', ignoreDuplicates: true })
+    const { data: authData, error } = await supabase.auth.signUp({
+      email: values.email,
+      password: values.password,
+      options: { data: { full_name: values.name } },
+    })
 
-        if (acceptanceError) {
-          setError('Account creato, ma non è stato possibile salvare l\'accettazione dei documenti. Riprova o contatta l\'assistenza.')
-          setLoading(false)
-          return
-        }
+    if (error) {
+      setError(error.status === 422 ? error.message : translateError(error.message))
+      setLoading(false)
+      return
+    }
 
-        const code = generateCode(values.name)
-        await supabase.from('affiliates').insert({
-          user_id: userId,
-          code,
-          name:    values.name.trim(),
-          email:   values.email.trim(),
-          status:  'pending',
-        })
-        setRegistered(true)
+    const userId = authData?.user?.id
+    if (userId) {
+      const code = generateCode(values.name)
+      const { error: affiliateInsertError } = await supabase.from('affiliates').insert({
+        user_id: userId,
+        code,
+        name: values.name.trim(),
+        email: values.email.trim(),
+        status: 'pending',
+      })
+      if (affiliateInsertError) {
+        console.error('AffiliatesAuth: insert affiliato post-signup fallito', affiliateInsertError)
       }
     }
 
+    setRegistered(true)
     setLoading(false)
   }
 
@@ -108,7 +95,7 @@ export default function AffiliatesAuth() {
           <div style={{ textAlign: 'center', padding: '16px 0 8px' }}>
             <div style={{ fontSize: 44, marginBottom: 14 }}>✓</div>
             <h1 className="auth-title">Registrazione ricevuta!</h1>
-            <p className="auth-subtitle">Ti contatteremo presto per attivare il tuo account affiliato.</p>
+            <p className="auth-subtitle">Controlla la tua email e conferma l&apos;account prima del primo accesso.</p>
             <Link to="/affiliates" style={{ display: 'inline-block', marginTop: 20, color: 'var(--accent)', textDecoration: 'underline', fontSize: 14 }}>
               ← Torna alla pagina affiliati
             </Link>
@@ -121,13 +108,12 @@ export default function AffiliatesAuth() {
   return (
     <div className="auth-shell">
       <div className="auth-card">
-
         <div className="auth-brand">
           <Logo className="auth-brand-name" />
         </div>
 
         <h1 className="auth-title">
-          {mode === 'login' ? 'Accedi — Area Affiliati' : 'Registrati come affiliato'}
+          {mode === 'login' ? 'Accedi - Area Affiliati' : 'Registrati come affiliato'}
         </h1>
         <p className="auth-subtitle">
           {mode === 'login'
@@ -136,7 +122,7 @@ export default function AffiliatesAuth() {
         </p>
 
         <div className="auth-tabs">
-          <button type="button" className={`auth-tab ${mode === 'login'    ? 'auth-tab--active' : ''}`} onClick={() => switchMode('login')}>Accedi</button>
+          <button type="button" className={`auth-tab ${mode === 'login' ? 'auth-tab--active' : ''}`} onClick={() => switchMode('login')}>Accedi</button>
           <button type="button" className={`auth-tab ${mode === 'register' ? 'auth-tab--active' : ''}`} onClick={() => switchMode('register')}>Registrati</button>
         </div>
 
@@ -198,7 +184,7 @@ export default function AffiliatesAuth() {
         </form>
 
         <p className="auth-switch">
-          {mode === 'login' ? 'Non hai un account?' : 'Hai già un account?'}{' '}
+          {mode === 'login' ? 'Non hai un account?' : 'Hai gia un account?'}{' '}
           <button type="button" className="auth-link-btn auth-link-btn--accent" onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}>
             {mode === 'login' ? 'Registrati' : 'Accedi'}
           </button>
@@ -214,9 +200,9 @@ export default function AffiliatesAuth() {
 
 function translateError(msg) {
   if (msg.includes('Invalid login credentials')) return 'Email o password errati.'
-  if (msg.includes('Email not confirmed'))       return 'Conferma la tua email prima di accedere.'
-  if (msg.includes('User already registered'))   return 'Questo indirizzo email è già registrato.'
-  if (msg.includes('Password should be'))        return 'La password deve essere di almeno 6 caratteri.'
+  if (msg.includes('Email not confirmed')) return 'Conferma la tua email prima di accedere.'
+  if (msg.includes('User already registered')) return 'Questo indirizzo email e gia registrato.'
+  if (msg.includes('Password should be')) return 'La password deve essere di almeno 6 caratteri.'
   return msg
 }
 
