@@ -32,6 +32,22 @@ function formatDateShort(iso) {
   return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
 }
 
+function formatDateTime(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('it-IT', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatCityProvince(city, province) {
+  const parts = [city, province].map(v => (v ?? '').trim()).filter(Boolean)
+  return parts.length ? parts.join(' · ') : null
+}
+
 function trialDaysLeft(biz) {
   if (getStatus(biz) !== 'trial' || !biz.trial_ends_at) return null
   const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -57,6 +73,11 @@ export default function Admin() {
   const [affLoading,   setAffLoading]   = useState(false)
   const [affError,     setAffError]     = useState(null)
   const [activatingId, setActivatingId] = useState(null)
+  const [drawerAff,    setDrawerAff]    = useState(null)
+  const [affDraft,     setAffDraft]     = useState({ city: '', province: '', phone: '', legal_name: '', admin_notes: '' })
+  const [affSaveBusy,  setAffSaveBusy]  = useState(false)
+  const [affSaveError, setAffSaveError] = useState(null)
+  const [affSaveOk,    setAffSaveOk]    = useState(false)
 
   /* Drawer */
   const [drawerBiz,           setDrawerBiz]           = useState(null)
@@ -220,7 +241,7 @@ export default function Admin() {
     setAffLoading(true)
     const { data, error } = await supabase
       .from('affiliates')
-      .select('id, name, email, code, status, total_clients, total_earned, created_at')
+      .select('id, name, email, code, status, total_clients, total_earned, created_at, approved_email_sent_at, admin_notes, city, province, phone, legal_name')
       .order('created_at', { ascending: false })
     if (error) {
       setAffError('Errore nel caricamento affiliati. Riprova o controlla la connessione.')
@@ -253,8 +274,68 @@ export default function Admin() {
     }
 
     setAffiliates(prev => prev.map(a => a.id === id ? { ...a, status: data?.status ?? status } : a))
+    setDrawerAff(prev => prev?.id === id ? { ...prev, status: data?.status ?? status } : prev)
     setActivatingId(null)
   }
+
+  const openAffiliateDrawer = useCallback((affiliate) => {
+    setDrawerAff(affiliate)
+    setAffDraft({
+      city: affiliate.city ?? '',
+      province: affiliate.province ?? '',
+      phone: affiliate.phone ?? '',
+      legal_name: affiliate.legal_name ?? '',
+      admin_notes: affiliate.admin_notes ?? '',
+    })
+    setAffSaveBusy(false)
+    setAffSaveError(null)
+    setAffSaveOk(false)
+  }, [])
+
+  const closeAffiliateDrawer = useCallback(() => {
+    setDrawerAff(null)
+    setAffSaveBusy(false)
+    setAffSaveError(null)
+    setAffSaveOk(false)
+  }, [])
+
+  const saveAffiliateDetails = useCallback(async () => {
+    if (!drawerAff) return
+
+    const normalize = (v) => {
+      const text = (v ?? '').trim()
+      return text ? text : null
+    }
+
+    const updates = {
+      city: normalize(affDraft.city),
+      province: normalize(affDraft.province),
+      phone: normalize(affDraft.phone),
+      legal_name: normalize(affDraft.legal_name),
+      admin_notes: normalize(affDraft.admin_notes),
+    }
+
+    setAffSaveBusy(true)
+    setAffSaveError(null)
+    setAffSaveOk(false)
+
+    const { error } = await supabase
+      .from('affiliates')
+      .update(updates)
+      .eq('id', drawerAff.id)
+
+    setAffSaveBusy(false)
+
+    if (error) {
+      setAffSaveError('Errore nel salvataggio dati affiliato. Riprova.')
+      return
+    }
+
+    setAffiliates(prev => prev.map(a => a.id === drawerAff.id ? { ...a, ...updates } : a))
+    setDrawerAff(prev => prev ? { ...prev, ...updates } : prev)
+    setAffSaveOk(true)
+    setTimeout(() => setAffSaveOk(false), 2200)
+  }, [drawerAff, affDraft])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -524,12 +605,16 @@ export default function Admin() {
                     <tbody>
                       {affiliates.map(a => {
                         const busy = activatingId === a.id
+                        const cityProvince = formatCityProvince(a.city, a.province)
                         return (
-                          <tr key={a.id} className={busy ? 'adm-row--busy' : ''}>
+                          <tr key={a.id} className={`adm-row--clickable ${busy ? 'adm-row--busy' : ''}`} onClick={() => openAffiliateDrawer(a)}>
                             <td>
                               <div className="adm-biz-cell">
                                 <div className="adm-biz-avatar">{a.name?.[0]?.toUpperCase() ?? '?'}</div>
-                                <div className="adm-biz-info"><span className="adm-biz-name">{a.name}</span></div>
+                                <div className="adm-biz-info">
+                                  <span className="adm-biz-name">{a.name}</span>
+                                  {cityProvince && <span className="adm-biz-cat">{cityProvince}</span>}
+                                </div>
                               </div>
                             </td>
                             <td><span className="adm-cell-email">{a.email ?? '—'}</span></td>
@@ -542,9 +627,9 @@ export default function Admin() {
                               <div className="adm-row-actions">
                                 {busy ? <AdminSpinner small /> : (
                                   <>
-                                    {a.status !== 'approved' && <button className="adm-toggle-btn adm-toggle-btn--active"   onClick={() => setAffiliateStatus(a.id, 'approved')} title="Attiva affiliato"><IconPlay /></button>}
-                                    {a.status === 'approved' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'pending')}  title="Sospendi affiliato"><IconPause /></button>}
-                                    {a.status !== 'rejected' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'rejected')} title="Rifiuta affiliato" style={{ color: '#ef4444' }}><IconX /></button>}
+                                    {a.status !== 'approved' && <button className="adm-toggle-btn adm-toggle-btn--active"   onClick={(e) => { e.stopPropagation(); setAffiliateStatus(a.id, 'approved') }} title="Attiva affiliato"><IconPlay /></button>}
+                                    {a.status === 'approved' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={(e) => { e.stopPropagation(); setAffiliateStatus(a.id, 'pending') }}  title="Sospendi affiliato"><IconPause /></button>}
+                                    {a.status !== 'rejected' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={(e) => { e.stopPropagation(); setAffiliateStatus(a.id, 'rejected') }} title="Rifiuta affiliato" style={{ color: '#ef4444' }}><IconX /></button>}
                                   </>
                                 )}
                               </div>
@@ -558,17 +643,21 @@ export default function Admin() {
                 <div className="adm-cards">
                   {affiliates.map(a => {
                     const busy = activatingId === a.id
+                    const cityProvince = formatCityProvince(a.city, a.province)
                     return (
-                      <div key={a.id} className="adm-card">
+                      <div key={a.id} className="adm-card adm-aff-card" onClick={() => openAffiliateDrawer(a)}>
                         <div className="adm-card-head">
                           <div className="adm-biz-cell">
                             <div className="adm-biz-avatar">{a.name?.[0]?.toUpperCase() ?? '?'}</div>
                             <div className="adm-biz-info">
-                              <span className="adm-biz-name">{a.name}</span>
+                              <div className="adm-aff-headline">
+                                <span className="adm-biz-name">{a.name}</span>
+                                <AffStatusBadge status={a.status} />
+                              </div>
                               {a.email && <span className="adm-biz-cat">{a.email}</span>}
+                              {cityProvince && <span className="adm-biz-cat">{cityProvince}</span>}
                             </div>
                           </div>
-                          <AffStatusBadge status={a.status} />
                         </div>
                         <div className="adm-card-meta">
                           <span className="adm-cell-text">Codice: <code style={{ fontSize: 12, background: 'var(--code-bg)', padding: '2px 6px', borderRadius: 4 }}>{a.code}</code></span>
@@ -580,9 +669,9 @@ export default function Admin() {
                           <div className="adm-row-actions">
                             {busy ? <AdminSpinner small /> : (
                               <>
-                                {a.status !== 'approved' && <button className="adm-toggle-btn adm-toggle-btn--active"   onClick={() => setAffiliateStatus(a.id, 'approved')} title="Attiva affiliato"><IconPlay /></button>}
-                                {a.status === 'approved' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'pending')}  title="Sospendi affiliato"><IconPause /></button>}
-                                {a.status !== 'rejected' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={() => setAffiliateStatus(a.id, 'rejected')} title="Rifiuta affiliato" style={{ color: '#ef4444' }}><IconX /></button>}
+                                {a.status !== 'approved' && <button className="adm-toggle-btn adm-toggle-btn--active"   onClick={(e) => { e.stopPropagation(); setAffiliateStatus(a.id, 'approved') }} title="Attiva affiliato"><IconPlay /></button>}
+                                {a.status === 'approved' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={(e) => { e.stopPropagation(); setAffiliateStatus(a.id, 'pending') }}  title="Sospendi affiliato"><IconPause /></button>}
+                                {a.status !== 'rejected' && <button className="adm-toggle-btn adm-toggle-btn--inactive" onClick={(e) => { e.stopPropagation(); setAffiliateStatus(a.id, 'rejected') }} title="Rifiuta affiliato" style={{ color: '#ef4444' }}><IconX /></button>}
                               </>
                             )}
                           </div>
@@ -622,6 +711,18 @@ export default function Admin() {
         onCopyLink={copyLink}
         onToggleAiUnlimited={toggleAiUnlimited}
         copied={copied}
+      />
+    )}
+    {drawerAff && (
+      <AffiliateDrawer
+        affiliate={drawerAff}
+        draft={affDraft}
+        onDraftChange={setAffDraft}
+        onSave={saveAffiliateDetails}
+        saveBusy={affSaveBusy}
+        saveError={affSaveError}
+        saveOk={affSaveOk}
+        onClose={closeAffiliateDrawer}
       />
     )}
   </>
@@ -809,6 +910,128 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
             </div>
           )}
 
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AffiliateDrawer({ affiliate, draft, onDraftChange, onSave, saveBusy, saveError, saveOk, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const cityProvince = formatCityProvince(affiliate.city, affiliate.province)
+
+  return (
+    <div className="adm-drawer-overlay" onClick={onClose}>
+      <div className="adm-drawer" onClick={e => e.stopPropagation()}>
+        <div className="adm-drawer-header">
+          <div className="adm-drawer-title-wrap">
+            <div className="adm-biz-avatar adm-biz-avatar--lg">{affiliate.name?.[0]?.toUpperCase() ?? '?'}</div>
+            <div>
+              <div className="adm-drawer-title">{affiliate.name}</div>
+              <div className="adm-drawer-subtitle">Dettagli affiliato</div>
+            </div>
+          </div>
+          <button className="adm-drawer-close" onClick={onClose} title="Chiudi"><IconX /></button>
+        </div>
+
+        <div className="adm-drawer-body">
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Dati profilo</div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Stato</span>
+              <AffStatusBadge status={affiliate.status} />
+            </div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Email</span>
+              <span className="adm-drawer-value">{affiliate.email ?? '—'}</span>
+            </div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Codice affiliato</span>
+              <span className="adm-drawer-value"><span className="adm-aff-badge">{affiliate.code}</span></span>
+            </div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Data candidatura</span>
+              <span className="adm-drawer-value">{formatDate(affiliate.created_at)}</span>
+            </div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Email approvazione</span>
+              <span className="adm-drawer-value">{affiliate.approved_email_sent_at ? formatDateTime(affiliate.approved_email_sent_at) : '—'}</span>
+            </div>
+            {cityProvince && (
+              <div className="adm-drawer-row">
+                <span className="adm-drawer-label">Località</span>
+                <span className="adm-drawer-value">{cityProvince}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Dati interni admin</div>
+            <div className="adm-aff-form">
+              <label className="adm-aff-field">
+                <span className="adm-drawer-label">Città</span>
+                <input
+                  className="adm-aff-input"
+                  type="text"
+                  value={draft.city}
+                  onChange={e => onDraftChange(prev => ({ ...prev, city: e.target.value }))}
+                  placeholder="Città"
+                />
+              </label>
+              <label className="adm-aff-field">
+                <span className="adm-drawer-label">Provincia</span>
+                <input
+                  className="adm-aff-input"
+                  type="text"
+                  value={draft.province}
+                  onChange={e => onDraftChange(prev => ({ ...prev, province: e.target.value }))}
+                  placeholder="Provincia"
+                />
+              </label>
+              <label className="adm-aff-field">
+                <span className="adm-drawer-label">Telefono</span>
+                <input
+                  className="adm-aff-input"
+                  type="text"
+                  value={draft.phone}
+                  onChange={e => onDraftChange(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="Telefono"
+                />
+              </label>
+              <label className="adm-aff-field">
+                <span className="adm-drawer-label">Nominativo legale</span>
+                <input
+                  className="adm-aff-input"
+                  type="text"
+                  value={draft.legal_name}
+                  onChange={e => onDraftChange(prev => ({ ...prev, legal_name: e.target.value }))}
+                  placeholder="Nome reale / ragione sociale"
+                />
+              </label>
+              <label className="adm-aff-field">
+                <span className="adm-drawer-label">Note interne admin</span>
+                <textarea
+                  className="adm-notes-area"
+                  value={draft.admin_notes}
+                  onChange={e => onDraftChange(prev => ({ ...prev, admin_notes: e.target.value }))}
+                  rows={5}
+                  placeholder="Note visibili solo all'admin…"
+                />
+              </label>
+            </div>
+
+            {saveError && <div className="adm-aff-save-msg adm-aff-save-msg--error">{saveError}</div>}
+            {saveOk && <div className="adm-aff-save-msg adm-aff-save-msg--ok">Dati affiliato salvati.</div>}
+
+            <button className={`adm-notes-save-btn ${saveOk ? 'adm-notes-save-btn--saved' : ''}`} onClick={onSave} disabled={saveBusy}>
+              {saveBusy ? 'Salvataggio…' : saveOk ? '✓ Salvato' : 'Salva dati affiliato'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

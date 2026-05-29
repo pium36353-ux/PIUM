@@ -4775,6 +4775,10 @@ code {
   &:hover { background: var(--code-bg); }
 }
 
+.adm-row--clickable {
+  cursor: pointer;
+}
+
 .adm-row--busy { opacity: 0.6; pointer-events: none; }
 
 /* Business cell */
@@ -4958,6 +4962,32 @@ code {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+}
+
+.adm-aff-card {
+  cursor: pointer;
+}
+
+.adm-card-head .adm-biz-cell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.adm-card-head .adm-biz-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.adm-aff-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.adm-aff-headline .adm-badge {
+  flex-shrink: 0;
 }
 
 .adm-card-meta {
@@ -5349,6 +5379,40 @@ code {
   border-color: rgba(34,197,94,0.3);
   color: #16a34a;
 }
+
+.adm-aff-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adm-aff-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.adm-aff-input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-size: 13px;
+  font-family: var(--sans);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+  &:focus { border-color: var(--accent-border); }
+}
+
+.adm-aff-save-msg {
+  font-size: 12px;
+  font-weight: 600;
+}
+.adm-aff-save-msg--ok { color: #16a34a; }
+.adm-aff-save-msg--error { color: #dc2626; }
 
 /* Drawer action buttons */
 .adm-drawer-action-btn {
