@@ -55,6 +55,7 @@ export default function Admin() {
   const [section,      setSection]      = useState('clienti')
   const [affiliates,   setAffiliates]   = useState([])
   const [affLoading,   setAffLoading]   = useState(false)
+  const [affError,     setAffError]     = useState(null)
   const [activatingId, setActivatingId] = useState(null)
 
   /* Drawer */
@@ -217,18 +218,41 @@ export default function Admin() {
   const loadAffiliates = useCallback(async () => {
     if (!user) return
     setAffLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('affiliates')
       .select('id, name, email, code, status, total_clients, total_earned, created_at')
       .order('created_at', { ascending: false })
+    if (error) {
+      setAffError('Errore nel caricamento affiliati. Riprova o controlla la connessione.')
+    } else {
+      setAffError(null)
+    }
     setAffiliates(data ?? [])
     setAffLoading(false)
   }, [user])
 
   const setAffiliateStatus = async (id, status) => {
     setActivatingId(id)
-    await supabase.from('affiliates').update({ status }).eq('id', id)
-    setAffiliates(prev => prev.map(a => a.id === id ? { ...a, status } : a))
+    setAffError(null)
+
+    const { data, error } = await supabase.functions.invoke('approve-affiliate', {
+      body: { affiliate_id: id, target_status: status },
+    })
+
+    if (error) {
+      setAffError(error.message || 'Errore durante aggiornamento stato affiliato.')
+      setActivatingId(null)
+      return
+    }
+
+    if (data?.error) {
+      const detail = data.detail ? ` (${data.detail})` : ''
+      setAffError(`${data.error}${detail}`)
+      setActivatingId(null)
+      return
+    }
+
+    setAffiliates(prev => prev.map(a => a.id === id ? { ...a, status: data?.status ?? status } : a))
     setActivatingId(null)
   }
 
@@ -477,6 +501,12 @@ export default function Admin() {
         ) : (
           /* ── Affiliati tab ── */
           <>
+            {affError && (
+              <div className="adm-load-error" role="alert">
+                <IconAlert /> {affError}
+                <button className="adm-load-error-retry" onClick={loadAffiliates}>Riprova</button>
+              </div>
+            )}
             {affLoading ? (
               <div className="adm-loading"><AdminSpinner /></div>
             ) : affiliates.length === 0 ? (
