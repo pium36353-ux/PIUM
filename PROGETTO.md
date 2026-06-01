@@ -37,10 +37,14 @@
 
 ### Bloccanti (senza questi non si lancia)
 - [ ] **Sostituire chiavi Stripe da test a live** — attualmente configurate con `pk_test_` / `sk_test_`. Prima del lancio: generare chiavi live su Stripe Dashboard, aggiornare secret su Supabase, aggiornare `VITE_STRIPE_PUBLIC_KEY` nel `.env` di produzione su Vercel
+- [ ] **Completare setup Stripe live**: webhook live, secrets live, test pagamento reale end-to-end
 - [ ] **Sostituire Claude API key temporanea** con quella account aziendale
 - [ ] **Verificare numero di telefono** sull'account Anthropic
 - [ ] **Aggiungere dati di fatturazione** su Anthropic
+- [ ] **Compilare dati reali nei documenti legali web**: ragione sociale, P.IVA/C.F., indirizzo, email, PEC, data ultimo aggiornamento, foro competente
+- [ ] **Valutare revisione legale/professionale dei documenti** prima del lancio commerciale
 - [ ] **Verifica onboarding → sito pubblico** funzionante end-to-end su utente reale
+- [ ] **Test end-to-end finale completo** (Auth, onboarding, booking, push, affiliati, email, Stripe)
 
 ### Importanti ma non bloccanti
 - [ ] **Upgrade Supabase al piano Pro** (25€/mese) — il piano Free ha 50 MB storage condivisi. Con foto dei clienti si esaurisce rapidamente. Nessuna modifica al codice, solo upgrade dal pannello Supabase
@@ -51,18 +55,20 @@
 ### Dopo il lancio
 - [ ] **Sistema di monitoraggio**: avviso automatico se il webhook Supabase smette di rispondere, se le notifiche push falliscono sistematicamente, o se Stripe webhook non processa pagamenti. Priorità: media (dopo il lancio dei primi clienti)
 - [ ] **Miglioramento bot FAQ**: ampliare le domande coperte, migliorare le risposte esistenti, aggiungere categoria "Notifiche e prenotazioni" che copre i problemi più comuni segnalati dai clienti reali. Priorità: alta (prima di scalare gli affiliati)
+- [ ] **Eventuale kit vendita/affiliati** (materiale commerciale e onboarding partner)
 
 ### Nice to have
 - [ ] Template visivi per categoria attività (ristorante, parrucchiere, estetica, ecc.)
 - [ ] Opuscolo venditori PDF
 - [ ] Analytics (sezione #10 mai implementata)
+- [ ] Ottimizzazione bundle Vite (warning chunk >500 kB, non bloccante)
 
 ---
 
 ## Cosa funziona oggi — recap completo
 
 ### Prodotto cliente
-- **Auth**: registrazione email/password, login, logout, reset password
+- **Auth**: registrazione email/password, login, logout, reset password con pagina dedicata `/reset-password`
 - **Onboarding**: wizard guidato con generazione slug univoco (`bar-roma`, `bar-roma-2`), categoria attività, orari, descrizione
 - **Dashboard**:
   - *Panoramica*: hero grid 2 card (appuntamenti oggi + calendario mensile), contatori compatti (promemoria, servizi, bozze social, recensioni), card "Prossime attività" full-width con segna-completato inline, card "Promemoria" con urgenza colorata, card "Attività completate", barra utilizzo AI con reset mensile
@@ -92,19 +98,24 @@
 - Badge affiliato + provenienza con nome affiliato nel drawer
 
 ### Sistema affiliati
-- Registrazione affiliati con codice univoco
+- Registrazione affiliati con codice univoco e accettazione legale tracciata
 - Dashboard affiliati con link referral personalizzato
 - Clienti registrati via referral tracciati (`affiliate_code` in `businesses`)
-- Approvazione manuale da admin, guadagni tracciati manualmente (Stripe non ancora collegato)
+- Confirm email attivo anche per affiliati con redirect dedicato su `/affiliates`
+- Stato affiliato attivo reale: `approved` (non `active`)
+- Sezione Admin → Affiliati con stati `pending` / `approved` / `rejected`
+- Approvazione affiliato via Edge Function server-side (`approve-affiliate`) con invio email automatico su transizione `pending -> approved`
+- Drawer dettagli affiliato admin con campi interni (`city`, `province`, `phone`, `legal_name`, `admin_notes`)
+- Guadagni affiliati ancora tracciati manualmente (Stripe non ancora collegato)
 
 ### Infrastruttura
 - Deploy su Vercel (CI/CD automatico da `git push`)
 - Dominio `piumapp.com` su Cloudflare Registrar
 - Supabase: auth, DB PostgreSQL, storage foto, Edge Functions, Realtime
-- Edge Functions deployate: `claude-proxy` (AI con rate limiting), `stripe-checkout`, `stripe-webhook`, `notify-new-booking`
+- Edge Functions deployate: `claude-proxy` (AI con rate limiting), `stripe-checkout`, `stripe-webhook`, `notify-new-booking`, `approve-affiliate`
 - Cloudflare Worker: proxy trasparente sottodomini `*.piumapp.com → www.piumapp.com`
-- GDPR: Privacy Policy, Termini di Servizio, DPA, Cookie Policy generati
-- Email `info@piumapp.com` attiva con forwarding su Cloudflare
+- GDPR: documenti legali web in Markdown, pagine frontend dedicate, accettazioni legali tracciate su Supabase
+- Email `info@piumapp.com` attiva con forwarding su Cloudflare; email transazionali Auth via Resend SMTP (`no-reply@piumapp.com`) + Custom SMTP Supabase Auth configurato
 
 ---
 
@@ -179,6 +190,178 @@
   - **Minimum TLS Version** impostata a 1.2 (disabilita TLS 1.0 e 1.1)
   - **HSTS** abilitato: `max-age` 6 mesi (15.768.000s), `includeSubDomains` On, `Preload` On
   - **X-Content-Type-Options: nosniff** header abilitato (No-Sniff Header)
+
+---
+
+## Sessione corrente — 2026-05-29
+
+### Documenti legali web
+
+- 🟡 **Documenti legali web parzialmente completati**: le versioni web SaaS dei documenti legali sono state preparate, convertite in Markdown e rese presenti/importabili da `legal-docs/`. Non sono più documenti cartacei con firme o spazi manuali
+- File presenti:
+  - `legal-docs/termini-servizio.md`
+  - `legal-docs/dpa.md`
+  - `legal-docs/privacy-policy.md`
+  - `legal-docs/cookie-policy.md`
+  - `legal-docs/contratto-affiliazione.md`
+- Stato: **PARZIALMENTE COMPLETATO**. Mancano ancora i dati reali: `[NOME / RAGIONE SOCIALE]`, `[P.IVA / C.F.]`, `[INDIRIZZO]`, `[EMAIL DI CONTATTO]`, `[PEC]`, `[DATA ULTIMO AGGIORNAMENTO]`, `[FORO COMPETENTE]`
+- Prima del lancio commerciale: compilare tutti i placeholder reali e far revisionare idealmente i testi da avvocato/commercialista/privacy consultant
+
+### Pagine legali frontend
+
+- ✅ **Route legali create e pubblicate**: `/privacy`, `/termini`, `/cookie`, `/dpa`, `/contratto-affiliazione`
+- File coinvolti: `src/pages/legal/LegalPage.jsx`, `src/pages/legal/Privacy.jsx`, `src/pages/legal/Termini.jsx`, `src/pages/legal/Cookie.jsx`, `src/pages/legal/Dpa.jsx`, `src/pages/legal/ContrattoAffiliazione.jsx`
+- Le route sono dichiarate in `App.jsx` prima della catch-all `/:slug`, così non vengono interpretate come siti pubblici
+
+### Accettazioni legali
+
+- ✅ **Tabella `public.legal_acceptances` creata manualmente su Supabase** con campi: `id`, `user_id`, `context`, `acceptance_type`, `document_versions`, `source`, `accepted_at`, `created_at`
+- RLS: SELECT solo owner (`auth.uid() = user_id`), INSERT solo owner (`auth.uid() = user_id`), nessuna policy UPDATE/DELETE
+- Tipi gestiti:
+  - commerciante: `context = merchant`, `acceptance_type = merchant_terms_dpa_privacy`, `source = onboarding_create_business`, `document_versions = {"termini":"2026-05-28","dpa":"2026-05-28","privacy":"2026-05-28"}`
+  - affiliato: `context = affiliate`, `acceptance_type = affiliate_contract_privacy`, `source = affiliate_register_confirmed`, `document_versions = {"contratto_affiliazione":"2026-05-28","privacy":"2026-05-28"}`
+- Flusso commerciante: checkbox obbligatoria in registrazione; salvataggio spostato in `Onboarding.jsx` (non subito dopo `signUp`) perché con Confirm email ON la sessione post-signUp non è affidabile per RLS
+- Flusso affiliato: checkbox obbligatoria in registrazione; salvataggio spostato a flusso autenticato post conferma email
+- Stato finale: **COMPLETATO** e testato online per commerciante e affiliato
+
+### Checkbox legali
+
+- ✅ **`Auth.jsx`**: checkbox obbligatoria solo in registrazione commerciante, non compare nel login, blocca il submit se non selezionata. Testo: “Accetto i Termini di Servizio e il DPA, inclusi gli obblighi relativi al caricamento di dati dei miei clienti, rubriche telefoniche e immagini, e dichiaro di aver preso visione della Privacy Policy.”
+- ✅ **`AffiliatesAuth.jsx`**: checkbox obbligatoria solo in registrazione affiliato, non compare nel login, blocca il submit se non selezionata. Testo: “Dichiaro di aver letto e accetto il Contratto di Affiliazione PIUM e dichiaro di aver preso visione della Privacy Policy.”
+
+### Nota privacy booking
+
+- ✅ **Nota privacy aggiunta in `BookingSection.jsx`** nello step finale della prenotazione pubblica: “Inserendo i dati e inviando la richiesta di prenotazione, dichiari di aver preso visione della Privacy Policy. I dati saranno trattati per gestire la prenotazione presso l'attività selezionata.”
+- Non è stata inserita checkbox obbligatoria per il cliente finale; il link usa URL assoluto `https://www.piumapp.com/privacy`
+- Booking testato: richiesta inviata e push notification ricevuta
+
+### Reset password
+
+- ✅ **Pagina dedicata `/reset-password` implementata** in `src/pages/ResetPassword.jsx`
+- Motivo: `Auth.jsx` usava già `resetPasswordForEmail(..., redirectTo: ${window.location.origin}/reset-password)`, ma mancava la route `/reset-password`; prima poteva essere catturata da `/:slug` e trattata come sito pubblico
+- Funzioni:
+  - verifica sessione recovery con `supabase.auth.getSession()`
+  - form nuova password + conferma
+  - validazione minimo 6 caratteri
+  - controllo corrispondenza password
+  - update con `supabase.auth.updateUser({ password })`
+  - `supabase.auth.signOut()` dopo successo per evitare riuso sessione recovery
+  - messaggio “Password aggiornata correttamente. Ora accedi con la nuova password.”
+  - solo link “Torna al login”
+- Stato: **testato online, OK**
+
+### Redirect signup separati commerciante/affiliato
+
+- ✅ Bug corretto con Confirm email ON: commerciante e affiliato non usano più lo stesso redirect
+- Fix:
+  - in `Auth.jsx` registrazione commerciante: `options.emailRedirectTo = ${window.location.origin}/onboarding`
+  - in `AffiliatesAuth.jsx` registrazione affiliato: `options.emailRedirectTo = ${window.location.origin}/affiliates`
+- Stato:
+  - commerciante -> conferma email -> `/onboarding`: OK
+  - affiliato -> conferma email -> `/affiliates`: OK
+
+### Email transazionali / SMTP
+
+- ✅ **Resend configurato**: account creato, dominio `piumapp.com` verificato su Resend tramite DNS Cloudflare
+- DNS configurati: DKIM `resend._domainkey`, SPF su `send`, MX bounce su `send`, DMARC `_dmarc` con `v=DMARC1; p=none;`
+- API key Resend creata e salvata in Proton Pass
+- Supabase Auth: Custom SMTP attivato con Sender email `no-reply@piumapp.com`, Sender name `PIUM`, Host `smtp.resend.com`, Port `465`, Username `resend`, Password = Resend API key, Minimum interval per user `60`
+- Template email personalizzati: Confirm sign up + Reset password
+- Test reset password: email inviata correttamente da `PIUM <no-reply@piumapp.com>`, senza branding Resend
+- Gmail inizialmente mostrava warning perché il link puntava a Supabase/localhost. Site URL Supabase aggiornato a `https://www.piumapp.com`; Redirect URLs configurati: `https://www.piumapp.com/**`, `https://piumapp.com/**`
+- Localhost non è stato aggiunto agli allowed redirects perché per ora il focus è produzione
+- Link Auth: passaggio iniziale su dominio Supabase per verifica token e redirect finale su PIUM (comportamento accettato)
+- Stato:
+  - Custom SMTP configurato e operativo
+  - Confirm email attivo
+  - registrazione commerciante con conferma email: OK
+  - registrazione affiliato con conferma email: OK (dopo fix redirect)
+
+### Sistema affiliati/admin
+
+- Flusso affiliato:
+  - registrazione affiliato con checkbox legale obbligatoria
+  - Confirm email attivo
+  - dopo conferma email redirect su `/affiliates`
+  - con status `pending` viene mostrata pagina richiesta in attesa
+  - stato attivo reale: `approved` (non `active`)
+- Admin:
+  - sezione Admin -> Affiliati funzionante
+  - approvazione manuale affiliato da admin
+  - stati gestiti: `pending`, `approved`, `rejected`
+- Email approvazione affiliato:
+  - Edge Function: `supabase/functions/approve-affiliate/index.ts`
+  - deploy: `npx supabase functions deploy approve-affiliate --project-ref onkyhknchhlsmcknpinr`
+  - secrets Supabase Edge Functions: `RESEND_API_KEY`, `FROM_EMAIL`
+  - dashboard admin usa `supabase.functions.invoke('approve-affiliate', ...)`
+  - la function verifica JWT + ruolo admin (`user.app_metadata.role === 'admin'`), usa service role, aggiorna status, invia email solo su `pending -> approved`, non reinvia se `approved_email_sent_at` esiste, usa idempotency key e valorizza `approved_email_sent_at`
+  - email approvazione testata: OK
+  - `approved_email_sent_at` salvato correttamente in Supabase
+- Nota contrattuale: email senza allegato contratto; viene indicata accettazione digitale in registrazione e linkata la versione corrente `https://www.piumapp.com/contratto-affiliazione`
+
+### Drawer dettagli affiliato admin
+
+- Colonne aggiunte manualmente su `public.affiliates`:
+  - `admin_notes text`
+  - `city text`
+  - `province text`
+  - `phone text`
+  - `legal_name text`
+  - `approved_email_sent_at timestamptz`
+- In Admin -> Affiliati:
+  - clic su riga/card apre drawer dettagli affiliato
+  - pulsanti approva/sospendi/rifiuta con `stopPropagation()` per non aprire il drawer
+  - layout mobile affiliati corretto (badge stato dentro card)
+- Campi modificabili nel drawer:
+  - `city`
+  - `province`
+  - `phone`
+  - `legal_name`
+  - `admin_notes`
+- Campi solo lettura:
+  - `name`, `email`, `code`, `status`, `created_at`, `approved_email_sent_at`
+- Stato: dati salvati correttamente in Supabase; test online OK
+
+### Commit/deploy recenti
+
+- Commit principali recenti:
+  - `Add legal documents and acceptance tracking`
+  - `Add reset password page`
+  - `Harden reset password flow`
+  - `Fix affiliate acceptance with email confirmation`
+  - `Fix signup email redirects`
+  - `Add affiliate approval email notification`
+  - `Add affiliate admin details drawer`
+- Deploy Edge Function:
+  - `approve-affiliate` deployata su Supabase
+- Nota build:
+  - `npm run build` passa
+  - warning chunk Vite >500 kB presente, non bloccante
+
+### Stato finale blocchi completati
+
+- Completati/testati:
+  - Documenti web/pagine legali: PARZIALMENTE COMPLETATO (in attesa dati reali)
+  - Checkbox legali commerciante/affiliato: OK
+  - Legal acceptances DB: OK
+  - Resend SMTP/Supabase Auth: OK
+  - Reset password: OK
+  - Confirm email commerciante: OK
+  - Confirm email affiliato: OK
+  - Redirect signup separati: OK
+  - Booking privacy note: OK
+  - Sistema affiliati base: OK
+  - Approvazione affiliato admin + email automatica: OK
+  - Drawer admin affiliati/note/città/provincia: OK
+- Ancora da fare:
+  - compilare dati reali nei documenti legali
+  - valutare revisione legale/professionale dei documenti
+  - Stripe live: chiavi live, webhook live, secrets, test pagamento reale
+  - Supabase Pro / piano produzione
+  - Anthropic/account definitivo e limiti
+  - test end-to-end finale completo
+  - eventuale kit vendita/affiliati
+  - eventuale ottimizzazione bundle Vite/chunk >500 kB (non bloccante)
 
 ---
 
