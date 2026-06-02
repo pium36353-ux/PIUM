@@ -38,12 +38,6 @@ const CORE_FEATURES = [
     title: 'Strumenti AI inclusi',
     desc: 'Ti prepariamo bozze di descrizioni, post social e risposte alle recensioni. Tu leggi, modifichi e pubblichi solo quello che decidi.',
   },
-  {
-    icon: <IconMessage />,
-    color: 'green',
-    title: "Si usa come un'app",
-    desc: 'Aggiungi PIUM alla schermata del telefono e aprilo come un\'app, senza installare niente.',
-  },
 ]
 
 const DAILY_ACTIONS = [
@@ -79,28 +73,47 @@ const COST_ITEMS = [
 ]
 
 const MAIN_FEATURES = [
-  'Sito pubblico con indirizzo web dedicato',
-  'Foto, galleria, orari e recensioni sul sito',
-  'Agenda appuntamenti con gestione collaboratori',
-  'Prenotazioni online: ricevi, verifichi e confermi tu',
-  'Notifiche su ogni richiesta, anche col telefono in tasca',
-  'Rubrica clienti con import dalla rubrica del telefono',
-  'Promemoria e cose da fare con scadenze',
-  'Modifichi testi, foto e contenuti del sito da solo',
-  'Panoramica con il riepilogo della giornata',
-  'Strumenti AI per testi, social e risposte recensioni',
-  'Gestione servizi e prezzi in autonomia',
-  'Nessuna commissione sulle prenotazioni',
-  'Si usa come app dal telefono, senza installazioni',
+  {
+    group: 'Per i tuoi clienti',
+    items: [
+      'Sito pubblico con indirizzo web dedicato',
+      'Foto, galleria, orari e recensioni sul sito',
+      'Prenotazioni online dirette dal sito',
+      'Si usa come app dal telefono, senza installazioni',
+    ],
+  },
+  {
+    group: 'Per te che gestisci',
+    items: [
+      'Agenda appuntamenti con gestione collaboratori',
+      'Rubrica clienti con import dalla rubrica del telefono',
+      'Promemoria e cose da fare con scadenze',
+      'Notifiche su ogni richiesta, anche col telefono in tasca',
+    ],
+  },
+  {
+    group: 'Per la tua giornata',
+    items: [
+      'Modifichi testi, foto e contenuti del sito da solo',
+      'Panoramica con il riepilogo della giornata',
+      'Strumenti AI per testi, social e risposte recensioni',
+      'Gestione servizi e prezzi in autonomia',
+    ],
+  },
 ]
 
 const PRICE_FEATURES = [
-  'Sito pubblico personalizzato con URL dedicato',
-  'Pannello gestionale completo in un unico spazio',
-  'Strumenti AI inclusi per testi e bozze operative',
-  'Gestione servizi, prezzi e richieste clienti',
-  'Supporto alla gestione recensioni e contenuti',
+  'Sito pubblico con indirizzo web dedicato',
+  'Agenda appuntamenti e gestione collaboratori',
+  'Prenotazioni online con conferma via WhatsApp',
+  'Rubrica clienti importabile dal telefono',
+  'Notifiche su ogni nuova richiesta',
+  'Gestione servizi e prezzi in autonomia',
+  'Strumenti AI per testi, social e risposte recensioni',
+  'Supporto alla gestione recensioni',
+  'Si usa come app dal telefono senza installazioni',
   'Aggiornamenti inclusi nel piano',
+  'Nessuna commissione sulle prenotazioni',
 ]
 
 const FAQS = [
@@ -243,7 +256,7 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="ln-features ln-features--soft">
+        <section className="ln-features ln-features--dark">
           <div className="ln-section-header">
             <p className="ln-section-eyebrow">Valore economico</p>
             <h2 className="ln-section-title">Una cosa sola, invece di mettere insieme dieci pezzi</h2>
@@ -270,17 +283,24 @@ export default function Landing() {
             <p className="ln-section-eyebrow">Funzioni principali</p>
             <h2 className="ln-section-title">Strumenti essenziali, in un unico spazio</h2>
           </div>
-          <div className="ln-main-features-grid">
-            {MAIN_FEATURES.map((feature) => (
-              <div key={feature} className="ln-main-feature">
-                <span className="ln-price-check"><IconCheck /></span>
-                <span>{feature}</span>
+          <div className="ln-main-features-groups">
+            {MAIN_FEATURES.map((group) => (
+              <div key={group.group} className="ln-main-features-group">
+                <p className="ln-main-features-group-title">{group.group}</p>
+                <div className="ln-main-features-grid">
+                  {group.items.map((item) => (
+                    <div key={item} className="ln-main-feature">
+                      <span className="ln-price-check"><IconCheck /></span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="ln-features ln-features--soft">
+        <section className="ln-features ln-features--accent">
           <div className="ln-section-header">
             <p className="ln-section-eyebrow">Assistenza</p>
             <h2 className="ln-section-title">C'è una persona che ti segue, non un modulo da compilare</h2>
@@ -293,9 +313,9 @@ export default function Landing() {
         <section className="ln-pricing" id="prezzi">
           <div className="ln-section-header">
             <p className="ln-section-eyebrow">Prezzo</p>
-            <h2 className="ln-section-title">Piano completo: 99,99 €/mese</h2>
+            <h2 className="ln-section-title">Un piano, tutto incluso</h2>
             <p className="ln-section-sub">
-              Un piano unico, tutto incluso: sito, area gestionale, agenda, prenotazioni e strumenti AI.
+              Senza commissioni, senza sorprese. La prova la fai con calma per 14 giorni.
             </p>
           </div>
 
@@ -303,7 +323,6 @@ export default function Landing() {
             <div className="ln-price-card">
               <div className="ln-price-head">
                 <div>
-                  <p className="ln-price-plan-name">Piano completo</p>
                   <div className="ln-price-amount-row">
                     <span className="ln-price-currency">€</span>
                     <span className="ln-price-amount">99,99</span>
