@@ -60,7 +60,7 @@ function formatReminderDue(due_at) {
 /* ── Component ── */
 export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
   const rNav = useNavigate()
-  const [counts,       setCounts]       = useState({ servizi: null, recensioni: null, appuntamenti: null, bozzeSocial: null, promemoria: null })
+  const [counts,       setCounts]       = useState({ servizi: null, recensioni: null, appuntamenti: null, appuntamentiMese: null, bozzeSocial: null, promemoria: null })
   const [loading,      setLoading]      = useState(true)
   const [activity,     setActivity]     = useState([])
   const [upcoming,     setUpcoming]     = useState([])
@@ -77,6 +77,9 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
     const sevenDaysLater = new Date(now); sevenDaysLater.setDate(sevenDaysLater.getDate() + 7)
     const sevenDaysStr = `${sevenDaysLater.getFullYear()}-${String(sevenDaysLater.getMonth() + 1).padStart(2, '0')}-${String(sevenDaysLater.getDate()).padStart(2, '0')}`
 
+    const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const lastOfMonth  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`
+
     try {
       const [
         { count: cServizi,      error: e1 },
@@ -88,6 +91,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
         { data: rems,           error: e7 },
         { data: doneApts,       error: e8 },
         { data: doneRems,       error: e9 },
+        { count: cAppMese,      error: e10 },
       ] = await Promise.all([
         supabase.from('services').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
         supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('business_id', business.id),
@@ -98,18 +102,20 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
         supabase.from('reminders').select('id, title, due_at, priority').eq('business_id', business.id).eq('status', 'pending').gte('due_at', today).order('due_at').limit(5),
         supabase.from('appointments').select('id, client_name, date, updated_at').eq('business_id', business.id).eq('completed', true).order('updated_at', { ascending: false }).limit(5),
         supabase.from('reminders').select('id, title, updated_at').eq('business_id', business.id).eq('status', 'done').order('updated_at', { ascending: false }).limit(5),
+        supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', business.id).gte('date', firstOfMonth).lte('date', lastOfMonth),
       ])
 
       if (signal?.cancelled) return
 
-      const firstError = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9
+      const firstError = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9 ?? e10
       if (firstError) console.error('[Panoramica load]', firstError)
 
       setCounts({
         servizi:      cServizi      ?? 0,
         recensioni:   cRecensioni   ?? 0,
-        appuntamenti: cAppuntamenti ?? 0,
-        bozzeSocial:  cSocial       ?? 0,
+        appuntamenti:     cAppuntamenti ?? 0,
+        appuntamentiMese: cAppMese     ?? 0,
+        bozzeSocial:      cSocial      ?? 0,
         promemoria:   cPromemoria   ?? 0,
       })
       setUpcoming(apts ?? [])
@@ -194,7 +200,9 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
         </button>
         <button className="pn-hero-card" onClick={() => onNavigate?.('agenda', { view: 'month' })}>
           <span className="pn-hero-icon">🗓️</span>
-          <span className="pn-hero-value">—</span>
+          <span className="pn-hero-value">
+            {loading ? <span className="db-stat-loading">…</span> : (counts.appuntamentiMese ?? '—')}
+          </span>
           <span className="pn-hero-label">Calendario mensile</span>
         </button>
       </div>
