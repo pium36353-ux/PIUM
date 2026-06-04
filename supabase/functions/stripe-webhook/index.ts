@@ -58,38 +58,144 @@ Deno.serve(async (req) => {
     return new Response('Invalid JSON', { status: 400 })
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session     = event.data.object
-    const bizId       = session['client_reference_id'] as string | null
-    const subId       = session['subscription']        as string | null
-    const customerId  = session['customer']            as string | null
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')              ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
 
-    if (!bizId) {
-      console.error('No client_reference_id in session')
-      return new Response('Missing business id', { status: 400 })
+  if (event.type === 'checkout.session.completed') {
+    const session    = event.data.object
+    const customerId = session['customer']     as string | null
+    const subId      = session['subscription'] as string | null
+
+    if (!customerId) {
+      console.error('No customer in checkout session')
+      return new Response('Missing customer', { status: 400 })
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')               ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')  ?? ''
-    )
+    const { data: biz, error: bizErr } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .maybeSingle()
+
+    if (bizErr || !biz) {
+      console.error('Business not found for customer:', customerId, bizErr)
+      return new Response('Business not found', { status: 404 })
+    }
+
+    const updateData: Record<string, unknown> = {
+      status: 'active',
+      plan:   'active',
+      ...(subId ? { stripe_subscription_id: subId } : {}),
+    }
+
+    if (subId) {
+      const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') ?? ''
+      const subRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subId}`, {
+        headers: { 'Authorization': `Bearer ${stripeKey}` },
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (subRes.ok) {
+        const sub = await subRes.json()
+        if (sub.trial_end) {
+          updateData.trial_ends_at = new Date(sub.trial_end * 1000).toISOString()
+        }
+      }
+    }
 
     const { error } = await supabase
       .from('businesses')
-      .update({
-        status:                  'active',
-        plan:                    'active',
-        ...(subId      ? { stripe_subscription_id: subId }     : {}),
-        ...(customerId ? { stripe_customer_id:     customerId } : {}),
-      })
-      .eq('id', bizId)
+      .update(updateData)
+      .eq('id', biz.id)
 
     if (error) {
-      console.error('DB update error:', error)
+      console.error('DB update error (checkout.session.completed):', error)
       return new Response('DB error', { status: 500 })
     }
 
-    console.log(`Business ${bizId} activated via Stripe`)
+    console.log(`Business ${biz.id} activated via Stripe checkout`)
+  }
+
+  else if (event.type === 'customer.subscription.updated') {
+    const subscription = event.data.object
+    const customerId   = subscription['customer'] as string | null
+    const subId        = subscription['id']       as string | null
+    const subStatus    = subscription['status']   as string | null
+
+    if (!customerId) {
+      console.error('No customer in subscription.updated')
+      return new Response('Missing customer', { status: 400 })
+    }
+
+    const { data: biz, error: bizErr } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .maybeSingle()
+
+    if (bizErr || !biz) {
+      console.error('Business not found for customer:', customerId, bizErr)
+      return new Response('Business not found', { status: 404 })
+    }
+
+    const statusMap: Record<string, string> = {
+      trialing: 'trial',
+      active:   'active',
+      past_due: 'suspended',
+      canceled: 'expired',
+    }
+    const newStatus = statusMap[subStatus ?? '']
+
+    const updateData: Record<string, unknown> = {
+      ...(newStatus ? { status: newStatus } : {}),
+      ...(subId     ? { stripe_subscription_id: subId } : {}),
+    }
+
+    const { error } = await supabase
+      .from('businesses')
+      .update(updateData)
+      .eq('id', biz.id)
+
+    if (error) {
+      console.error('DB update error (customer.subscription.updated):', error)
+      return new Response('DB error', { status: 500 })
+    }
+
+    console.log(`Business ${biz.id} subscription updated: ${subStatus} → ${newStatus ?? '(unmapped)'}`)
+  }
+
+  else if (event.type === 'customer.subscription.deleted') {
+    const subscription = event.data.object
+    const customerId   = subscription['customer'] as string | null
+
+    if (!customerId) {
+      console.error('No customer in subscription.deleted')
+      return new Response('Missing customer', { status: 400 })
+    }
+
+    const { data: biz, error: bizErr } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .maybeSingle()
+
+    if (bizErr || !biz) {
+      console.error('Business not found for customer:', customerId, bizErr)
+      return new Response('Business not found', { status: 404 })
+    }
+
+    const { error } = await supabase
+      .from('businesses')
+      .update({ status: 'expired', plan: 'free' })
+      .eq('id', biz.id)
+
+    if (error) {
+      console.error('DB update error (customer.subscription.deleted):', error)
+      return new Response('DB error', { status: 500 })
+    }
+
+    console.log(`Business ${biz.id} subscription deleted → expired/free`)
   }
 
   return new Response(JSON.stringify({ received: true }), {

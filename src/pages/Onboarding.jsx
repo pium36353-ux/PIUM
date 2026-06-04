@@ -138,6 +138,8 @@ export default function Onboarding() {
         address:             form.address.trim()  || null,
         city:                form.city.trim(),
         affiliate_code:      affiliateCode,
+        status:              'trial',
+        trial_ends_at:       new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
       })
       .select('id')
       .single()

@@ -21,12 +21,12 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get('SUPABASE_URL')              ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -35,19 +35,13 @@ Deno.serve(async (req) => {
 
     const { data: biz } = await supabase
       .from('businesses')
-      .select('id, name, status')
+      .select('id, stripe_customer_id, affiliate_code, plan_price')
       .eq('user_id', user.id)
       .maybeSingle()
 
     if (!biz) {
       return new Response(JSON.stringify({ error: 'Business not found' }), {
         status: 404, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
-    if (biz.status === 'active') {
-      return new Response(JSON.stringify({ error: 'Already active' }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
 
@@ -58,49 +52,87 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Create Checkout session via Stripe REST API (no SDK needed — avoids Deno compat issues)
-    const params = new URLSearchParams({
-      mode:                                                  'subscription',
-      'payment_method_types[]':                              'card',
-      customer_email:                                        user.email ?? '',
-      client_reference_id:                                   biz.id,
-      'line_items[0][price_data][currency]':                 'eur',
-      'line_items[0][price_data][unit_amount]':              '9900',
-      'line_items[0][price_data][recurring][interval]':      'month',
-      'line_items[0][price_data][product_data][name]':       'PIUM — Piano Mensile',
-      'line_items[0][price_data][product_data][description]':'Accesso completo alla piattaforma PIUM per la tua attività',
-      'line_items[0][quantity]':                             '1',
-      success_url:                                           `${APP_URL}/dashboard?stripe_success=true`,
-      cancel_url:                                            `${APP_URL}/dashboard`,
-      locale:                                                'it',
-    })
+    // Create or reuse Stripe Customer
+    let customerId = biz.stripe_customer_id as string | null
+    if (!customerId) {
+      const customerParams = new URLSearchParams()
+      customerParams.set('metadata[supabase_user_id]', user.id)
+      customerParams.set('metadata[business_id]', biz.id)
+
+      const customerRes = await fetch('https://api.stripe.com/v1/customers', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${stripeKey}`,
+          'Content-Type':  'application/x-www-form-urlencoded',
+        },
+        body: customerParams.toString(),
+        signal: AbortSignal.timeout(10_000),
+      })
+
+      if (!customerRes.ok) {
+        const err = await customerRes.json()
+        console.error('Stripe customer creation error:', err)
+        return new Response(JSON.stringify({ error: 'Payment service error' }), {
+          status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const customer = await customerRes.json()
+      customerId = customer.id as string
+
+      const { error: dbErr } = await supabase
+        .from('businesses')
+        .update({ stripe_customer_id: customerId })
+        .eq('id', biz.id)
+
+      if (dbErr) {
+        console.error('Failed to save stripe_customer_id:', dbErr)
+      }
+    }
+
+    const priceId = Deno.env.get('STRIPE_PRICE_ID') ?? ''
+    const checkoutParams = new URLSearchParams()
+    checkoutParams.set('mode',                                  'subscription')
+    checkoutParams.set('customer',                              customerId)
+    checkoutParams.set('line_items[0][price]',                  priceId)
+    checkoutParams.set('line_items[0][quantity]',               '1')
+    checkoutParams.set('success_url',                           `${APP_URL}/dashboard?activated=true`)
+    checkoutParams.set('cancel_url',                            `${APP_URL}/dashboard`)
+    checkoutParams.set('locale',                                'it')
+    checkoutParams.set('allow_promotion_codes',                 'false')
+
+    if (biz.affiliate_code) {
+      const coupon = Deno.env.get('STRIPE_COUPON_FOUNDER') ?? ''
+      if (coupon) {
+        checkoutParams.set('discounts[0][coupon]', coupon)
+      }
+    }
 
     const stripeRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
       headers: {
-        'Authorization':  `Bearer ${stripeKey}`,
-        'Content-Type':   'application/x-www-form-urlencoded',
+        'Authorization': `Bearer ${stripeKey}`,
+        'Content-Type':  'application/x-www-form-urlencoded',
       },
-      body: params.toString(),
+      body: checkoutParams.toString(),
       signal: AbortSignal.timeout(10_000),
     })
 
     if (!stripeRes.ok) {
       const err = await stripeRes.json()
-      console.error('Stripe error:', err)
-      return new Response(JSON.stringify({ error: err?.error?.message ?? 'Stripe error' }), {
-        status: 502, headers: { ...CORS, 'Content-Type': 'application/json' },
+      console.error('Stripe checkout error:', err)
+      return new Response(JSON.stringify({ error: 'Payment service error' }), {
+        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
 
     const session = await stripeRes.json()
-
     return new Response(JSON.stringify({ url: session.url }), {
       status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
     })
 
-  } catch (_err) {
-    console.error(_err)
+  } catch (err) {
+    console.error('stripe-checkout error:', err)
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     })

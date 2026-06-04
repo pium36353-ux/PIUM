@@ -44,6 +44,10 @@ export default function Dashboard() {
   const [pendingActivation,  setPendingActivation]  = useState(false)
   const [loadError,          setLoadError]          = useState(false)
 
+  const trialExpired = business?.status === 'trial'
+    && !!business?.trial_ends_at
+    && new Date(business.trial_ends_at) < new Date()
+
   useEffect(() => {
     let alive = true
     supabase.auth.getUser().then(({ data }) => {
@@ -336,7 +340,26 @@ export default function Dashboard() {
             </div>
           )}
 
-          {business?.status === 'trial' && (
+          {trialExpired && (
+            <div className="db-trial-banner">
+              <div className="db-trial-banner-text">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>
+                  <strong>Il tuo periodo di prova è terminato</strong>
+                  {' — '}Per continuare ad usare PIUM abbonati al piano mensile.
+                </span>
+              </div>
+              <button
+                className="db-trial-btn"
+                onClick={handleCheckout}
+                disabled={checkoutLoading}
+              >
+                {checkoutLoading ? 'Caricamento…' : 'Attiva ora'}
+              </button>
+            </div>
+          )}
+
+          {business?.status === 'trial' && !trialExpired && (
             <div className="db-trial-banner">
               <div className="db-trial-banner-text">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
