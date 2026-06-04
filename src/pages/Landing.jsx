@@ -371,7 +371,7 @@ export default function Landing() {
         </section>
 
         <section className="ln-trust">
-          <SslBadge size={96} />
+          <LockBadge size={96} />
           <h2 className="ln-trust-title">I tuoi dati trattati con attenzione</h2>
           <p className="ln-trust-copy">
             PIUM non vende i dati tuoi né dei tuoi clienti. Documenti chiari su privacy, termini e trattamento dati sempre disponibili.
@@ -394,7 +394,7 @@ export default function Landing() {
             <Logo className="ln-footer-name" />
           </div>
           <div className="ln-footer-copy">
-            <SslBadge size={36} />
+            <LockBadge size={36} />
             © {new Date().getFullYear()} <Logo /> · Tutti i diritti riservati
           </div>
           <div className="ln-footer-links">
@@ -408,33 +408,19 @@ export default function Landing() {
   )
 }
 
-function SslBadge({ size = 64 }) {
-  const cx = size / 2
-  const cy = size / 2
-  const outerR = size / 2 - 1.5
-  const petalD = outerR / 1.38
-  const petalR = outerR - petalD
-  const innerR = petalD - petalR * 0.6
-  const backR = innerR + petalR * 0.42
-  const hasLbl = size >= 56
-  const aFont = innerR * 0.92
-  const aY = cy + aFont * 0.36 - (hasLbl ? innerR * 0.08 : 0)
-  const lFont = Math.max(6, innerR * 0.32)
-  const lY = cy + innerR * 0.72
-
-  const petals = Array.from({ length: 12 }, (_, k) => {
-    const angle = (k * Math.PI * 2) / 12 - Math.PI / 2
-    return { x: cx + petalD * Math.cos(angle), y: cy + petalD * Math.sin(angle) }
-  })
-
+function LockBadge({ size = 48 }) {
+  const isLarge = size >= 56
+  const iconSize = isLarge ? 28 : 14
+  const fontSize = isLarge ? 16 : 12
+  const gap = isLarge ? 10 : 5
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="SSL A+" style={{ flexShrink: 0 }}>
-      {petals.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={petalR} fill="#F5C518" />)}
-      <circle cx={cx} cy={cy} r={backR} fill="#E8A000" />
-      <circle cx={cx} cy={cy} r={innerR} fill="#fff" />
-      <text x={cx} y={aY} textAnchor="middle" fontFamily="system-ui,sans-serif" fontWeight="700" fontSize={aFont} fill="#1a1a1a">A+</text>
-      {hasLbl && <text x={cx} y={lY} textAnchor="middle" fontFamily="system-ui,sans-serif" fontSize={lFont} fill="#888">SSL Labs</text>}
-    </svg>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap, color: '#16a34a', fontSize, fontWeight: 700, flexShrink: 0 }}>
+      <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      Dati protetti
+    </span>
   )
 }
 
