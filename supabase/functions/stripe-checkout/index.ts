@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     checkoutParams.set('customer',                              customerId)
     checkoutParams.set('line_items[0][price]',                  priceId)
     checkoutParams.set('line_items[0][quantity]',               '1')
-    checkoutParams.set('success_url',                           `${APP_URL}/dashboard?activated=true`)
+    checkoutParams.set('success_url',                           `${APP_URL}/dashboard?stripe_success=true`)
     checkoutParams.set('cancel_url',                            `${APP_URL}/dashboard`)
     checkoutParams.set('locale',                                'it')
     checkoutParams.set('allow_promotion_codes',                 'false')
