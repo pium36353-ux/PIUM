@@ -19,6 +19,7 @@ import Dpa from './pages/legal/Dpa'
 import ContrattoAffiliazione from './pages/legal/ContrattoAffiliazione'
 import PWABanner      from './components/PWABanner'
 import SupportBot     from './components/SupportBot'
+import ErrorBoundary  from './components/ErrorBoundary'
 import { scheduleAllTodayNotifications } from './lib/notifications'
 
 function RefRedirect() {
@@ -69,15 +70,18 @@ export default function App() {
 
   if (isSubdomain) {
     return (
-      <BrowserRouter>
-        <Routes>
-          <Route path="*" element={<PublicSite />} />
-        </Routes>
-      </BrowserRouter>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <Routes>
+            <Route path="*" element={<PublicSite />} />
+          </Routes>
+        </BrowserRouter>
+      </ErrorBoundary>
     )
   }
 
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <NotificationScheduler />
       <PWABanner />
@@ -103,5 +107,6 @@ export default function App() {
         <Route path="/:slug"        element={<PublicSite />} />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   )
 }

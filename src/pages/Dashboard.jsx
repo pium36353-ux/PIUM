@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import ErrorBoundary from '../components/ErrorBoundary'
 import { notifyNewBooking } from '../lib/notifications'
 import Panoramica  from '../components/dashboard/Panoramica'
 import EditorSito  from '../components/dashboard/EditorSito'
@@ -129,6 +130,11 @@ export default function Dashboard() {
     setCheckoutError(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        setCheckoutError('Sessione scaduta. Effettua di nuovo il login.')
+        setCheckoutLoading(false)
+        return
+      }
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`,
         {
@@ -398,7 +404,11 @@ export default function Dashboard() {
               <IconChevronLeft /> Panoramica
             </button>
           )}
-          {Section && <Section key={section} business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} />}
+          {Section && (
+            <ErrorBoundary key={section}>
+              <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} />
+            </ErrorBoundary>
+          )}
         </main>
       </div>
     </div>
