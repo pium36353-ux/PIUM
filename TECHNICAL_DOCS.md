@@ -1,6 +1,37 @@
 # PIUM — Documentazione Tecnica
 
-> Documento aggiornato al 2026-05-19. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
+> Documento aggiornato al 2026-06-08. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
+
+---
+
+## Aggiornamento 2026-06-08
+
+**Sessione: fix pre-lancio + verifica billing Stripe end-to-end (modalità test)**
+
+Cinque fix applicati, committati e in produzione:
+- **fix(stripe)** `e31230b` — `success_url` corretto da `?activated=true` a `?stripe_success=true`. Il polling post-checkout in `Dashboard.jsx` ora si attiva: prima il parametro non combaciava e il banner trial non spariva mai dopo il pagamento.
+- **feat(robustness)** `6977952` — React Error Boundary in `src/components/ErrorBoundary.jsx`, applicato a livello app (`App.jsx`, entrambi i rami: subdomain bypass + router) e a livello sezione dashboard (`Dashboard.jsx`, con `key={section}` per reset automatico al cambio sezione). Primo e unico class component del progetto.
+- **fix(onboarding)** `e8340ba` — guard al mount in `Onboarding.jsx`: se l'utente ha già un business → redirect immediato a `/dashboard`, wizard mai mostrato (state `checking` che ritorna `null` finché la verifica non completa). Previene la creazione di business duplicati al riatterraggio su `/onboarding`.
+- **fix(auth)** `5c5103b` — `emailRedirectTo` cambiato da `/onboarding` a `/auth` in `Auth.jsx`: il link di conferma email reindirizza al login.
+- **feat(security)** `ff00847` — XSS guard sugli URL social: nuovo `src/lib/safeUrl.js` (`safeHref`, ammette solo protocolli `http`/`https`/`mailto`/`tel`), validazione in scrittura in `EditorSito.jsx`, sanitization in lettura in `PublicSite.jsx`.
+
+Fix infrastruttura:
+- `stripe-webhook` ridistribuita con `--no-verify-jwt` → risolto **errore 401** sul webhook. Il `config.toml` aveva già `verify_jwt = false` ma il deploy precedente non lo applicava. Sicurezza garantita dalla verifica firma HMAC Stripe, non dal JWT Supabase. Nessuna modifica al codice della funzione.
+
+**Billing Stripe verificato END-TO-END (test) — FUNZIONANTE:**
+Registrazione → conferma email (bloccante) → onboarding → pagamento carta test `4242` → webhook 200 → DB `status='active'`, `plan='active'`, `stripe_subscription_id` salvato → banner trial sparito in automatico con messaggio "Pagamento completato! Il tuo piano è ora attivo". Confermato sia con reinvio evento sia con pagamento fresco (polling automatico, nessun refresh).
+
+**Verifiche di sicurezza:**
+- `.env` gitignored (riga 3), mai committato in alcun branch della storia. Chiavi Stripe tutte in modalità test.
+- Supabase Secrets completi: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_COUPON_FOUNDER`, `CLAUDE_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`.
+- "Confirm email" attivo in Supabase Auth — blocco login pre-conferma verificato.
+
+**Ancora da fare prima del lancio reale:**
+- 🔴 Stripe LIVE: chiavi live (`pk_live_`/`sk_live_`) + webhook ricreato in modalità live + `VITE_STRIPE_PUBLIC_KEY` live
+- 🔴 Documenti legali: compilare i placeholder con dati societari reali (P.IVA, ragione sociale, PEC, foro) — in lavorazione con il commercialista
+- 🔴 Cookie banner GDPR (assente)
+- 🟡 `VITE_VAPID_PUBLIC_KEY` nel `.env` frontend (push notifications)
+- 🟡 Verificare deliverability email auth Supabase (SMTP Resend) — durante i test un'email di conferma non è arrivata; il sender di default Supabase ha limite ~2/ora
 
 ---
 
@@ -1196,3 +1227,36 @@ Stesso flusso preview + deduplicazione della vCard. Il pulsante è visibile solo
 | 13 | `Clienti.jsx` | `handleSave` nel drawer: nessun errore mostrato su fallimento Supabase | try/catch/finally; `saveError` state mostrato sotto il form |
 | 14 | `Clienti.jsx` | `confirmImport`: errore INSERT non comunicato all'utente | try/catch; step 'done' mostra icona rossa + messaggio errore |
 | 15 | `Dashboard.jsx` | Realtime INSERT su `bookings`: `setPendingCount(c+1)` senza fetch → stale count | `setPendingCount(c => c + 1)` poi `fetchCount()` per conferma DB |
+
+---
+
+## 16. TODOs e Problemi Noti
+
+| Stato | Problema | Note |
+|---|---|---|
+| ✅ Risolto 2026-06-08 | Assenza di React Error Boundary — crash non gestiti abbattevano l'intera UI senza messaggio utente | Aggiunto `ErrorBoundary.jsx` (commit `6977952`): applicato in `App.jsx` (entrambi i rami subdomain + router) e in `Dashboard.jsx` con `key={section}` per reset automatico al cambio sezione |
+| 🔴 Aperto | Cookie banner GDPR assente | Obbligatorio prima del lancio reale |
+| 🔴 Aperto | Documenti legali con placeholder — dati societari non compilati | In lavorazione con il commercialista (P.IVA, ragione sociale, PEC, foro) |
+| 🟡 Aperto | Re-subscription push dopo rideploy `notify-new-booking` — il titolare deve disattivare/riattivare il toggle Web Push manualmente | Da automatizzare con logica re-subscription al mount di `Settings.jsx` |
+| 🟡 Aperto | Deliverability email auth Supabase — durante i test una conferma non è arrivata | Sender Supabase default ha limite ~2/ora; valutare SMTP Resend configurato |
+| 🟡 Aperto | `VITE_VAPID_PUBLIC_KEY` mancante nel `.env` frontend di produzione | Necessario per Web Push |
+
+---
+
+## 17. Checklist Pre-Lancio
+
+| Fatto | Voce |
+|---|---|
+| ✅ | Verificare che `.env` sia nel `.gitignore` (riga 3 — confermato, mai committato) |
+| ✅ | Aggiungere React Error Boundary (commit `6977952` — 2026-06-08) |
+| ✅ | Billing Stripe end-to-end verificato in modalità test |
+| ✅ | Webhook Stripe attivo e funzionante (`verify_jwt = false`, risposta 200) |
+| ✅ | "Confirm email" attivo in Supabase Auth |
+| ✅ | RLS su tutte le tabelle |
+| ✅ | Select esplicita in `PublicSite.jsx` (nessun campo admin/billing esposto) |
+| ✅ | XSS guard URL social (`safeHref` — commit `ff00847`) |
+| 🔴 | Stripe LIVE: chiavi `pk_live_`/`sk_live_` + webhook live + `VITE_STRIPE_PUBLIC_KEY` live |
+| 🔴 | Documenti legali: compilare placeholder con dati societari reali |
+| 🔴 | Cookie banner GDPR |
+| 🟡 | `VITE_VAPID_PUBLIC_KEY` in `.env` frontend produzione |
+| 🟡 | Verifica deliverability email auth (SMTP Resend) |
