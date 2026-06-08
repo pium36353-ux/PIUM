@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import imageCompression from 'browser-image-compression'
 import Orari from './Orari'
+import { safeHref } from '../../lib/safeUrl'
 
 const BLOCKS = [
   { id: 'hero',    label: 'Intestazione principale' },
@@ -699,14 +700,28 @@ function SocialBlock({ business }) {
   const [instagram, setInstagram] = useState(business?.instagram_url ?? '')
   const [facebook,  setFacebook]  = useState(business?.facebook_url  ?? '')
   const [status, triggerSave]     = useSaveStatus()
+  const [urlError, setUrlError]   = useState(null)
 
-  const save = () => triggerSave(async () => {
-    const { error } = await supabase
-      .from('businesses')
-      .update({ instagram_url: instagram.trim() || null, facebook_url: facebook.trim() || null })
-      .eq('id', business.id)
-    if (error) throw error
-  })
+  const save = () => {
+    const igVal = instagram.trim()
+    const fbVal = facebook.trim()
+    if (igVal && !safeHref(igVal)) {
+      setUrlError('URL Instagram non valido. Deve iniziare con http:// o https://')
+      return
+    }
+    if (fbVal && !safeHref(fbVal)) {
+      setUrlError('URL Facebook non valido. Deve iniziare con http:// o https://')
+      return
+    }
+    setUrlError(null)
+    triggerSave(async () => {
+      const { error } = await supabase
+        .from('businesses')
+        .update({ instagram_url: igVal || null, facebook_url: fbVal || null })
+        .eq('id', business.id)
+      if (error) throw error
+    })
+  }
 
   return (
     <div className="db-card" style={{ marginTop: 20 }}>
@@ -717,12 +732,13 @@ function SocialBlock({ business }) {
       <div className="ed-fields">
         <div className="ed-field">
           <label className="ed-label">Instagram</label>
-          <input className="ed-input" type="url" value={instagram} onChange={e => setInstagram(e.target.value)} placeholder="https://instagram.com/tuoprofilo" />
+          <input className="ed-input" type="url" value={instagram} onChange={e => { setInstagram(e.target.value); setUrlError(null) }} placeholder="https://instagram.com/tuoprofilo" />
         </div>
         <div className="ed-field">
           <label className="ed-label">Facebook</label>
-          <input className="ed-input" type="url" value={facebook} onChange={e => setFacebook(e.target.value)} placeholder="https://facebook.com/tuapagina" />
+          <input className="ed-input" type="url" value={facebook} onChange={e => { setFacebook(e.target.value); setUrlError(null) }} placeholder="https://facebook.com/tuapagina" />
         </div>
+        {urlError && <p className="ed-file-error">{urlError}</p>}
       </div>
       <div className="ed-footer">
         <SaveButton status={status} onClick={save} />

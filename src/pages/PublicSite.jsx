@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 import BookingSection from '../components/public/BookingSection'
+import { safeHref } from '../lib/safeUrl'
 
 export default function PublicSite() {
   const { slug: paramSlug } = useParams()
@@ -255,13 +256,13 @@ export default function PublicSite() {
                     <IconMail /> <span>{email}</span>
                   </a>
                 )}
-                {instagram_url && (
-                  <a href={instagram_url} target="_blank" rel="noopener noreferrer" className="ps-contact-btn ps-contact-btn--instagram">
+                {safeHref(instagram_url) && (
+                  <a href={safeHref(instagram_url)} target="_blank" rel="noopener noreferrer" className="ps-contact-btn ps-contact-btn--instagram">
                     <IconInstagram /> <span>Instagram</span>
                   </a>
                 )}
-                {facebook_url && (
-                  <a href={facebook_url} target="_blank" rel="noopener noreferrer" className="ps-contact-btn ps-contact-btn--facebook">
+                {safeHref(facebook_url) && (
+                  <a href={safeHref(facebook_url)} target="_blank" rel="noopener noreferrer" className="ps-contact-btn ps-contact-btn--facebook">
                     <IconFacebook /> <span>Facebook</span>
                   </a>
                 )}
