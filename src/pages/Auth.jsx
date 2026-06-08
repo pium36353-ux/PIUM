@@ -82,7 +82,7 @@ export default function Auth() {
           password: values.password,
           options: {
             data: { full_name: values.name },
-            emailRedirectTo: `${window.location.origin}/onboarding`,
+            emailRedirectTo: `${window.location.origin}/auth`,
           },
         })
         if (error) {
