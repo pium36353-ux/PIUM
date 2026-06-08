@@ -63,6 +63,7 @@ export default function Onboarding() {
   const [step, setStep]     = useState(0)
   const [form, setForm]     = useState(EMPTY)
   const [errors, setErrors] = useState({})
+  const [checking, setChecking]     = useState(true)
   const [loading, setLoading]       = useState(false)
   const [loadingMsg, setLoadingMsg] = useState('')
   const [serverError, setServerError] = useState(null)
@@ -71,13 +72,25 @@ export default function Onboarding() {
 
   useEffect(() => {
     let alive = true
-    supabase.auth.getUser().then(({ data }) => {
+    ;(async () => {
+      const { data } = await supabase.auth.getUser()
       if (!alive) return
-      if (!data.user) navigate('/auth', { replace: true })
-      else if (data.user.app_metadata?.role === 'admin') navigate('/admin', { replace: true })
-    })
+      if (!data.user) { navigate('/auth', { replace: true }); return }
+      if (data.user.app_metadata?.role === 'admin') { navigate('/admin', { replace: true }); return }
+
+      const { data: biz } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('user_id', data.user.id)
+        .maybeSingle()
+      if (!alive) return
+      if (biz) { navigate('/dashboard', { replace: true }); return }
+      setChecking(false)
+    })()
     return () => { alive = false }
   }, [navigate])
+
+  if (checking) return null
 
   const set = (field) => (e) => {
     setForm((f) => ({ ...f, [field]: e.target.value }))
