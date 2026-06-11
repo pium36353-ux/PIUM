@@ -67,6 +67,7 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
   const [reminders,    setReminders]    = useState([])
   const [cardsLoading, setCardsLoading] = useState(true)
   const [completingId, setCompletingId] = useState(null)
+  const [siteCopied,   setSiteCopied]   = useState(false)
 
   const load = useCallback(async (signal = null) => {
     if (!business) return
@@ -159,6 +160,34 @@ export default function Panoramica({ business, onNavigate, pendingCount = 0 }) {
       {!business && (
         <div className="db-empty-banner">
           Nessuna attività trovata. Configura la tua attività per iniziare.
+        </div>
+      )}
+
+      {/* Site URL */}
+      {business?.slug && (
+        <div className="pn-site-url-row">
+          <span className="pn-site-url-label">🌐 Il tuo sito</span>
+          <span className="pn-site-url-text">{`https://${business.slug}.piumapp.com`}</span>
+          <div className="pn-site-url-actions">
+            <button
+              className={`pn-site-url-btn pn-site-url-btn--copy ${siteCopied ? 'pn-site-url-btn--copied' : ''}`}
+              onClick={() => {
+                navigator.clipboard.writeText(`https://${business.slug}.piumapp.com`)
+                setSiteCopied(true)
+                setTimeout(() => setSiteCopied(false), 2000)
+              }}
+            >
+              {siteCopied ? '✓ Copiato' : 'Copia link'}
+            </button>
+            <a
+              href={`https://${business.slug}.piumapp.com`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pn-site-url-btn pn-site-url-btn--open"
+            >
+              Apri
+            </a>
+          </div>
         </div>
       )}
 

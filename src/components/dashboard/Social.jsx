@@ -57,8 +57,6 @@ function buildPrompt(business, { platform, topic, tone }) {
     `Argomento del post: ${topic || 'presentazione generale dell\'attività'}`,
     `Tono: ${tone}`,
     ``,
-    business.slug ? `Includi sempre nel post, in modo naturale e non forzato, il link al sito dell'attività: ${business.slug}.piumapp.com — può essere alla fine come call to action oppure integrato nel testo.` : null,
-    ``,
     `Rispondi SOLO con un oggetto JSON (senza markdown, senza backtick) con questa struttura:`,
     `{"content":"testo del post in italiano","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5"]}`,
     ``,
@@ -133,7 +131,14 @@ export default function Social({ business }) {
     try {
       const prompt = buildPrompt(business, genForm)
       const raw    = await generateWithClaude(prompt)
-      setGenPreview(parseAIResponse(raw))
+      const parsed = parseAIResponse(raw)
+      if (business.slug) {
+        const urlFrag = `${business.slug}.piumapp.com`
+        if (!parsed.content.includes(urlFrag)) {
+          parsed.content = `${parsed.content}\n\n📍 Prenota su: ${urlFrag}`
+        }
+      }
+      setGenPreview(parsed)
     } catch (err) {
       if (err.message === 'AI_LIMIT_REACHED') {
         setGenError('Hai raggiunto il limite mensile di utilizzo AI. Si rinnova il 1° del mese.')

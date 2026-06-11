@@ -30,12 +30,7 @@ if (isMainApp) {
     document.head.appendChild(m)
   })
 
-  const appleIcon = document.createElement('link')
-  appleIcon.rel  = 'apple-touch-icon'
-  appleIcon.href = '/favicon.svg'
-  document.head.appendChild(appleIcon)
-
-  if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator) {
     if (document.readyState === 'complete') {
       navigator.serviceWorker.register('/sw.js').catch(() => {})
     } else {

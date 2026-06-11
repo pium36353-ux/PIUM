@@ -14,6 +14,10 @@
     {
       "source": "/favicon.ico",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/favicon-32.png",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     }
   ]
 }

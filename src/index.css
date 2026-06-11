@@ -7187,6 +7187,69 @@ code {
   background: #22c55e;
 }
 
+/* ── Panoramica — Site URL row ── */
+.pn-site-url-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+.pn-site-url-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.pn-site-url-text {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent, #6366f1);
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.pn-site-url-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.pn-site-url-btn {
+  padding: 5px 11px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  text-decoration: none;
+}
+.pn-site-url-btn--copy { background: var(--border); color: var(--text); }
+.pn-site-url-btn--copy.pn-site-url-btn--copied { background: #22c55e; color: #fff; }
+.pn-site-url-btn--open { background: var(--accent, #6366f1); color: #fff; }
+
+/* ── EditorSito — site actions toolbar ── */
+.ed-site-actions { display: flex; align-items: center; gap: 8px; }
+.ed-copy-link-btn {
+  padding: 5px 11px;
+  border: none;
+  border-radius: 6px;
+  background: var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.ed-copy-link-btn--copied { background: #22c55e; color: #fff; }
+
 /* Closed-period shading in day timeline */
 .ag-closed-period {
   background: repeating-linear-gradient(

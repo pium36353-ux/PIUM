@@ -44,6 +44,7 @@ function buildReplyPrompt(business, review) {
   const tone = review.rating >= 4 ? 'caloroso e grato' : review.rating === 3 ? 'professionale e costruttivo' : 'empatico, scusante e propositivo'
   return [
     `Sei il titolare di "${business.name}", un'attività di tipo "${business.category ?? 'locale'}" a ${business.city ?? 'Italia'}.`,
+    business.slug ? `- Sito: ${business.slug}.piumapp.com` : null,
     `Scrivi una risposta professionale in italiano a questa recensione ricevuta:`,
     ``,
     `Autore: ${review.author_name}`,
@@ -51,9 +52,9 @@ function buildReplyPrompt(business, review) {
     review.body ? `Testo: "${review.body}"` : `Testo: (senza testo)`,
     ``,
     `Tono da usare: ${tone}.`,
-    `La risposta deve essere breve (2-4 frasi), personale, in prima persona. Non usare frasi generiche.`,
+    `La risposta deve essere breve (2-4 frasi), personale, in prima persona. Non usare frasi generiche. Quando naturale, chiudi con un invito a prenotare o visitare il sito.`,
     `Rispondi SOLO con il testo della risposta, senza virgolette, senza intestazioni.`,
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 }
 
 /* ── Component ── */
@@ -72,9 +73,10 @@ export default function Recensioni({ business }) {
   const [replies, setReplies]       = useState({})
 
   // Delete
-  const [confirmId, setConfirmId]     = useState(null)
-  const [deletingId, setDeletingId]   = useState(null)
+  const [confirmId, setConfirmId]       = useState(null)
+  const [deletingId, setDeletingId]     = useState(null)
   const [deletedToast, setDeletedToast] = useState(false)
+  const [visibilityError, setVisibilityError] = useState(null)
 
   /* ── Load ── */
   const load = useCallback(async (signal = null) => {
@@ -177,9 +179,15 @@ export default function Recensioni({ business }) {
 
   /* ── Publish toggle ── */
   const togglePublish = async (review) => {
-    const next = !review.published
-    await supabase.from('reviews').update({ published: next }).eq('id', review.id)
-    setReviews(prev => prev.map(r => r.id === review.id ? { ...r, published: next } : r))
+    const next = !review.is_visible
+    const { error } = await supabase.from('reviews').update({ is_visible: next }).eq('id', review.id)
+    if (error) {
+      console.error('[Recensioni] togglePublish error:', error)
+      setVisibilityError('Errore nel cambio visibilità. Riprova.')
+      setTimeout(() => setVisibilityError(null), 3000)
+      return
+    }
+    setReviews(prev => prev.map(r => r.id === review.id ? { ...r, is_visible: next } : r))
   }
 
   /* ── Delete ── */
@@ -201,7 +209,8 @@ export default function Recensioni({ business }) {
   return (
     <div className="db-section">
 
-      {deletedToast && <div className="db-deleted-toast">Eliminato ✓</div>}
+      {deletedToast    && <div className="db-deleted-toast">Eliminato ✓</div>}
+      {visibilityError && <div className="db-deleted-toast" style={{ background: '#ef4444' }}>{visibilityError}</div>}
 
       {/* Toolbar */}
       <div className="db-section-toolbar">
@@ -385,7 +394,7 @@ function ReviewCard({ review: r, business, reply, confirmId, deletingId, onGener
   const src  = SOURCES.find(s => s.value === r.source)
 
   return (
-    <div className={`rv-card ${r.published ? 'rv-card--published' : ''}`}>
+    <div className={`rv-card ${r.is_visible ? 'rv-card--published' : ''}`}>
       {/* Header */}
       <div className="rv-card-head">
         <div className="rv-card-author-row">
@@ -393,7 +402,7 @@ function ReviewCard({ review: r, business, reply, confirmId, deletingId, onGener
           <div className="rv-author-info">
             <div className="rv-author-name-row">
               <span className="rv-author-name">{r.author_name}</span>
-              {r.published && <span className="rv-published-badge"><IconGlobe size={10} /> Pubblicata</span>}
+              {r.is_visible && <span className="rv-published-badge"><IconGlobe size={10} /> Pubblicata</span>}
             </div>
             <div className="rv-author-meta">
               <Stars rating={r.rating} size={13} />
@@ -405,11 +414,11 @@ function ReviewCard({ review: r, business, reply, confirmId, deletingId, onGener
         <div className="rv-card-actions">
           {confirmId !== r.id && (
             <button
-              className={`rv-action-btn ${r.published ? 'rv-action-btn--published' : 'rv-action-btn--publish'}`}
-              title={r.published ? 'Rimuovi dal sito pubblico' : 'Pubblica sul sito pubblico'}
+              className={`rv-action-btn ${r.is_visible ? 'rv-action-btn--published' : 'rv-action-btn--publish'}`}
+              title={r.is_visible ? 'Rimuovi dal sito pubblico' : 'Pubblica sul sito pubblico'}
               onClick={onTogglePublish}
             >
-              {r.published ? <IconGlobe size={14} /> : <IconGlobeOff size={14} />}
+              {r.is_visible ? <IconGlobe size={14} /> : <IconGlobeOff size={14} />}
             </button>
           )}
           {confirmId === r.id ? (

@@ -19,9 +19,10 @@ const GALLERY_MAX    = 20
 const GALLERY_MAX_MB = 50 // pre-compression limit (generous); target output is 0.8 MB via compression
 
 export default function EditorSito({ business }) {
-  const [active,  setActive]  = useState('hero')
-  const [content, setContent] = useState(null) // { hero: row|null, about: row|null, cover: row|null }
-  const [loading, setLoading] = useState(true)
+  const [active,      setActive]      = useState('hero')
+  const [content,     setContent]     = useState(null)
+  const [loading,     setLoading]     = useState(true)
+  const [siteCopied,  setSiteCopied]  = useState(false)
 
   useEffect(() => {
     if (!business) return
@@ -61,14 +62,26 @@ export default function EditorSito({ business }) {
       <div className="db-section-toolbar">
         <p className="db-section-desc">Personalizza i contenuti del tuo sito pubblico.</p>
         {business.slug && (
-          <a
-            href={`https://www.piumapp.com/site/${business.slug}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ed-view-btn"
-          >
-            <IconExternalLink /> Vedi sito pubblico
-          </a>
+          <div className="ed-site-actions">
+            <a
+              href={`https://${business.slug}.piumapp.com`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ed-view-btn"
+            >
+              <IconExternalLink /> Vedi sito pubblico
+            </a>
+            <button
+              className={`ed-copy-link-btn ${siteCopied ? 'ed-copy-link-btn--copied' : ''}`}
+              onClick={() => {
+                navigator.clipboard.writeText(`https://${business.slug}.piumapp.com`)
+                setSiteCopied(true)
+                setTimeout(() => setSiteCopied(false), 2000)
+              }}
+            >
+              {siteCopied ? '✓ Copiato' : 'Copia link'}
+            </button>
+          </div>
         )}
       </div>
 
