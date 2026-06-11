@@ -29,7 +29,7 @@ export default function PublicSite() {
           .select(`
             id, user_id, name, slug, category, business_type_custom, description,
             phone, whatsapp, email, address, city, profile_image,
-            instagram_url, facebook_url, opening_hours,
+            instagram_url, facebook_url, opening_hours, booking_capacity,
             services(*),
             reviews(id, author_name, rating, body, reply, reviewed_at, is_visible),
             site_content(*)

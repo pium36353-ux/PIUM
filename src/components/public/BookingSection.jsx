@@ -19,23 +19,23 @@ function timeToMin(t) {
   return h * 60 + m
 }
 
-function generateSlotsForRange(startMin, endMin, dur, taken) {
+function generateSlotsForRange(startMin, endMin, dur, taken, capacity = 1) {
   const slots = []
   let cur = startMin
   while (cur + dur <= endMin) {
     const label = `${Math.floor(cur / 60).toString().padStart(2, '0')}:${(cur % 60).toString().padStart(2, '0')}`
-    const conflict = taken.some(t => {
+    const overlapCount = taken.filter(t => {
       const ts = timeToMin(t.start_time)
       const te = ts + t.duration_minutes
       return cur < te && cur + dur > ts
-    })
-    if (!conflict) slots.push(label)
+    }).length
+    if (overlapCount < capacity) slots.push(label)
     cur += dur
   }
   return slots
 }
 
-function generateSlots(totalDuration, dateStr, opening_hours, taken) {
+function generateSlots(totalDuration, dateStr, opening_hours, taken, capacity = 1) {
   const dayKey = DAYS[new Date(dateStr + 'T12:00:00').getDay()]
   const hours = opening_hours?.[dayKey]
 
@@ -45,10 +45,10 @@ function generateSlots(totalDuration, dateStr, opening_hours, taken) {
   if (hours.morning !== undefined || hours.afternoon !== undefined) {
     const slots = []
     if (hours.morning?.active && hours.morning.open && hours.morning.close) {
-      slots.push(...generateSlotsForRange(timeToMin(hours.morning.open), timeToMin(hours.morning.close), totalDuration, taken))
+      slots.push(...generateSlotsForRange(timeToMin(hours.morning.open), timeToMin(hours.morning.close), totalDuration, taken, capacity))
     }
     if (hours.afternoon?.active && hours.afternoon.open && hours.afternoon.close) {
-      slots.push(...generateSlotsForRange(timeToMin(hours.afternoon.open), timeToMin(hours.afternoon.close), totalDuration, taken))
+      slots.push(...generateSlotsForRange(timeToMin(hours.afternoon.open), timeToMin(hours.afternoon.close), totalDuration, taken, capacity))
     }
     return slots
   }
@@ -56,7 +56,7 @@ function generateSlots(totalDuration, dateStr, opening_hours, taken) {
   // Old format: open/close
   const startMin = hours.open ? timeToMin(hours.open) : 9 * 60
   const endMin   = hours.close ? timeToMin(hours.close) : 18 * 60
-  return generateSlotsForRange(startMin, endMin, totalDuration, taken)
+  return generateSlotsForRange(startMin, endMin, totalDuration, taken, capacity)
 }
 
 function formatDur(min) {
@@ -172,7 +172,7 @@ export default function BookingSection({ business, services }) {
     setStep(STEPS.SUCCESS)
   }
 
-  const slots = step === STEPS.SLOT ? generateSlots(totalDuration, date, business.opening_hours, takenSlots) : []
+  const slots = step === STEPS.SLOT ? generateSlots(totalDuration, date, business.opening_hours, takenSlots, business.booking_capacity ?? 1) : []
 
   const formattedDate = date
     ? new Date(date + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })

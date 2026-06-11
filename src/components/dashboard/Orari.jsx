@@ -41,7 +41,10 @@ export default function Orari({ business }) {
       })
     )
   })
-  const [saving, setSaving] = useState(null)
+  const [saving,          setSaving]          = useState(null)
+  const [capacity,        setCapacity]        = useState(business?.booking_capacity ?? 1)
+  const [savingCapacity,  setSavingCapacity]  = useState(false)
+  const [capacitySaved,   setCapacitySaved]   = useState(false)
 
   if (!business) return (
     <div className="db-section">
@@ -57,6 +60,23 @@ export default function Orari({ business }) {
       .eq('id', business.id)
     if (error) console.error('Errore salvataggio orari:', error)
     setSaving(null)
+  }
+
+  const saveCapacity = async () => {
+    const val = Math.min(50, Math.max(1, Number(capacity) || 1))
+    setCapacity(val)
+    setSavingCapacity(true)
+    const { error } = await supabase
+      .from('businesses')
+      .update({ booking_capacity: val })
+      .eq('id', business.id)
+    setSavingCapacity(false)
+    if (!error) {
+      setCapacitySaved(true)
+      setTimeout(() => setCapacitySaved(false), 2000)
+    } else {
+      console.error('Errore salvataggio capacità:', error)
+    }
   }
 
   const updateDay = (day, patch) => {
@@ -142,6 +162,32 @@ export default function Orari({ business }) {
             </div>
           )
         })}
+      </div>
+
+      <div className="oh-capacity-row">
+        <div className="oh-capacity-label">
+          <span className="oh-day-label">Clienti in contemporanea</span>
+          <span className="oh-capacity-hint">Quante persone puoi servire nello stesso orario (es. numero di postazioni)</span>
+        </div>
+        <div className="oh-capacity-controls">
+          <input
+            type="number"
+            className="oh-time-input"
+            value={capacity}
+            min={1}
+            max={50}
+            onChange={e => { setCapacity(e.target.value); setCapacitySaved(false) }}
+            style={{ width: 64 }}
+          />
+          <button
+            className={`oh-capacity-save-btn ${capacitySaved ? 'oh-capacity-save-btn--saved' : ''}`}
+            onClick={saveCapacity}
+            disabled={savingCapacity}
+            type="button"
+          >
+            {savingCapacity ? '…' : capacitySaved ? '✓ Salvato' : 'Salva'}
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -7137,6 +7137,56 @@ code {
   user-select: none;
 }
 
+.oh-capacity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.oh-capacity-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.oh-capacity-hint {
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 400;
+}
+
+.oh-capacity-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.oh-capacity-save-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+.oh-capacity-save-btn--saved {
+  background: #22c55e;
+}
+
 /* Closed-period shading in day timeline */
 .ag-closed-period {
   background: repeating-linear-gradient(
