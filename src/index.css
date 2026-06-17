@@ -9218,6 +9218,41 @@ code {
   background: #22c55e;
 }
 
+/* ── Admin: commissioni ── */
+.adm-comm-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); margin-top: 4px; }
+.adm-comm-table { font-size: 12px; }
+.adm-comm-table th { padding: 8px 12px; font-size: 11px; }
+.adm-comm-table td { padding: 9px 12px; }
+.adm-comm-pending-val { color: #f97316; font-weight: 600; }
+.adm-comm-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 12px; flex-wrap: wrap;
+}
+.adm-comm-pending-label { font-size: 13px; color: var(--text); }
+.adm-comm-pending-label strong { color: #f97316; }
+.adm-comm-pay-btn {
+  padding: 6px 14px; border: none; border-radius: 7px;
+  background: var(--accent); color: #fff;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+}
+.adm-comm-pay-btn:disabled { opacity: 0.6; cursor: default; }
+.adm-comm-confirm { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.adm-comm-confirm-msg { font-size: 13px; color: var(--text); margin: 0; }
+.adm-comm-confirm-actions { display: flex; gap: 8px; }
+.adm-comm-confirm-yes {
+  padding: 6px 14px; border: none; border-radius: 7px;
+  background: #22c55e; color: #fff;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+}
+.adm-comm-confirm-yes:disabled { opacity: 0.6; cursor: default; }
+.adm-comm-confirm-no {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: 7px;
+  background: transparent; color: var(--text);
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: border-color 0.15s;
+}
+.adm-comm-confirm-no:hover { border-color: var(--accent); }
+.adm-drawer-empty { font-size: 13px; color: var(--text); opacity: 0.5; margin: 4px 0 0; }
+
 /* ── Dashboard: deletion toast ── */
 .db-deleted-toast {
   display: flex;

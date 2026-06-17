@@ -78,6 +78,12 @@ export default function Admin() {
   const [affSaveBusy,  setAffSaveBusy]  = useState(false)
   const [affSaveError, setAffSaveError] = useState(null)
   const [affSaveOk,    setAffSaveOk]    = useState(false)
+  const [affStats,        setAffStats]        = useState({})
+  const [affCommissions,  setAffCommissions]  = useState([])
+  const [affCommLoading,  setAffCommLoading]  = useState(false)
+  const [affCommError,    setAffCommError]    = useState(null)
+  const [markPaidBusy,    setMarkPaidBusy]    = useState(false)
+  const [markPaidConfirm, setMarkPaidConfirm] = useState(false)
 
   /* Drawer */
   const [drawerBiz,           setDrawerBiz]           = useState(null)
@@ -239,10 +245,26 @@ export default function Admin() {
   const loadAffiliates = useCallback(async () => {
     if (!user) return
     setAffLoading(true)
-    const { data, error } = await supabase
-      .from('affiliates')
-      .select('id, name, email, code, status, total_clients, total_earned, created_at, approved_email_sent_at, admin_notes, city, province, phone, legal_name')
-      .order('created_at', { ascending: false })
+    const [{ data, error }, { data: commData }] = await Promise.all([
+      supabase
+        .from('affiliates')
+        .select('id, name, email, code, status, total_clients, total_earned, created_at, approved_email_sent_at, admin_notes, city, province, phone, legal_name')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('affiliate_commissions')
+        .select('affiliate_id, business_id, amount, status'),
+    ])
+    const statsMap = {}
+    for (const row of (commData ?? [])) {
+      if (!statsMap[row.affiliate_id]) statsMap[row.affiliate_id] = { bids: new Set(), earned: 0, pending: 0 }
+      const s = statsMap[row.affiliate_id]
+      s.bids.add(row.business_id)
+      if (row.status === 'pending' || row.status === 'paid') s.earned += Number(row.amount)
+      if (row.status === 'pending') s.pending += Number(row.amount)
+    }
+    const computed = {}
+    for (const [id, s] of Object.entries(statsMap)) computed[id] = { clients: s.bids.size, earned: s.earned, pending: s.pending }
+    setAffStats(computed)
     if (error) {
       setAffError('Errore nel caricamento affiliati. Riprova o controlla la connessione.')
     } else {
@@ -278,7 +300,7 @@ export default function Admin() {
     setActivatingId(null)
   }
 
-  const openAffiliateDrawer = useCallback((affiliate) => {
+  const openAffiliateDrawer = useCallback(async (affiliate) => {
     setDrawerAff(affiliate)
     setAffDraft({
       city: affiliate.city ?? '',
@@ -290,6 +312,23 @@ export default function Admin() {
     setAffSaveBusy(false)
     setAffSaveError(null)
     setAffSaveOk(false)
+    setAffCommissions([])
+    setAffCommLoading(true)
+    setAffCommError(null)
+    setMarkPaidConfirm(false)
+
+    const { data, error } = await supabase
+      .from('affiliate_commissions')
+      .select('id, business_id, amount, month_number, status, paid_at, created_at, businesses(name)')
+      .eq('affiliate_id', affiliate.id)
+      .order('created_at', { ascending: false })
+
+    setAffCommLoading(false)
+    if (error) {
+      setAffCommError('Errore nel caricamento commissioni.')
+    } else {
+      setAffCommissions(data ?? [])
+    }
   }, [])
 
   const closeAffiliateDrawer = useCallback(() => {
@@ -297,7 +336,33 @@ export default function Admin() {
     setAffSaveBusy(false)
     setAffSaveError(null)
     setAffSaveOk(false)
+    setAffCommissions([])
+    setAffCommLoading(false)
+    setAffCommError(null)
+    setMarkPaidConfirm(false)
   }, [])
+
+  const markCommissionsPaid = useCallback(async () => {
+    if (!drawerAff) return
+    setMarkPaidBusy(true)
+    const now = new Date().toISOString()
+    const { error } = await supabase
+      .from('affiliate_commissions')
+      .update({ status: 'paid', paid_at: now })
+      .eq('affiliate_id', drawerAff.id)
+      .eq('status', 'pending')
+    setMarkPaidBusy(false)
+    setMarkPaidConfirm(false)
+    if (error) {
+      setAffCommError('Errore nel salvataggio. Riprova.')
+      return
+    }
+    setAffCommissions(prev => prev.map(c => c.status === 'pending' ? { ...c, status: 'paid', paid_at: now } : c))
+    setAffStats(prev => {
+      const cur = prev[drawerAff.id] ?? { clients: 0, earned: 0, pending: 0 }
+      return { ...prev, [drawerAff.id]: { ...cur, pending: 0 } }
+    })
+  }, [drawerAff])
 
   const saveAffiliateDetails = useCallback(async () => {
     if (!drawerAff) return
@@ -599,13 +664,14 @@ export default function Admin() {
                     <thead>
                       <tr>
                         <th>Affiliato</th><th>Email</th><th>Codice</th><th>Stato</th>
-                        <th>Clienti</th><th>Guadagnato</th><th>Registrato</th><th>Azioni</th>
+                        <th>Clienti</th><th>Maturato</th><th>Da pagare</th><th>Registrato</th><th>Azioni</th>
                       </tr>
                     </thead>
                     <tbody>
                       {affiliates.map(a => {
                         const busy = activatingId === a.id
                         const cityProvince = formatCityProvince(a.city, a.province)
+                        const cs = affStats[a.id]
                         return (
                           <tr key={a.id} className={`adm-row--clickable ${busy ? 'adm-row--busy' : ''}`} onClick={() => openAffiliateDrawer(a)}>
                             <td>
@@ -620,8 +686,9 @@ export default function Admin() {
                             <td><span className="adm-cell-email">{a.email ?? '—'}</span></td>
                             <td><code style={{ fontSize: 12, background: 'var(--code-bg)', padding: '2px 6px', borderRadius: 4 }}>{a.code}</code></td>
                             <td><AffStatusBadge status={a.status} /></td>
-                            <td><span className="adm-cell-text">{a.total_clients ?? 0}</span></td>
-                            <td><span className="adm-cell-text">€{Number(a.total_earned ?? 0).toFixed(2)}</span></td>
+                            <td><span className="adm-cell-text">{cs?.clients ?? 0}</span></td>
+                            <td><span className="adm-cell-text">{cs ? `€${cs.earned.toFixed(2)}` : '—'}</span></td>
+                            <td><span className="adm-cell-text adm-comm-pending-val">{cs?.pending > 0 ? `€${cs.pending.toFixed(2)}` : '—'}</span></td>
                             <td><span className="adm-cell-text adm-cell-date">{formatDate(a.created_at)}</span></td>
                             <td>
                               <div className="adm-row-actions">
@@ -644,6 +711,7 @@ export default function Admin() {
                   {affiliates.map(a => {
                     const busy = activatingId === a.id
                     const cityProvince = formatCityProvince(a.city, a.province)
+                    const cs = affStats[a.id]
                     return (
                       <div key={a.id} className="adm-card adm-aff-card" onClick={() => openAffiliateDrawer(a)}>
                         <div className="adm-card-head">
@@ -661,8 +729,9 @@ export default function Admin() {
                         </div>
                         <div className="adm-card-meta">
                           <span className="adm-cell-text">Codice: <code style={{ fontSize: 12, background: 'var(--code-bg)', padding: '2px 6px', borderRadius: 4 }}>{a.code}</code></span>
-                          <span className="adm-cell-text">Clienti: {a.total_clients ?? 0}</span>
-                          <span className="adm-cell-text">Guadagnato: €{Number(a.total_earned ?? 0).toFixed(2)}</span>
+                          <span className="adm-cell-text">Clienti: {cs?.clients ?? 0}</span>
+                          <span className="adm-cell-text">Maturato: {cs ? `€${cs.earned.toFixed(2)}` : '—'}</span>
+                          {cs?.pending > 0 && <span className="adm-cell-text adm-comm-pending-val">Da pagare: €{cs.pending.toFixed(2)}</span>}
                           <span className="adm-cell-text adm-cell-date">{formatDate(a.created_at)}</span>
                         </div>
                         <div className="adm-card-footer">
@@ -723,6 +792,14 @@ export default function Admin() {
         saveError={affSaveError}
         saveOk={affSaveOk}
         onClose={closeAffiliateDrawer}
+        commissions={affCommissions}
+        commLoading={affCommLoading}
+        commError={affCommError}
+        markPaidBusy={markPaidBusy}
+        markPaidConfirm={markPaidConfirm}
+        onMarkPaid={markCommissionsPaid}
+        onMarkPaidConfirm={() => setMarkPaidConfirm(true)}
+        onMarkPaidCancel={() => setMarkPaidConfirm(false)}
       />
     )}
   </>
@@ -916,7 +993,8 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
   )
 }
 
-function AffiliateDrawer({ affiliate, draft, onDraftChange, onSave, saveBusy, saveError, saveOk, onClose }) {
+function AffiliateDrawer({ affiliate, draft, onDraftChange, onSave, saveBusy, saveError, saveOk, onClose, commissions, commLoading, commError, markPaidBusy, markPaidConfirm, onMarkPaid, onMarkPaidConfirm, onMarkPaidCancel }) {
+  const pendingTotal = (commissions ?? []).filter(c => c.status === 'pending').reduce((s, c) => s + Number(c.amount), 0)
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -967,6 +1045,58 @@ function AffiliateDrawer({ affiliate, draft, onDraftChange, onSave, saveBusy, sa
                 <span className="adm-drawer-label">Località</span>
                 <span className="adm-drawer-value">{cityProvince}</span>
               </div>
+            )}
+          </div>
+
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Commissioni</div>
+            {commLoading ? (
+              <div className="adm-drawer-loading"><AdminSpinner small /></div>
+            ) : commError ? (
+              <div className="adm-aff-save-msg adm-aff-save-msg--error">{commError}</div>
+            ) : !commissions || commissions.length === 0 ? (
+              <p className="adm-drawer-empty">Nessuna commissione registrata.</p>
+            ) : (
+              <>
+                <div className="adm-comm-table-wrap">
+                  <table className="adm-table adm-comm-table">
+                    <thead>
+                      <tr><th>Cliente</th><th>Mese</th><th>Importo</th><th>Stato</th><th>Data</th></tr>
+                    </thead>
+                    <tbody>
+                      {commissions.map(c => (
+                        <tr key={c.id}>
+                          <td><span className="adm-cell-text">{c.businesses?.name ?? '—'}</span></td>
+                          <td><span className="adm-cell-text">{c.month_number}/12</span></td>
+                          <td><span className="adm-cell-text">€{Number(c.amount).toFixed(2)}</span></td>
+                          <td><CommStatusBadge status={c.status} /></td>
+                          <td><span className="adm-cell-text adm-cell-date">{formatDate(c.created_at)}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {pendingTotal > 0 && (
+                  <div className="adm-comm-footer">
+                    <span className="adm-comm-pending-label">Da pagare: <strong>€{pendingTotal.toFixed(2)}</strong></span>
+                    {!markPaidConfirm ? (
+                      <button className="adm-comm-pay-btn" onClick={onMarkPaidConfirm} disabled={markPaidBusy}>
+                        Segna come pagate
+                      </button>
+                    ) : (
+                      <div className="adm-comm-confirm">
+                        <p className="adm-comm-confirm-msg">Confermi di aver pagato <strong>€{pendingTotal.toFixed(2)}</strong> a <strong>{affiliate.name}</strong>?</p>
+                        <div className="adm-comm-confirm-actions">
+                          <button className="adm-comm-confirm-yes" onClick={onMarkPaid} disabled={markPaidBusy}>
+                            {markPaidBusy ? '…' : 'Conferma'}
+                          </button>
+                          <button className="adm-comm-confirm-no" onClick={onMarkPaidCancel} disabled={markPaidBusy}>Annulla</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -1087,6 +1217,16 @@ function AffStatusBadge({ status }) {
     approved: { label: 'Attivo',    cls: 'adm-badge--green'  },
     pending:  { label: 'In attesa', cls: 'adm-badge--yellow' },
     rejected: { label: 'Rifiutato', cls: 'adm-badge--gray'   },
+  }
+  const { label, cls } = map[status] ?? { label: status, cls: 'adm-badge--gray' }
+  return <span className={`adm-badge ${cls}`}>{label}</span>
+}
+
+function CommStatusBadge({ status }) {
+  const map = {
+    pending:   { label: 'In attesa', cls: 'adm-badge--yellow' },
+    paid:      { label: 'Pagata',    cls: 'adm-badge--green'  },
+    cancelled: { label: 'Annullata', cls: 'adm-badge--gray'   },
   }
   const { label, cls } = map[status] ?? { label: status, cls: 'adm-badge--gray' }
   return <span className={`adm-badge ${cls}`}>{label}</span>
