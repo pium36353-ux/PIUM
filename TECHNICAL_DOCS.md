@@ -1,6 +1,77 @@
 # PIUM — Documentazione Tecnica
 
-> Documento aggiornato al 2026-06-08. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
+> Documento aggiornato al 2026-06-18. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
+
+---
+
+## Aggiornamento 2026-06-18
+
+**Sessione: commissioni affiliati automatiche, capacità booking multi-posto, UX dashboard, audit pre-lancio**
+
+Cinque commit, tutti in produzione su `master`.
+
+### Nuove funzionalità
+
+**feat(affiliates)** `a80de07` — Registro commissioni automatico via Stripe webhook.
+- Nuova tabella `affiliate_commissions` (migration `20260610_affiliate_commissions.sql`): `id`, `affiliate_id FK→affiliates`, `business_id FK→businesses`, `stripe_invoice_id text UNIQUE`, `amount numeric(10,2) DEFAULT 25.00`, `month_number int 1–12`, `status (pending|paid|cancelled)`, `paid_at timestamptz`, `created_at`.
+- `stripe-webhook/index.ts` estesa: su `invoice.paid`, verifica `businesses.affiliate_code` → carica affiliato (`status = 'approved'`) → conta commissioni esistenti (`< 12`) → inserisce riga con `month_number = existingCount + 1`.
+- Costanti: `COMMISSION_AMOUNT = 25.00`, `COMMISSION_MONTHS_CAP = 12`. Cap di 12 mesi per coppia `(affiliate_id, business_id)`.
+- Idempotente: `stripe_invoice_id UNIQUE` previene doppio inserimento su retry Stripe (codice errore `23505` ignorato silenziosamente).
+- RLS: affiliato legge solo le proprie commissioni; admin legge e aggiorna tutto; nessuna policy INSERT (solo webhook via service role bypassa RLS).
+
+**feat(booking)** `d69e721` — Capacità postazioni multipla.
+- Nuova colonna `businesses.booking_capacity int NOT NULL DEFAULT 1 CHECK (between 1 and 50)` (migration `20260610_booking_capacity.sql`).
+- `Orari.jsx`: aggiunto campo input per la capacità nella sezione impostazioni orari.
+- `get_taken_slots` v2 (DROP+RECREATE): ora include anche i booking con `status = 'pending'` (`UNION ALL` con `bookings JOIN services` per durata; fallback 60 min se servizio non trovato). Prima includeva solo `appointments`.
+- `create_booking` v3 (DROP+RECREATE): aggiunge check capacità — conta slot sovrapposti confermati + pending (`get_taken_slots`), confronta con `booking_capacity`; lancia `'Orario non più disponibile'` se `count >= capacity`. Stessa firma di v2 (`20260519_booking_services.sql`).
+- `BookingSection.jsx`: sfrutta la nuova logica — un orario appare disponibile finché la capacità non è satura.
+- `PublicSite.jsx`: aggiunto `booking_capacity` nel select businesses.
+
+**feat(ux)** `6db955f` — URL sito copiabile in dashboard + favicon unificata.
+- `Panoramica.jsx`: nuova card "Il tuo sito" (`https://${slug}.piumapp.com`) con pulsanti Copia (feedback visivo 2s) e Apri.
+- `EditorSito.jsx`: link "Vedi sito pubblico" corretto da `www.piumapp.com/site/${slug}` → `${slug}.piumapp.com`; pulsante Copia aggiunto accanto.
+- `Social.jsx`: rimossa istruzione "Includi sempre..." dal prompt AI; URL `${slug}.piumapp.com` aggiunto via codice post-generazione (solo se non già presente nel testo, evita doppioni). Prefisso: `📍 Prenota su:`.
+- `Recensioni.jsx`: `buildReplyPrompt` include `- Sito: ${slug}.piumapp.com` + istruzione finale "Quando naturale, chiudi con un invito a prenotare o visitare il sito".
+- **fix(reviews)**: `togglePublish` scriveva `.update({ published: next })` su un campo inesistente nello schema — l'update su Supabase aggiornava 0 righe silenziosamente. Corretta in `.update({ is_visible: next })`. Tutti i 5 riferimenti a `.published` convertiti a `.is_visible`. Aggiunta gestione errore con toast rosso.
+- Favicon unificata: `index.html` usa `.ico` + `.png` + `apple-touch-icon` (rimosso `favicon.svg`). Rimosse 4 righe di injection dinamica da `main.jsx`. `vercel.json`: aggiunto no-cache per `favicon-32.png`.
+
+**fix(favicon)** `5379ac0` — Rigenerazione corretta dei file favicon.
+- La prima generazione (`6db955f`) era corrotta: `scripts/gen-favicon.mjs` usava un decoder PNG puro Node.js che ignorava i filtri di riga PNG (Sub/Up/Average/Paeth), producendo output quasi bianco (pixel delta-encoded interpretati come assoluti).
+- Riscritto con `sharp` + `png-to-ico` (devDependencies): genera 16×16, 32×32, 48×48 da `public/icon-512.png`; `.ico` risultante contiene 3 immagini BMP DIB (~15 kB, formato universalmente supportato). `favicon-32.png`: 1782 byte corretti (era 351 corrotto).
+- Installazione fallita inizialmente con `npm i -D sharp png-to-ico` per errore SSL aziendale; risolto con `--strict-ssl false`.
+
+**feat(admin)** `4a6d5c9` — Pannello admin affiliati collegato al registro commissioni.
+- `loadAffiliates`: batch query in `Promise.all` su `affiliates` + `affiliate_commissions(affiliate_id, business_id, amount, status)`. Calcolo client-side: `Set<business_id>` per clienti distinti, somme separate per `earned` (pending+paid) e `pending`.
+- Tabella: "Guadagnato" → "Maturato" + nuova colonna "Da pagare" (arancio se > 0). `total_clients`/`total_earned` del DB rimangono nella select ma non vengono più renderizzati.
+- Drawer: nuova sezione "Commissioni" (caricata async all'apertura) con tabella per-riga: Cliente (embed `businesses(name)`), Mese (N/12), Importo, Stato (badge), Data. Se pendente > 0: totale "Da pagare" + pulsante "Segna come pagate" → conferma inline `"Confermi di aver pagato €X a [nome]?"` → UPDATE `status='paid', paid_at=now()` su tutte le righe pending dell'affiliato. Optimistic UI: righe diventano "Pagata" e colonna tabella si azzera senza reload.
+
+### Audit pre-lancio (sola lettura — nessuna modifica)
+
+Audit completo: sicurezza frontend, flussi critici, gestione errori, edge functions, RLS, UX, PWA.
+
+| Severity | Problema | File |
+|---|---|---|
+| ✅ risolto | `togglePublish` scriveva su colonna inesistente `published` | `Recensioni.jsx` |
+| 🟡 | `notify-new-booking`: `verify_jwt=false` senza shared secret — chiunque conosca l'URL può inviare push a qualsiasi business | `supabase/functions/notify-new-booking` |
+| 🟡 | `PublicSite.jsx`: recensioni `is_visible=false` incluse nella risposta API — filtro solo client-side espone testo nel network tab | `PublicSite.jsx` + RLS `reviews` |
+| 🟡 | `Auth.jsx`: `signUp()` naviga a `/onboarding` senza controllare `data.session` — bounce silenzioso se email confirmation abilitata | `Auth.jsx:91` |
+| 🟡 | `Onboarding.jsx`: `handleSubmit` senza `try/finally` — spinner bloccato su eccezione di rete in `getUser()` | `Onboarding.jsx:129` |
+| 🟡 | `Settings.jsx`, `ResetPassword.jsx`, `AffiliatesAuth.jsx`: messaggi errore Supabase raw (inglese) mostrati all'utente | righe 95/108, 40, 69 |
+| 🟢 | Stripe polling: max 10s senza messaggio di recovery dopo timeout | `Dashboard.jsx:116` |
+| 🟢 | `CACHE = 'pium-v2'` in `sw.js` — non viene mai bumped; invalidazione cache richiede modifica manuale | `public/sw.js` |
+
+### Ancora da fare prima del lancio reale
+
+- 🔴 **Stripe LIVE**: chiavi live (`pk_live_`/`sk_live_`) in `.env` + Vercel + Supabase Secrets; webhook live ricreato con endpoint produzione
+- 🔴 **Documenti legali**: compilare i placeholder con dati societari reali (P.IVA, ragione sociale, PEC, foro)
+- 🔴 **Cookie banner GDPR** (assente)
+- 🟡 `VITE_VAPID_PUBLIC_KEY` nel `.env` frontend (attualmente vuoto — push notification lato client non funzionanti)
+- 🟡 Fix: `Auth.jsx` — controllare `data.session` dopo `signUp()` e mostrare "Controlla la tua email" se nulla
+- 🟡 Fix: `notify-new-booking` — aggiungere shared secret header per autenticare le chiamate in ingresso
+- 🟡 Fix: RLS `reviews` — aggiungere policy `anon SELECT WHERE is_visible = true` (filtro server-side)
+- 🟡 Fix errori in italiano: `Settings.jsx`, `ResetPassword.jsx`, `AffiliatesAuth.jsx`
+- 🟡 Fix: `Onboarding.jsx` — wrappare `handleSubmit` in `try/finally` per evitare spinner bloccato su errore di rete
+- 🟡 Verificare deliverability email auth Supabase (SMTP Resend) — durante i test un'email di conferma non è arrivata; sender default Supabase limite ~2/ora
 
 ---
 
@@ -224,6 +295,7 @@ La tabella centrale: un'attività per utente. Il titolare interagisce solo con i
 | `trial_ends_at` | timestamptz | Scadenza periodo trial — editabile dall'admin nel drawer (migration 20260518) |
 | `admin_notes` | text | Note interne visibili solo all'admin (migration 20260518) |
 | `affiliate_code` | text | Codice affiliato che ha riferito questo cliente al signup (migration 20260520). Join: `affiliate_code = affiliates.code` |
+| `booking_capacity` | int | Numero massimo di prenotazioni simultanee per lo stesso orario. Default `1`, range 1–50. (migration 20260610_booking_capacity) |
 | `is_active` | boolean | Default `true`; se `false` il mini-sito non è visibile |
 | `ai_calls_month` | int | Contatore chiamate AI nel mese corrente (deprecato — usa `ai_calls_month_display`) |
 | `ai_calls_total` | int | Contatore chiamate AI totali |
@@ -441,6 +513,26 @@ Collega più servizi a un singolo appuntamento. Congela il prezzo e la durata al
 
 **RLS:** accesso tramite join con `appointments` → `businesses` (owner). Migration: `20260526_appointment_services.sql`.
 
+#### `affiliate_commissions`
+Registro commissioni affiliati. Una riga per ogni mensilità di abbonamento pagato da un cliente referenziato. Popolata automaticamente da `stripe-webhook` su `invoice.paid`; mai scritta dal frontend.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | uuid PK | `gen_random_uuid()` |
+| `affiliate_id` | uuid FK → `affiliates` | `on delete cascade` |
+| `business_id` | uuid FK → `businesses` | `on delete cascade` |
+| `stripe_invoice_id` | text NOT NULL UNIQUE | Previene doppio inserimento su retry Stripe |
+| `amount` | numeric(10,2) | Default `25.00` (€) |
+| `month_number` | int | Numero progressivo mensile per la coppia `(affiliate_id, business_id)`, range 1–12 |
+| `status` | text | `pending \| paid \| cancelled` |
+| `paid_at` | timestamptz | Popolato dall'admin al pagamento manuale |
+| `created_at` | timestamptz | |
+
+**RLS:** affiliato legge solo le proprie righe (`affiliate_id IN (SELECT id FROM affiliates WHERE user_id = auth.uid())`); admin legge e aggiorna tutto; nessuna policy INSERT (solo webhook con service role).
+**Indici:** `(affiliate_id, status)`, `(business_id)`.
+
+---
+
 #### `faq`
 Domande e risposte per il SupportBot flottante. Read-only dal client.
 
@@ -486,15 +578,15 @@ Domande e risposte per il SupportBot flottante. Read-only dal client.
 
 ### 5.3 RPC (Stored Functions)
 
-#### `get_taken_slots(p_business_id uuid, p_date date)`
+#### `get_taken_slots(p_business_id uuid, p_date date)` — v2
 - **Tipo:** `SECURITY DEFINER`, SQL puro
 - **Grant:** `anon, authenticated`
-- **Cosa fa:** Restituisce `(start_time, duration_minutes)` degli appuntamenti esistenti per un business in una data, senza esporre nomi clienti o note. Usato da `BookingSection.jsx` per calcolare gli slot disponibili nel calendario booking pubblico.
+- **Cosa fa:** Restituisce `(start_time, duration_minutes)` degli slot occupati per un business in una data. **v2 (migration 20260610_booking_capacity):** include sia `appointments` esistenti sia booking con `status = 'pending'` (via `UNION ALL`; durata da `services.duration_min` o fallback 60 min). Usato da `BookingSection.jsx` e da `create_booking` per il check capacità.
 
-#### `create_booking(p_business_id, p_service_id, p_customer_name, p_customer_email, p_date, p_time, p_customer_phone?, p_service_names?)`
+#### `create_booking(p_business_id, p_service_id, p_customer_name, p_customer_email, p_date, p_time, p_customer_phone?, p_service_names?)` — v3
 - **Tipo:** `SECURITY DEFINER`, PL/pgSQL
 - **Grant:** `anon, authenticated`
-- **Firma attuale** (dopo migration `20260519_booking_services.sql`):
+- **Firma attuale** (dopo migration `20260610_booking_capacity.sql`, identica a v2):
   ```
   p_business_id uuid, p_service_id uuid,
   p_customer_name text, p_customer_email text,
@@ -506,6 +598,7 @@ Domande e risposte per il SupportBot flottante. Read-only dal client.
 - **Cosa fa:** Crea una nuova prenotazione con `status='pending'`. Non richiede sessione autenticata. Validazioni interne:
   1. Servizio deve essere `is_available=true` e appartenere al business
   2. Antiabuse: un solo `pending` per email per business
+  3. **[v3]** Capacità: conta gli slot sovrapposti (confermati + pending) via `get_taken_slots`; se `count >= booking_capacity` → lancia `'Orario non più disponibile'`
 - **Restituisce:** UUID della nuova prenotazione
 - **`p_service_names`:** stringa opzionale con i nomi dei servizi selezionati (es. `"Taglio, Barba"`) — usata solo per display nel pannello pending
 
@@ -701,6 +794,23 @@ Esegui `supabase/schema.sql` nella SQL Editor di Supabase. Crea:
   → CREATE TRIGGER on_new_booking AFTER INSERT ON bookings
      che chiama supabase_functions.http_request() SENZA Authorization header
      (la funzione ha verify_jwt = false in config.toml)
+
+20260610_affiliate_commissions.sql
+  → CREATE TABLE affiliate_commissions (id, affiliate_id FK, business_id FK, stripe_invoice_id UNIQUE,
+     amount numeric(10,2) DEFAULT 25.00, month_number int 1-12, status pending|paid|cancelled, paid_at, created_at)
+  → CREATE INDEX idx_aff_comm_affiliate ON (affiliate_id, status)
+  → CREATE INDEX idx_aff_comm_business ON (business_id)
+  → ALTER TABLE: enable RLS
+  → CREATE POLICY "aff_comm: affiliate read own" (affiliate_id IN proprie righe via user_id)
+  → CREATE POLICY "aff_comm: admin read all" e "aff_comm: admin update all" (app_metadata.role = 'admin')
+  ⚠️ Nessuna policy INSERT: l'unico writer è stripe-webhook via service role (bypass RLS)
+
+20260610_booking_capacity.sql
+  → ALTER businesses: aggiunge booking_capacity int NOT NULL DEFAULT 1 CHECK (between 1 and 50)
+  → CREATE OR REPLACE FUNCTION get_taken_slots v2: UNION ALL con bookings pending (durata da services, fallback 60 min)
+  → DROP FUNCTION create_booking (firma v2 — stessa firma, necessario drop per recreate)
+  → CREATE FUNCTION create_booking v3: aggiunge check capacità (count slot sovrapposti >= booking_capacity → eccezione)
+  → GRANT EXECUTE su create_booking v3 ad anon, authenticated
 ```
 
 ### Step 3 — Tabelle non in migrations (create direttamente in Supabase)
@@ -1094,9 +1204,23 @@ supabase.from('affiliates').select('code, name').eq('code', biz.affiliate_code).
 | `total_pending` | numeric | Commissioni in attesa di pagamento |
 | `created_at` | timestamptz | |
 
-### 12.4 Migration
+### 12.4 Commissioni automatiche via Stripe
 
-`affiliate_code` su `businesses` documentata in `20260520_affiliate_code.sql`. La tabella `affiliates` non ha migration locale — esiste in produzione, ricreala manualmente se necessario (vedi §6, Step 3).
+Il webhook `stripe-webhook` registra automaticamente le commissioni su `invoice.paid`:
+1. Verifica `businesses.affiliate_code` → carica affiliato con `status = 'approved'`
+2. Conta le commissioni già esistenti per la coppia `(affiliate_id, business_id)` — cap 12 mesi
+3. Inserisce riga in `affiliate_commissions` con `amount = 25.00`, `month_number = count + 1`, `status = 'pending'`
+4. Idempotente: `stripe_invoice_id UNIQUE` previene doppi inserimenti su retry Stripe
+
+I campi `total_clients` e `total_earned` in `affiliates` **non vengono più aggiornati dal sistema** — erano pensati per aggregati, ma il pannello admin ora li ignora e calcola tutto live da `affiliate_commissions`. Mantenuti per retro-compatibilità ma da considerare deprecati.
+
+### 12.5 Gestione commissioni in Admin
+
+L'admin vede le commissioni aggregate in tabella (clienti distinti, maturato, da pagare) e le dettaglio nel drawer. Il pulsante "Segna come pagate" aggiorna tutte le righe `pending` dell'affiliato a `status = 'paid'` con `paid_at = now()`. Operazione reversibile solo manualmente da DB.
+
+### 12.6 Migration
+
+`affiliate_code` su `businesses`: `20260520_affiliate_code.sql`. La tabella `affiliates` non ha migration locale — esiste in produzione, ricreala manualmente se necessario (vedi §6, Step 3). La tabella `affiliate_commissions` ha migration locale: `20260610_affiliate_commissions.sql` (vedi §6).
 
 ---
 
