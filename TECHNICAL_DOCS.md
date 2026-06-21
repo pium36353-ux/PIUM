@@ -1416,6 +1416,8 @@ Stesso flusso preview + deduplicazione della vCard. Il pulsante è visibile solo
 | 🟡 Aperto | Deliverability email auth Supabase — durante i test una conferma non è arrivata | Sender Supabase default ha limite ~2/ora; valutare SMTP Resend configurato |
 | 🟡 Aperto | `VITE_VAPID_PUBLIC_KEY` mancante nel `.env` frontend di produzione | Necessario per Web Push |
 
+- 🔵 **Internazionalizzazione (i18n)**: valutata per il futuro, non prioritaria al lancio. Approccio deciso: italiano come lingua di default invariata, sistema di traduzione (variabili sostituibili tipo `t('chiave')`) introdotto componente per componente, mai un sistema parallelo/duplicato. L'inglese sarà la prima lingua aggiunta, usata anche come lingua-ponte per le traduzioni successive. Da affrontare solo dopo aver consolidato la base clienti italiana.
+
 ---
 
 ## 17. Checklist Pre-Lancio
@@ -1437,3 +1439,16 @@ Stesso flusso preview + deduplicazione della vCard. Il pulsante è visibile solo
 | 🟡 | `VITE_VAPID_PUBLIC_KEY` in `.env` frontend produzione |
 | 🟡 | Verifica deliverability email auth (SMTP Resend) |
 | 🟡 | Verificare proprietà piumapp.com su Google Search Console e richiedere re-indicizzazione della home dopo il fix della meta description |
+
+---
+
+## 18. Metodologia di Deploy — Modifiche Delicate
+
+Per modifiche che toccano parti dell'app già in uso dai clienti (logica di business, flussi critici come auth/booking/pagamenti, refactoring estesi come una futura internazionalizzazione), si segue questa pratica:
+
+- **Deploy in finestra di basso traffico**: preferibilmente notte (i clienti sono attività locali italiane con orari diurni, traffico quasi nullo di notte).
+- **Verifica attiva post-deploy**: dopo ogni deploy delicato, navigare di persona le sezioni principali dell'app (dashboard, sito pubblico di un'attività di test, booking) per confermare che il comportamento sia invariato rispetto a prima.
+- **Finestra di osservazione**: lasciare alcune ore tra il deploy e l'orario di utilizzo reale dei clienti, per avere il tempo di individuare e correggere eventuali problemi prima che li incontri un cliente.
+- **Vercel deploy è atomico e senza downtime visibile** — il vantaggio della notte non è evitare un disservizio, ma avere il tempo per testare con calma prima che i clienti tornino attivi.
+
+Questa pratica si applica in particolare a: refactoring estesi (es. futura internazionalizzazione, componente per componente), modifiche alla logica di booking/pagamenti, modifiche alla RLS o alle Edge Functions critiche.
