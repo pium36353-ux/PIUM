@@ -72,10 +72,45 @@ export default function PublicSite() {
       setReviews(rvs)
       setIsOwner(session?.user?.id === biz.user_id)
       setStatus('found')
-      document.title = `${biz.name} — PIUM`
+
+      const pageTitle = biz.city
+        ? `${biz.name} — ${biz.category || 'Attività locale'} a ${biz.city} | PIUM`
+        : `${biz.name} — ${biz.category || 'Attività locale'} | PIUM`
+      const rawDesc = scFlat.about_text || biz.description || ''
+      const metaDesc = rawDesc
+        ? truncateToWord(rawDesc, 155)
+        : `Scopri ${biz.name}${biz.city ? ` a ${biz.city}` : ''} su PIUM.`
+      const ogImage = scFlat.cover_image_url || biz.profile_image || 'https://www.piumapp.com/icon-512.png'
+      const canonical = `https://${biz.slug}.piumapp.com`
+
+      document.title = pageTitle
+      setMetaTag('name',     'description',         metaDesc)
+      setMetaTag('property', 'og:title',            pageTitle)
+      setMetaTag('property', 'og:description',      metaDesc)
+      setMetaTag('property', 'og:image',            ogImage)
+      setMetaTag('property', 'og:url',              window.location.href)
+      setMetaTag('property', 'og:type',             'business.business')
+      setMetaTag('name',     'twitter:card',        'summary_large_image')
+      setMetaTag('name',     'twitter:title',       pageTitle)
+      setMetaTag('name',     'twitter:description', metaDesc)
+      setMetaTag('name',     'twitter:image',       ogImage)
+      setLinkCanonical(canonical)
     }
     load()
-    return () => { alive = false; document.title = 'PIUM' }
+    return () => {
+      alive = false
+      document.title = 'PIUM'
+      const staticDesc = 'PIUM — Sito web, prenotazioni online e AI per attività locali italiane. 99,99€/mese, 14 giorni gratis.'
+      const descEl = document.head.querySelector('meta[name="description"]')
+      if (descEl) descEl.setAttribute('content', staticDesc)
+      ;['og:title', 'og:description', 'og:image', 'og:url', 'og:type'].forEach(k => {
+        document.head.querySelector(`meta[property="${k}"]`)?.remove()
+      })
+      ;['twitter:card', 'twitter:title', 'twitter:description', 'twitter:image'].forEach(k => {
+        document.head.querySelector(`meta[name="${k}"]`)?.remove()
+      })
+      document.head.querySelector('link[rel="canonical"]')?.remove()
+    }
   }, [slug])
 
   useEffect(() => {
@@ -541,6 +576,34 @@ function getTheme(category) {
   if (c.includes('estetista') || c.includes('estetica') || c.includes('spa') || c.includes('benessere') || c.includes('centro estetico')) return THEMES.spa
   if (c.includes('professionista') || c.includes('studio') || c.includes('consulenza') || c.includes('avvocato') || c.includes('commercialista') || c.includes('notaio')) return THEMES.professionista
   return THEMES.default
+}
+
+/* ── SEO helpers ── */
+function setMetaTag(attr, key, value) {
+  let el = document.head.querySelector(`meta[${attr}="${key}"]`)
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute(attr, key)
+    document.head.appendChild(el)
+  }
+  el.setAttribute('content', value)
+}
+
+function setLinkCanonical(href) {
+  let el = document.head.querySelector('link[rel="canonical"]')
+  if (!el) {
+    el = document.createElement('link')
+    el.setAttribute('rel', 'canonical')
+    document.head.appendChild(el)
+  }
+  el.setAttribute('href', href)
+}
+
+function truncateToWord(text, max) {
+  if (text.length <= max) return text
+  const cut = text.slice(0, max)
+  const last = cut.lastIndexOf(' ')
+  return (last > 0 ? cut.slice(0, last) : cut) + '…'
 }
 
 /* ── Helpers ── */
