@@ -1,6 +1,57 @@
 # PIUM — Documentazione Tecnica
 
-> Documento aggiornato al 2026-06-18. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
+> Documento aggiornato al 2026-06-21. Permette a un tecnico senza contesto di capire l'intero progetto e ricostruire l'ambiente Supabase da zero.
+
+---
+
+## Aggiornamento 2026-06-21
+
+**Sessione: meta tag SEO dinamici per pagine pubbliche**
+
+Un commit in produzione su `master`.
+
+### Nuova funzionalità
+
+**feat(seo)** `4ec7a27` — Meta tag Open Graph, Twitter Card e canonical su `PublicSite.jsx`. Gestione via DOM puro, nessuna libreria esterna.
+
+**`index.html`:**
+- `<html lang="en">` → `<html lang="it">` (fix correttezza lingua per crawler e screen reader)
+- Aggiunto `<meta name="description">` statico di fallback: `"PIUM — Sito web, prenotazioni online e AI per attività locali italiane. 99,99€/mese, 14 giorni gratis."` — visibile prima dell'idratazione React
+
+**`src/pages/PublicSite.jsx`:**
+
+Tre funzioni helper aggiunte a livello modulo:
+- `setMetaTag(attr, key, value)` — cerca `<meta [attr]="[key]">` in `<head>`, lo aggiorna se esiste o lo crea e appende
+- `setLinkCanonical(href)` — stessa logica per `<link rel="canonical">`
+- `truncateToWord(text, max)` — tronca al carattere `max` sull'ultimo spazio (mai a metà parola), aggiunge `…`
+
+Nel `useEffect` di caricamento dati (dipendenza `[slug]`), subito dopo `setStatus('found')`:
+
+| Tag | Valore |
+|---|---|
+| `document.title` | `{name} — {category\|'Attività locale'} a {city} \| PIUM` (omette ` a {city}` se assente) |
+| `meta[name="description"]` | `about_text \|\| description` troncato a 155 caratteri sull'ultimo spazio; fallback: `"Scopri {name} a {city} su PIUM."` |
+| `og:title` | uguale a `document.title` |
+| `og:description` | uguale a meta description |
+| `og:image` | `cover_image_url` → `profile_image` → `https://www.piumapp.com/icon-512.png` (mai assente) |
+| `og:url` | `window.location.href` |
+| `og:type` | `business.business` |
+| `twitter:card` | `summary_large_image` |
+| `twitter:title / description / image` | stessi valori di og:* |
+| `link[rel="canonical"]` | `https://{biz.slug}.piumapp.com` (sempre il sottodominio, anche da `/site/:slug`) |
+
+**Cleanup al dismount:** `document.title = 'PIUM'`, meta description ripristinata al valore statico di `index.html`, tutti i tag `og:*` e `twitter:*` rimossi con `.remove()`, canonical rimosso.
+
+**Impatto SEO — prima/dopo:**
+
+| Voce | Prima | Dopo |
+|---|---|---|
+| `<html lang>` | `en` | `it` |
+| `<title>` | `PIUM` (fisso per tutte le pagine) | `Pizzeria Rossi — Ristorante a Milano \| PIUM` |
+| Meta description | assente | 155 caratteri dalla descrizione del business |
+| Open Graph | assente | Anteprima ricca su WhatsApp / Telegram / social |
+| Twitter Card | assente | `summary_large_image` con immagine copertina |
+| Canonical | assente | `https://{slug}.piumapp.com` |
 
 ---
 
@@ -1379,8 +1430,10 @@ Stesso flusso preview + deduplicazione della vCard. Il pulsante è visibile solo
 | ✅ | RLS su tutte le tabelle |
 | ✅ | Select esplicita in `PublicSite.jsx` (nessun campo admin/billing esposto) |
 | ✅ | XSS guard URL social (`safeHref` — commit `ff00847`) |
+| ✅ | Meta tag SEO dinamici su `PublicSite.jsx` — Open Graph, Twitter Card, canonical, `lang="it"` (commit `4ec7a27` — 2026-06-21) |
 | 🔴 | Stripe LIVE: chiavi `pk_live_`/`sk_live_` + webhook live + `VITE_STRIPE_PUBLIC_KEY` live |
 | 🔴 | Documenti legali: compilare placeholder con dati societari reali |
 | 🔴 | Cookie banner GDPR |
 | 🟡 | `VITE_VAPID_PUBLIC_KEY` in `.env` frontend produzione |
 | 🟡 | Verifica deliverability email auth (SMTP Resend) |
+| 🟡 | Verificare proprietà piumapp.com su Google Search Console e richiedere re-indicizzazione della home dopo il fix della meta description |
