@@ -8165,6 +8165,46 @@ code {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
+.bot-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg, #fff);
+}
+.bot-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+  padding: 0;
+}
+.bot-search-input::placeholder { color: var(--text-secondary, #aaa); }
+.bot-search-clear {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-secondary, #aaa);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.bot-search-clear:hover { color: var(--text); }
+.bot-list-item--search { flex-wrap: wrap; gap: 4px; }
+.bot-item-tag {
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-bg, rgba(168,85,247,0.08));
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
 
 /* ── Agenda: month view ── */
 .ag-month { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
