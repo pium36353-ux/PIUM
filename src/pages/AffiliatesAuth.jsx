@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import { translateError } from '../lib/errors'
 
 function generateCode(name) {
   const base = name
@@ -66,7 +67,7 @@ export default function AffiliatesAuth() {
     })
 
     if (error) {
-      setError(error.status === 422 ? error.message : translateError(error.message))
+      setError(translateError(error.message))
       setLoading(false)
       return
     }
@@ -201,13 +202,6 @@ export default function AffiliatesAuth() {
   )
 }
 
-function translateError(msg) {
-  if (msg.includes('Invalid login credentials')) return 'Email o password errati.'
-  if (msg.includes('Email not confirmed')) return 'Conferma la tua email prima di accedere.'
-  if (msg.includes('User already registered')) return 'Questo indirizzo email e gia registrato.'
-  if (msg.includes('Password should be')) return 'La password deve essere di almeno 6 caratteri.'
-  return msg
-}
 
 function Eye() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>

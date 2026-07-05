@@ -132,81 +132,83 @@ export default function Onboarding() {
     setLoadingMsg('Salvataggio in corso…')
     setServerError(null)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { navigate('/auth', { replace: true }); return }
-
-    // 1. Insert business
-    const affiliateCode = localStorage.getItem('pium_ref') || null
-    const { data: biz, error } = await supabase
-      .from('businesses')
-      .insert({
-        user_id:             user.id,
-        name:                form.name.trim(),
-        slug:                await generateSlug(form.name.trim()),
-        category:            form.category,
-        business_type_custom:form.business_type_custom.trim() || null,
-        phone:               form.phone.trim()    || null,
-        whatsapp:            form.whatsapp.trim() || null,
-        email:               form.email.trim()    || null,
-        address:             form.address.trim()  || null,
-        city:                form.city.trim(),
-        affiliate_code:      affiliateCode,
-        status:              'trial',
-        trial_ends_at:       new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .select('id')
-      .single()
-
-    if (error) {
-      if (!mountedRef.current) return
-      setServerError('Errore nel salvataggio. Riprova tra qualche istante.')
-      setLoading(false)
-      return
-    }
-
-    if (affiliateCode) localStorage.removeItem('pium_ref')
-
-    const { error: acceptanceError } = await supabase
-      .from('legal_acceptances')
-      .upsert({
-        user_id: user.id,
-        context: 'merchant',
-        acceptance_type: 'merchant_terms_dpa_privacy',
-        document_versions: {
-          termini: '2026-05-28',
-          dpa: '2026-05-28',
-          privacy: '2026-05-28',
-        },
-        source: 'onboarding_create_business',
-      }, { onConflict: 'user_id,acceptance_type', ignoreDuplicates: true })
-
-    if (acceptanceError) {
-      if (!mountedRef.current) return
-      setServerError('Non è stato possibile salvare l\'accettazione dei documenti. Riprova o contatta l\'assistenza.')
-      setLoading(false)
-      return
-    }
-
-    // 2. Generate AI description
-    if (!mountedRef.current) return
-    setLoadingMsg('Generazione descrizione AI…')
     try {
-      const prompt = buildDescriptionPrompt(form)
-      const aiDescription = await generateWithClaude(prompt)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { navigate('/auth', { replace: true }); return }
 
-      const { error: updateError } = await supabase
+      // 1. Insert business
+      const affiliateCode = localStorage.getItem('pium_ref') || null
+      const { data: biz, error } = await supabase
         .from('businesses')
-        .update({ description: aiDescription.trim() })
-        .eq('id', biz.id)
+        .insert({
+          user_id:             user.id,
+          name:                form.name.trim(),
+          slug:                await generateSlug(form.name.trim()),
+          category:            form.category,
+          business_type_custom:form.business_type_custom.trim() || null,
+          phone:               form.phone.trim()    || null,
+          whatsapp:            form.whatsapp.trim() || null,
+          email:               form.email.trim()    || null,
+          address:             form.address.trim()  || null,
+          city:                form.city.trim(),
+          affiliate_code:      affiliateCode,
+          status:              'trial',
+          trial_ends_at:       new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .select('id')
+        .single()
 
-      if (updateError) {
-        console.error('[Supabase] errore aggiornamento description:', updateError)
+      if (error) {
+        if (!mountedRef.current) return
+        setServerError('Errore nel salvataggio. Riprova tra qualche istante.')
+        return
       }
-    } catch (err) {
-      console.error('[Claude] errore durante la generazione:', err)
-    }
 
-    navigate('/dashboard', { replace: true })
+      if (affiliateCode) localStorage.removeItem('pium_ref')
+
+      const { error: acceptanceError } = await supabase
+        .from('legal_acceptances')
+        .upsert({
+          user_id: user.id,
+          context: 'merchant',
+          acceptance_type: 'merchant_terms_dpa_privacy',
+          document_versions: {
+            termini: '2026-05-28',
+            dpa: '2026-05-28',
+            privacy: '2026-05-28',
+          },
+          source: 'onboarding_create_business',
+        }, { onConflict: 'user_id,acceptance_type', ignoreDuplicates: true })
+
+      if (acceptanceError) {
+        if (!mountedRef.current) return
+        setServerError('Non è stato possibile salvare l\'accettazione dei documenti. Riprova o contatta l\'assistenza.')
+        return
+      }
+
+      // 2. Generate AI description
+      if (!mountedRef.current) return
+      setLoadingMsg('Generazione descrizione AI…')
+      try {
+        const prompt = buildDescriptionPrompt(form)
+        const aiDescription = await generateWithClaude(prompt)
+
+        const { error: updateError } = await supabase
+          .from('businesses')
+          .update({ description: aiDescription.trim() })
+          .eq('id', biz.id)
+
+        if (updateError) {
+          console.error('[Supabase] errore aggiornamento description:', updateError)
+        }
+      } catch (err) {
+        console.error('[Claude] errore durante la generazione:', err)
+      }
+
+      navigate('/dashboard', { replace: true })
+    } finally {
+      if (mountedRef.current) setLoading(false)
+    }
   }
 
   return (

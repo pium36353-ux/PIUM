@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import { translateError } from '../lib/errors'
 
 const FIELDS = {
   login: [
@@ -77,7 +78,7 @@ export default function Auth() {
           navigate(role === 'admin' ? '/admin' : '/dashboard', { replace: true })
         }
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: values.email,
           password: values.password,
           options: {
@@ -88,7 +89,11 @@ export default function Auth() {
         if (error) {
           setError(translateError(error.message))
         } else {
-          navigate('/onboarding', { replace: true })
+          if (data.session) {
+            navigate('/onboarding', { replace: true })
+          } else {
+            setConfirmed(true)
+          }
         }
       }
     } finally {
@@ -252,17 +257,6 @@ export default function Auth() {
   }
 }
 
-function translateError(msg) {
-  if (msg.includes('Invalid login credentials')) return 'Email o password errati.'
-  if (msg.includes('Email not confirmed'))        return 'Conferma la tua email prima di accedere.'
-  if (msg.includes('User already registered'))   return 'Questo indirizzo email è già registrato.'
-  if (msg.includes('Password should be') || msg.includes('weak_password')) return 'La password deve essere di almeno 6 caratteri.'
-  if (msg.includes('Unable to validate'))        return 'Email non valida.'
-  if (msg.includes('rate limit') || msg.includes('over_email_send_rate_limit')) return 'Troppe richieste. Riprova tra qualche minuto.'
-  if (msg.includes('signup_disabled'))           return 'Le registrazioni sono temporaneamente disabilitate.'
-  if (msg.includes('network') || msg.includes('fetch')) return 'Errore di connessione. Controlla la tua rete e riprova.'
-  return 'Si è verificato un errore. Riprova tra poco.'
-}
 
 function Eye() {
   return (

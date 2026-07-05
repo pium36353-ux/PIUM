@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import { translateError } from '../lib/errors'
 
 export default function ResetPassword() {
   const [status, setStatus] = useState('checking')
@@ -37,7 +38,7 @@ export default function ResetPassword() {
     setSaving(false)
 
     if (error) {
-      setError(error.message || 'Impossibile aggiornare la password. Riprova.')
+      setError(translateError(error.message))
       return
     }
 

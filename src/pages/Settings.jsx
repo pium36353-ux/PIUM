@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 import { requestPermission, testNotification } from '../lib/notifications'
 import { subscribePush, unsubscribePush, isPushSubscribed } from '../lib/pushSubscription'
+import { translateError } from '../lib/errors'
 
 const NOTIF_KEY = 'pium_notification_settings'
 const DEFAULT_NOTIF = { appointmentMinutesBefore: 15, notifyNextOnComplete: false }
@@ -92,7 +93,7 @@ export default function Settings() {
     if (trimmed === user?.email) { setEmailError('È già la tua email attuale.'); return }
     setEmailStatus('saving')
     const { error } = await supabase.auth.updateUser({ email: trimmed })
-    if (error) { setEmailError(error.message); setEmailStatus('error') }
+    if (error) { setEmailError(translateError(error.message)); setEmailStatus('error') }
     else { setEmailStatus('ok'); setEmail('') }
   }
 
@@ -105,7 +106,7 @@ export default function Settings() {
     if (pwd.next !== pwd.confirm) { setPwdError('Le password non coincidono.'); return }
     setPwdStatus('saving')
     const { error } = await supabase.auth.updateUser({ password: pwd.next })
-    if (error) { setPwdError(error.message); setPwdStatus('error') }
+    if (error) { setPwdError(translateError(error.message)); setPwdStatus('error') }
     else { setPwdStatus('ok'); setPwd({ current: '', next: '', confirm: '' }) }
   }
 
