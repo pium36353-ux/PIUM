@@ -2,6 +2,20 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'npm:web-push'
 
 Deno.serve(async (req) => {
+  const incomingSecret = req.headers.get('X-Webhook-Secret')
+  const expectedSecret = Deno.env.get('NOTIFY_WEBHOOK_SECRET')
+
+  if (!incomingSecret || !expectedSecret) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  }
+
+  const encoder = new TextEncoder()
+  const a = encoder.encode(incomingSecret)
+  const b = encoder.encode(expectedSecret)
+  if (a.length !== b.length || !crypto.subtle.timingSafeEqual(a, b)) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  }
+
   try {
     const body = await req.json()
     const booking = body.record ?? body
