@@ -104,23 +104,38 @@ Cancellare tutti i dati del Cliente entro 30 giorni dalla risoluzione del contra
 
 # 5. Sub-responsabili del Trattamento
 
-PIUM si avvale dei seguenti sub-responsabili del trattamento, tutti operanti con garanzie adeguate ai sensi del GDPR (Standard Contractual Clauses o meccanismi equivalenti):
+PIUM si avvale dei seguenti sub-responsabili e fornitori tecnici per l'erogazione del servizio, nei limiti necessari alle finalità indicate nel presente DPA e secondo garanzie adeguate ai sensi del GDPR:
 
-Supabase Inc. — database PostgreSQL, autenticazione, storage foto
+Supabase Inc. — infrastruttura backend, database PostgreSQL, autenticazione, storage, sicurezza e servizi tecnici collegati.
 
-Vercel Inc. — hosting dell'applicazione web
+Vercel Inc. — hosting frontend, distribuzione dell'applicazione web e infrastruttura di pubblicazione.
 
-Anthropic PBC — elaborazione AI (solo testi anonimi dell'attività, nessun dato personale dei clienti finali viene trasmesso ad Anthropic)
+Stripe Inc. — gestione pagamenti, abbonamenti, checkout, dati di fatturazione e informazioni tecniche necessarie alle transazioni.
 
-Stripe Inc. — gestione pagamenti (dati di fatturazione del Cliente, non dei clienti finali)
+Cloudflare Inc. — DNS, sicurezza, routing, protezione dell'infrastruttura e servizi di rete.
 
-Cloudflare Inc. — CDN, DNS, routing sottodomini personalizzati
+Resend o altro provider email utilizzato da PIUM — invio di email transazionali, notifiche tecniche, comunicazioni di sistema e messaggi collegati all'account.
 
-Il Cliente autorizza espressamente l'utilizzo dei sub-responsabili elencati. PIUM comunicherà eventuali modifiche all'elenco con almeno 30 giorni di preavviso, consentendo al Cliente di opporsi.
+Anthropic PBC — fornitore AI per generazione, elaborazione o supporto alla produzione di contenuti tramite prompt e istruzioni impartite dall'utente.
+
+Il Cliente autorizza espressamente l'utilizzo dei sub-responsabili elencati. PIUM comunicherà eventuali modifiche sostanziali all'elenco con modalità ragionevoli o con preavviso, ove richiesto dalla normativa applicabile, consentendo al Cliente di opporsi nei casi previsti dal GDPR.
+
+## 5.1 Uso di fornitori AI e dati inseriti nei prompt
+
+Le funzionalità AI possono comportare l'invio a fornitori esterni, tra cui Anthropic, di prompt, istruzioni, testi, descrizioni, contenuti commerciali, dati operativi dell'attività e altri materiali inseriti o richiesti dal Cliente.
+
+Anthropic può essere un fornitore extra-SEE, in particolare con sede o infrastrutture negli Stati Uniti. Il trattamento e l'eventuale trasferimento dei dati avvengono secondo le garanzie e le basi di trasferimento applicabili.
+
+Il Cliente si impegna a non inserire nei prompt AI dati personali non necessari, dati particolari ai sensi dell'art. 9 GDPR, dati giudiziari o informazioni eccedenti rispetto alle finalità di utilizzo della piattaforma. Qualora il Cliente inserisca nei prompt dati personali di clienti finali o terzi, dichiara di disporre di idonea base giuridica e di impartire a PIUM istruzione documentata per il relativo trattamento nell'ambito del servizio.
+
 
 # 6. Trasferimenti Internazionali
 
-Alcuni sub-responsabili (Supabase, Vercel, Anthropic, Stripe) operano negli Stati Uniti. I trasferimenti di dati verso questi fornitori avvengono nel rispetto delle garanzie previste dal GDPR, in particolare tramite le Clausole Contrattuali Standard (Standard Contractual Clauses) approvate dalla Commissione Europea.
+Alcuni sub-responsabili e fornitori tecnici, inclusi a titolo esemplificativo Supabase, Vercel, Anthropic, Stripe, Cloudflare e Resend, possono avere sede, società collegate o infrastrutture situate al di fuori dello Spazio Economico Europeo.
+
+I trasferimenti di dati verso tali fornitori avvengono nel rispetto delle garanzie previste dal GDPR, incluse, ove applicabili, le Clausole Contrattuali Standard approvate dalla Commissione Europea, decisioni di adeguatezza o altri meccanismi riconosciuti dalla normativa vigente.
+
+In particolare, l'utilizzo delle funzionalità AI può comportare l'invio di contenuti o prompt a fornitori extra-SEE, tra cui Anthropic. Il Cliente è tenuto a utilizzare tali funzionalità evitando l'inserimento di dati personali non necessari o dati particolarmente protetti.
 
 # 7. Durata
 

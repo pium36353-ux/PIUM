@@ -52,29 +52,29 @@ L'Affiliato può utilizzare il codice e il link referral in qualsiasi canale pro
 
 ## 3.1 Struttura delle commissioni
 
-Per ogni nuovo cliente introdotto tramite codice referral che effettua regolarmente i pagamenti mensili a PIUM, l'Affiliato matura le seguenti commissioni:
+Per ogni nuovo cliente introdotto tramite codice referral che effettua regolarmente i pagamenti mensili a PIUM, l'Affiliato matura una commissione fissa di 25,00 € (venticinque/00) lordi per ciascun mese in cui il cliente risulta attivo e pagante, a partire dal primo pagamento successivo al periodo di prova gratuito.
 
-Mese 1 (primo pagamento del cliente): 50,00 € (cinquanta/00)
+La commissione è riconosciuta per un massimo di 12 (dodici) mensilità consecutive per ciascun cliente introdotto. A partire dal 13° mese di abbonamento del cliente, non matura alcuna ulteriore commissione per quel cliente, anche qualora il rapporto tra il cliente e PIUM continui.
 
-Mese 2 (secondo pagamento del cliente): 30,00 € (trenta/00)
+Il totale massimo per singolo cliente, qualora rimanga attivo e pagante per tutti i 12 mesi, è di 300,00 € (25 € × 12 mensilità).
 
-Mesi 3-12 (dal terzo al dodicesimo pagamento): 15,00 €/mese (quindici/00) per ciascun mese
-
-Il totale massimo per singolo cliente, qualora rimanga attivo per tutti i 12 mesi, è di 230,00 € (50 + 30 + 10 × 15).
+PIUM si riserva la facoltà, a propria esclusiva discrezione e in base all'andamento del programma, di prorogare il riconoscimento delle commissioni oltre il 12° mese per uno o più Affiliati o clienti. Tale eventuale proroga non costituisce diritto acquisito né precedente vincolante per altri casi, salvo comunicazione scritta che ne definisca espressamente i termini.
 
 ## 3.2 Maturazione e pagamento
 
-Ogni commissione matura nel momento in cui il cliente effettua il pagamento mensile a PIUM. Il pagamento all'Affiliato avviene il mese successivo alla maturazione, entro il giorno 15, secondo le modalità indicate all'art. 4.
+Ogni commissione matura automaticamente nel momento in cui il cliente effettua con successo il pagamento mensile a PIUM tramite il sistema di fatturazione della piattaforma. Il pagamento all'Affiliato avviene secondo le modalità e la cadenza indicate all'art. 4.
 
-Esempio: se il cliente paga il suo primo abbonamento il 10 marzo, l'Affiliato riceve 50,00 € entro il 15 aprile.
+Esempio: se il cliente effettua il primo pagamento mensile (dopo il periodo di prova) il 10 marzo, l'Affiliato matura una commissione di 25,00 € relativa a quel mese.
 
 ## 3.3 Durata e cessazione
 
-Il diritto alle commissioni cessa automaticamente dopo il 12° pagamento mensile del cliente, senza necessità di comunicazione. In caso di sospensione, cancellazione o mancato pagamento da parte del cliente, le commissioni si interrompono nel mese successivo all'evento e non vengono ripristinate anche qualora il cliente riattivi il servizio in seguito.
+Il diritto alle commissioni relative a un determinato cliente cessa automaticamente al raggiungimento della 12° mensilità pagata da quel cliente, senza necessità di comunicazione, salvo quanto previsto all'art. 3.1 in merito a eventuali proroghe a discrezione di PIUM.
+
+In caso di sospensione, cancellazione o mancato pagamento da parte del cliente, le commissioni si interrompono dal mese successivo all'evento e non vengono ripristinate anche qualora il cliente riattivi il servizio in seguito, salvo diversa valutazione di PIUM.
 
 ## 3.4 Commissioni per clienti con piano fondatori
 
-Per i clienti che aderiscono al piano fondatori (69,00 €/mese), la struttura delle commissioni resta invariata rispetto a quanto indicato all'art. 3.1.
+Per i clienti che aderiscono al piano fondatori con sconto promozionale sul prezzo di listino, la commissione resta fissata a 25,00 €/mese come indicato all'art. 3.1, indipendentemente dal prezzo effettivamente pagato dal cliente in virtù dello sconto.
 
 ## 3.5 Nessuna commissione nei seguenti casi
 
@@ -82,17 +82,17 @@ Cliente già registrato su PIUM prima dell'utilizzo del codice referral
 
 Cliente registrato con codice referral ma che non completa il periodo di prova e non effettua alcun pagamento
 
-Auto-referral: l'Affiliato non può utilizzare il proprio codice per registrare se stesso o attività di cui è titolare o comproprietario
+Auto-referral: l'Affiliato non può utilizzare il proprio codice per registrare se stesso o attività di cui è titolare, comproprietario o legale rappresentante. PIUM si riserva di verificare e accertare tali situazioni anche attraverso controlli incrociati sui dati disponibili
 
 Cliente la cui registrazione è ritenuta fraudolenta a insindacabile giudizio di PIUM
 
 # 4. Pagamento delle Commissioni
 
-PIUM provvede al pagamento delle commissioni maturate con cadenza mensile, entro il giorno 15 del mese successivo a quello di maturazione, tramite bonifico bancario alle coordinate fornite dall'Affiliato.
+PIUM provvede al pagamento delle commissioni maturate con cadenza mensile, tramite bonifico bancario alle coordinate fornite dall'Affiliato, secondo le tempistiche comunicate da PIUM all'Affiliato in fase di attivazione del programma.
 
-Il pagamento è subordinato al raggiungimento di un importo minimo di 50,00 € di commissioni maturate. Importi inferiori vengono accumulati e liquidati al raggiungimento della soglia minima.
+Il pagamento è subordinato al raggiungimento di un importo minimo di commissioni maturate, ove previsto e comunicato da PIUM. Importi inferiori alla soglia minima vengono accumulati e liquidati al raggiungimento della stessa.
 
-Prima dell'erogazione della prima commissione, l'Affiliato 00e8 tenuto a fornire a PIUM, tramite comunicazione a info@piumapp.com: (a) copia di un documento d'identit00e0 in corso di validit00e0 (carta d'identit00e0 o passaporto); (b) le coordinate bancarie IBAN per il pagamento. In mancanza di tali documenti, PIUM sospende il pagamento fino al loro ricevimento, senza che ci00f2 costituisca inadempimento contrattuale da parte di PIUM.
+Prima dell'erogazione della prima commissione, l'Affiliato è tenuto a fornire a PIUM, tramite comunicazione a info@piumapp.com: (a) copia di un documento d'identità in corso di validità (carta d'identità o passaporto); (b) le coordinate bancarie IBAN per il pagamento; (c) una dichiarazione relativa alla propria situazione fiscale, come indicato all'art. 4.1. In mancanza di tali documenti, PIUM sospende il pagamento fino al loro ricevimento, senza che ciò costituisca inadempimento contrattuale da parte di PIUM.
 
 ## 4.1 Obblighi fiscali dell'Affiliato
 
@@ -100,11 +100,13 @@ L'Affiliato è il solo responsabile degli adempimenti fiscali relativi alle comm
 
 Se l'Affiliato è un privato cittadino senza P.IVA: le commissioni sono soggette a ritenuta d'acconto del 20% ai sensi dell'art. 25 DPR 600/73. PIUM applica la ritenuta e la versa all'Erario. L'Affiliato riceve il netto.
 
-Se l'Affiliato è un libero professionista o titolare di P.IVA: l'Affiliato emette regolare fattura a PIUM entro il 5 del mese successivo alla maturazione. Il pagamento avviene a 30 giorni data fattura.
+L'Affiliato dichiara e si impegna a comunicare tempestivamente a PIUM qualora i compensi percepiti da lavoro autonomo occasionale, cumulativamente da PIUM e da qualsiasi altro committente, superino o siano prossimi a superare la soglia di 5.000 € nell'anno fiscale di riferimento, in quanto tale superamento comporta l'insorgere di obblighi contributivi presso la Gestione Separata INPS. L'Affiliato si assume piena responsabilità per la mancata o tardiva comunicazione di tale circostanza.
+
+Se l'Affiliato è un libero professionista o titolare di P.IVA: l'Affiliato emette regolare fattura a PIUM secondo le tempistiche comunicate da PIUM. Il pagamento avviene secondo le condizioni concordate.
 
 Se l'Affiliato è una società: come sopra, con emissione di fattura.
 
-PIUM si riserva di richiedere all'Affiliato la documentazione necessaria per la corretta gestione fiscale (codice fiscale, dati anagrafici, coordinate bancarie, eventuale P.IVA).
+PIUM si riserva di richiedere all'Affiliato la documentazione necessaria per la corretta gestione fiscale (codice fiscale, dati anagrafici, coordinate bancarie, eventuale P.IVA, dichiarazione sulla soglia dei compensi occasionali).
 
 # 5. Obblighi e Condotte dell'Affiliato
 
@@ -160,19 +162,37 @@ L'Affiliato si impegna a mantenere riservate tutte le informazioni non pubbliche
 
 # 9. Modifiche al Programma di Affiliazione
 
-PIUM si riserva il diritto di modificare le condizioni economiche del programma di affiliazione (importo commissioni, durata ricorrente, soglia minima di pagamento) con preavviso scritto di almeno 30 giorni. Le modifiche non si applicano retroattivamente alle commissioni già maturate. In caso di mancata accettazione delle nuove condizioni, l'Affiliato ha facoltà di recedere dal Contratto senza penali.
+PIUM si riserva il diritto di modificare le condizioni economiche del programma di affiliazione (importo commissioni, durata di riconoscimento, soglia minima di pagamento) con preavviso scritto di almeno 30 giorni. Le modifiche non si applicano retroattivamente alle commissioni già maturate. In caso di mancata accettazione delle nuove condizioni, l'Affiliato ha facoltà di recedere dal Contratto senza penali.
 
 # 10. Limitazione di Responsabilità
 
 PIUM non garantisce all'Affiliato un volume minimo di commissioni né la continuità del servizio offerto ai clienti introdotti. PIUM non è responsabile per mancati guadagni dell'Affiliato derivanti da disdette dei clienti, modifiche al servizio, interruzioni tecniche o cause di forza maggiore.
 
-# 11. Legge Applicabile e Foro Competente
+# 11. Manleva
+
+L'Affiliato si obbliga a manlevare e tenere indenne PIUM da qualsiasi pretesa, danno, costo o onere, incluse le spese legali ragionevoli, derivante da: (a) violazione delle presenti Condizioni; (b) comunicazioni, dichiarazioni o promesse non autorizzate, ingannevoli o scorrette rese a clienti o terzi; (c) trattamento illecito di dati personali; (d) violazione di diritti di terzi.
+
+L'obbligazione di manleva sopravvive alla cessazione del rapporto tra le Parti.
+
+# 12. Cedibilità del Contratto
+
+PIUM può cedere o trasferire il presente Contratto, in tutto o in parte, a soggetto controllante, controllato, collegato o successore, anche in caso di trasformazione, conferimento d'azienda o costituzione di nuova società, dandone comunicazione all'Affiliato con modalità ragionevoli.
+
+L'Affiliato non può cedere o trasferire il presente Contratto, né i diritti e gli obblighi da esso derivanti, senza il previo consenso scritto di PIUM.
+
+# 13. Accettazione Online e Prova dell'Accettazione
+
+L'accettazione delle presenti Condizioni del Programma di Affiliazione può avvenire mediante selezione dell'apposita casella durante il processo di registrazione affiliato o mediante altra modalità elettronica equivalente predisposta da PIUM.
+
+PIUM può conservare prova tecnica dell'accettazione, inclusa data, ora, utente, versione documentale e contesto di accettazione.
+
+# 14. Legge Applicabile e Foro Competente
 
 Il presente Contratto è regolato dalla legge italiana. Per qualsiasi controversia derivante dal presente Contratto è competente il Tribunale di [CITTÀ — DA COMPILARE].
 
-# 12. Disposizioni Finali
+# 15. Disposizioni Finali
 
-Il presente Contratto costituisce l'intero accordo tra le Parti in materia di affiliazione e sostituisce qualsiasi precedente intesa verbale o scritta. Eventuali modifiche al Contratto devono essere concordate per iscritto. La nullità o inefficacia di una singola clausola non comporta la nullità dell'intero Contratto.
+Il presente Contratto costituisce l'intero accordo tra le Parti in materia di affiliazione e sostituisce qualsiasi precedente intesa verbale o scritta. Eventuali modifiche al Contratto devono essere concordate per iscritto, salvo quanto previsto dall'art. 9 in relazione alle modifiche al Programma di Affiliazione. La nullità o inefficacia di una singola clausola non comporta la nullità dell'intero Contratto.
 
 # Firme
 
@@ -184,15 +204,25 @@ ___________________________                    ___________________________
 
 [RAGIONE SOCIALE]                                  Nome e Cognome / Ragione Sociale
 
-Ai sensi degli artt. 1341 e 1342 c.c., l'Affiliato dichiara di aver letto e di approvare specificamente le seguenti clausole:
+Ai sensi e per gli effetti degli artt. 1341 e 1342 c.c., l'Affiliato dichiara di aver letto e di approvare specificamente le seguenti clausole:
 
-Art. 3.5 — Esclusione delle commissioni (casi di non applicazione)
+Art. 3.5 — Esclusione delle commissioni e casi di non applicazione
+
+Art. 5 — Obblighi e condotte dell'Affiliato
 
 Art. 7.1 — Recesso per giusta causa da parte di PIUM con effetto immediato
 
 Art. 8 — Obbligo di riservatezza post-contrattuale
 
+Art. 9 — Modifiche al Programma di Affiliazione
+
 Art. 10 — Limitazione di responsabilità di PIUM
+
+Art. 11 — Manleva a favore di PIUM
+
+Art. 12 — Cedibilità del Contratto
+
+Art. 14 — Foro competente
 
 Firma dell'Affiliato per approvazione specifica clausole:
 

@@ -96,21 +96,32 @@ Obbligo legale (art. 6, par. 1, lett. c GDPR): conservazione dati fiscali
 
 I dati vengono conservati per la durata del contratto e, ove applicabile, per i successivi 10 anni per finalità fiscali e contabili. I dati dei clienti finali delle attività, inclusi i dati inseriti o importati nella rubrica clienti, vengono conservati per la durata dell’account del titolare dell’attività o fino alla loro cancellazione da parte del titolare, salvo obblighi di legge. Le immagini e i contenuti pubblicati sul sito dell’attività rimangono disponibili fino alla loro rimozione da parte del titolare o alla cancellazione dell’account. I token push notification vengono eliminati alla revoca del consenso o alla disinstallazione della PWA.
 
-# 6. Condivisione con Terze Parti
+# 6. Condivisione con Terze Parti, Fornitori e Trasferimenti
 
-I dati sono trattati dai seguenti fornitori di servizi tecnici in qualità di responsabili del trattamento, tutti operanti con garanzie adeguate ai sensi del GDPR (Standard Contractual Clauses o equivalenti):
+I dati sono trattati da fornitori di servizi tecnici, responsabili del trattamento o autonomi titolari nei limiti delle rispettive attività, secondo garanzie adeguate ai sensi del GDPR:
 
-Supabase Inc. — database, autenticazione e storage (server in area UE ove disponibile)
+Supabase Inc. — database, autenticazione, storage, sicurezza e servizi backend della piattaforma.
 
-Vercel Inc. — hosting dell'applicazione web
+Vercel Inc. — hosting dell'applicazione web e distribuzione del frontend.
 
-Anthropic PBC — elaborazione AI per generazione testi (solo testi anonimi dell'attività, nessun dato personale identificativo dei clienti finali)
+Stripe Inc. — gestione pagamenti, abbonamenti, checkout, dati di fatturazione e strumenti antifrode collegati alle transazioni.
 
-Stripe Inc. — gestione pagamenti e abbonamenti (dati di fatturazione e carta)
+Cloudflare Inc. — DNS, sicurezza, routing, protezione dell'infrastruttura e servizi di rete.
 
-Cloudflare Inc. — CDN, DNS, routing sottodomini
+Resend o altro provider email utilizzato da PIUM — invio di email transazionali, notifiche tecniche, conferme account, reset password e comunicazioni di servizio.
+
+Anthropic PBC — fornitore AI per generazione, elaborazione o supporto alla produzione di contenuti tramite prompt e istruzioni impartite dall'utente.
 
 Nessun dato viene venduto o ceduto a terzi per finalità commerciali o pubblicitarie.
+
+## 6.1 Funzionalità AI e trasferimenti extra-SEE
+
+Alcuni fornitori possono avere sede o trattare dati al di fuori dello Spazio Economico Europeo. In particolare, le funzionalità AI possono comportare l'invio di contenuti o prompt a fornitori extra-SEE, tra cui Anthropic, secondo le garanzie e le basi di trasferimento applicabili.
+
+Quando l'utente utilizza funzioni AI, deve evitare di inserire dati personali non necessari, dati particolari ai sensi dell'art. 9 GDPR, dati giudiziari o informazioni eccedenti rispetto alle finalità del servizio. Qualora vengano inseriti dati di clienti finali o terzi, l'utente dichiara di avere titolo e base giuridica per tale trattamento e per l'utilizzo di tali dati nell'ambito delle funzionalità richieste.
+
+PIUM tratta i dati inseriti nei prompt esclusivamente per erogare le funzionalità richieste dall'utente e secondo quanto previsto dai Termini di Servizio, dal DPA e dalla presente Privacy Policy.
+
 
 # 7. Diritti dell'Interessato
 
@@ -150,13 +161,11 @@ Accesso ai dati limitato al solo personale autorizzato
 
 # 9. Cookie
 
-PIUM utilizza esclusivamente cookie tecnici necessari al funzionamento del servizio:
+PIUM utilizza local storage del browser e tecnologie simili, necessari al funzionamento del servizio, inclusi token di autenticazione, sessione e sicurezza. PIUM non utilizza cookie veri e propri per la gestione della sessione degli utenti.
 
-sb-access-token: token di sessione per mantenere l'utente autenticato. Durata: sessione / 1 ora
+Alla data di ultimo aggiornamento, la piattaforma è progettata per utilizzare principalmente strumenti tecnici necessari al funzionamento del servizio. L'eventuale attivazione di strumenti di analytics, misurazione o tracciamento non strettamente tecnici potrà richiedere l'aggiornamento della presente Privacy Policy, della Cookie Policy e, ove necessario, l'introduzione di un meccanismo di raccolta del consenso.
 
-sb-refresh-token: token per il rinnovo automatico della sessione. Durata: 7 giorni
-
-Non vengono utilizzati cookie di profilazione, tracciamento o pubblicità. Non è richiesto il consenso per i cookie tecnici ai sensi del Provvedimento del Garante del 10 giugno 2021.
+Per maggiori informazioni, l'utente può consultare la Cookie Policy.
 
 # 10. Modifiche alla Privacy Policy
 

@@ -34,21 +34,21 @@ Per utilizzare PIUM è necessario registrarsi fornendo un indirizzo email valido
 
 # 3. Piani e Pagamenti
 
-Periodo di prova gratuito: 14 giorni dalla data di registrazione
+Periodo di prova gratuito: 14 giorni dalla data di registrazione, senza necessità di inserire dati di pagamento
 
-Piano standard: 99,00 €/mese + IVA, fatturato mensilmente
+Piano standard: 99,99 €/mese + IVA, fatturato mensilmente al termine del periodo di prova
 
-Piano fondatori (su invito): 69,00 €/mese + IVA, prezzo bloccato per tutta la durata del rapporto contrattuale
+Promozione fondatori (ove applicabile, su invito o tramite codice promozionale): sconto percentuale sul prezzo di listino per un periodo limitato comunicato al momento dell'attivazione (a titolo esemplificativo, 12 mesi). Al termine del periodo promozionale, il prezzo si adegua automaticamente al piano standard in vigore, salvo diversa comunicazione di PIUM
 
 Il pagamento avviene tramite carta di credito/debito attraverso il sistema Stripe
 
-In caso di mancato pagamento, l'accesso al servizio viene sospeso dopo 7 giorni dalla scadenza
+In caso di mancato pagamento, PIUM tenta nuovamente l'addebito secondo le logiche del sistema di pagamento; in caso di mancato esito, l'accesso alle funzionalità del servizio può essere sospeso fino alla regolarizzazione del pagamento
 
-Il piano e il prezzo possono essere modificati da PIUM con preavviso scritto di almeno 60 giorni
+Il piano e il prezzo standard possono essere modificati da PIUM con preavviso scritto di almeno 60 giorni. Le condizioni di eventuali promozioni in corso restano valide per la durata originariamente comunicata all'utente che ne ha beneficiato
 
 # 4. Disdetta e Recesso
 
-L'utente può disdire il servizio in qualsiasi momento tramite comunicazione scritta a info@piumapp.com. La disdetta ha effetto alla fine del periodo fatturato corrente. Non sono previsti rimborsi per periodi parziali già pagati.
+L'utente può disdire il servizio in qualsiasi momento tramite comunicazione scritta a info@piumapp.com o tramite le funzionalità rese disponibili nella dashboard. La disdetta ha effetto alla fine del periodo fatturato corrente. Non sono previsti rimborsi per periodi parziali già pagati.
 
 PIUM si riserva il diritto di risolvere il contratto con effetto immediato in caso di violazione dei presenti Termini, con rimborso proporzionale dei giorni non fruiti.
 
@@ -116,7 +116,45 @@ PIUM si riserva il diritto di modificare, aggiungere o rimuovere funzionalità d
 
 I presenti Termini sono regolati dalla legge italiana. Per qualsiasi controversia con utenti consumatori è competente il Tribunale del luogo di residenza del consumatore. Per controversie con utenti professionisti o aziende è competente il Tribunale di [CITTÀ — DA COMPILARE].
 
-# 14. Contatti
+# 14. Cedibilità del Contratto
+
+PIUM può cedere o trasferire il presente contratto, in tutto o in parte, a soggetto controllante, controllato, collegato o successore, anche in caso di trasformazione, conferimento d'azienda o costituzione di nuova società, dandone comunicazione al Cliente/Utente con modalità ragionevoli.
+
+Il Cliente/Utente non può cedere o trasferire il contratto, né i diritti e gli obblighi da esso derivanti, senza il previo consenso scritto di PIUM.
+
+# 15. Accettazione Online e Prova dell'Accettazione
+
+L'accettazione dei presenti Termini avviene mediante selezione dell'apposita casella durante il processo di registrazione o mediante altra modalità elettronica equivalente predisposta da PIUM.
+
+PIUM può conservare prova tecnica dell'accettazione, inclusa data, ora, utente, versione documentale e contesto di accettazione.
+
+# 16. Approvazione Specifica ex artt. 1341 e 1342 c.c.
+
+Ai sensi e per gli effetti degli artt. 1341 e 1342 c.c., ove applicabile, il Cliente/Utente dichiara di approvare specificamente le clausole relative a:
+
+Art. 3 — Piani, pagamenti, sospensione per mancato pagamento e modifiche del piano/prezzo
+
+Art. 4 — Disdetta, recesso e risoluzione da parte di PIUM
+
+Art. 7 — Uso accettabile e limitazioni di utilizzo
+
+Art. 8 — Limiti di utilizzo AI
+
+Art. 9 — Modifica, sospensione o chiusura del Programma di Affiliazione
+
+Art. 10 — Disponibilità del servizio e assenza di garanzie di uptime specifiche
+
+Art. 11 — Limitazione di responsabilità
+
+Art. 12 — Modifiche al servizio e ai Termini
+
+Art. 13 — Foro competente
+
+Art. 14 — Cedibilità del contratto
+
+Il testo della relativa checkbox di approvazione specifica potrà richiamare tali clausole durante il processo di registrazione online.
+
+# 17. Contatti
 
 Per qualsiasi comunicazione relativa ai presenti Termini: info@piumapp.com
 
