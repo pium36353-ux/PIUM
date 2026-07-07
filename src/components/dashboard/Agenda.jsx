@@ -28,7 +28,7 @@ const DAY_LETTER  = ['L','M','M','G','V','S','D']
 const EMPTY_FORM = { date: '', client_name: '', client_phone: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '', selected_services: [] }
 const EMPTY_EMP  = { name: '', color: COLORS[0] }
 
-const SLOT_H = 40 // px per 30-minute slot
+const SLOT_H = window.innerWidth < 768 ? 56 : 40 // px per 30-minute slot (56 su mobile, 40 su desktop)
 
 /* ── Wheel picker constants ── */
 const WP_ITEM_H    = 44
