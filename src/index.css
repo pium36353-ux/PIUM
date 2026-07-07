@@ -6806,6 +6806,21 @@ code {
   color: #fff;
 }
 
+@media (pointer: coarse) {
+  .ag-apt-btns {
+    opacity: 1;
+  }
+
+  .ag-apt-btn-check {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 .ag-apt-btn-del {
   width: 16px;
   height: 16px;
