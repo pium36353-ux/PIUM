@@ -96,6 +96,17 @@ export default function Admin() {
   const [drawerTrialDate,     setDrawerTrialDate]     = useState('')
   const [trialDateSaving,     setTrialDateSaving]     = useState(false)
   const [trialDateSaved,      setTrialDateSaved]      = useState(false)
+  const [msgText,             setMsgText]             = useState('')
+  const [msgUrl,              setMsgUrl]              = useState('')
+  const [msgLabel,            setMsgLabel]            = useState('')
+  const [msgSending,          setMsgSending]          = useState(false)
+  const [msgSent,             setMsgSent]             = useState(false)
+  const [showBroadcast,       setShowBroadcast]       = useState(false)
+  const [bcText,              setBcText]              = useState('')
+  const [bcUrl,               setBcUrl]               = useState('')
+  const [bcLabel,             setBcLabel]             = useState('')
+  const [bcSending,           setBcSending]           = useState(false)
+  const [bcSent,              setBcSent]              = useState(false)
 
   /* ── Auth + role check ── */
   useEffect(() => {
@@ -164,6 +175,10 @@ export default function Admin() {
     setDrawerAffiliate(null)
     setDrawerTrialDate('')
     setTrialDateSaved(false)
+    setMsgText('')
+    setMsgUrl('')
+    setMsgLabel('')
+    setMsgSent(false)
   }, [])
 
   const saveNotes = useCallback(async () => {
@@ -193,6 +208,44 @@ export default function Admin() {
       setTimeout(() => setTrialDateSaved(false), 2000)
     }
   }, [drawerBiz, drawerTrialDate])
+
+  const sendMessage = useCallback(async () => {
+    if (!drawerBiz || !msgText.trim()) return
+    setMsgSending(true)
+    const { error } = await supabase.from('admin_messages').insert({
+      business_id: drawerBiz.id,
+      message:     msgText.trim(),
+      link_url:    msgUrl.trim() || null,
+      link_label:  msgUrl.trim() && msgLabel.trim() ? msgLabel.trim() : null,
+    })
+    setMsgSending(false)
+    if (!error) {
+      setMsgText('')
+      setMsgUrl('')
+      setMsgLabel('')
+      setMsgSent(true)
+      setTimeout(() => setMsgSent(false), 2000)
+    }
+  }, [drawerBiz, msgText, msgUrl, msgLabel])
+
+  const sendBroadcast = useCallback(async () => {
+    if (!bcText.trim()) return
+    setBcSending(true)
+    const { error } = await supabase.from('admin_messages').insert({
+      business_id: null,
+      message:     bcText.trim(),
+      link_url:    bcUrl.trim() || null,
+      link_label:  bcUrl.trim() && bcLabel.trim() ? bcLabel.trim() : null,
+    })
+    setBcSending(false)
+    if (!error) {
+      setBcText('')
+      setBcUrl('')
+      setBcLabel('')
+      setBcSent(true)
+      setTimeout(() => { setBcSent(false); setShowBroadcast(false) }, 2000)
+    }
+  }, [bcText, bcUrl, bcLabel])
 
   /* ── Business actions ── */
   const updatePlan = async (id, plan) => {
@@ -499,6 +552,9 @@ export default function Admin() {
                     {s === 'tutti' ? `Tutti (${total})` : STATUS_FILTER_LABELS[s]}
                   </button>
                 ))}
+                <button className="adm-broadcast-btn" onClick={() => setShowBroadcast(true)}>
+                  📢 Messaggio a tutti
+                </button>
               </div>
             </div>
 
@@ -759,6 +815,53 @@ export default function Admin() {
 
     </div>
 
+    {/* Broadcast modal */}
+    {showBroadcast && (
+      <div className="adm-modal-overlay" onClick={e => e.target === e.currentTarget && setShowBroadcast(false)}>
+        <div className="adm-modal">
+          <div className="adm-modal-header">
+            <span className="adm-modal-title">📢 Messaggio a tutti i clienti</span>
+            <button className="adm-drawer-close" onClick={() => setShowBroadcast(false)}><IconX /></button>
+          </div>
+          <div className="adm-modal-body">
+            <textarea
+              className="adm-notes-area"
+              placeholder="Scrivi un messaggio per tutti i clienti…"
+              value={bcText}
+              onChange={e => setBcText(e.target.value)}
+              maxLength={500}
+              rows={4}
+            />
+            <input
+              className="adm-msg-input"
+              type="text"
+              placeholder="Link opzionale (es. /dashboard?s=editor)"
+              value={bcUrl}
+              onChange={e => setBcUrl(e.target.value)}
+            />
+            {bcUrl.trim() && (
+              <input
+                className="adm-msg-input"
+                type="text"
+                placeholder="Testo del link (es. Vai all'editor sito)"
+                value={bcLabel}
+                onChange={e => setBcLabel(e.target.value)}
+              />
+            )}
+          </div>
+          <div className="adm-modal-footer">
+            <button
+              className={`adm-notes-save-btn ${bcSent ? 'adm-notes-save-btn--saved' : ''}`}
+              onClick={sendBroadcast}
+              disabled={bcSending || !bcText.trim()}
+            >
+              {bcSending ? 'Invio…' : bcSent ? '✓ Inviato' : 'Invia a tutti'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Drawer — fuori da adm-shell per evitare stacking context problems */}
     {drawerBiz && (
       <BusinessDrawer
@@ -780,6 +883,15 @@ export default function Admin() {
         onCopyLink={copyLink}
         onToggleAiUnlimited={toggleAiUnlimited}
         copied={copied}
+        msgText={msgText}
+        onMsgTextChange={setMsgText}
+        msgUrl={msgUrl}
+        onMsgUrlChange={setMsgUrl}
+        msgLabel={msgLabel}
+        onMsgLabelChange={setMsgLabel}
+        msgSending={msgSending}
+        msgSent={msgSent}
+        onSendMessage={sendMessage}
       />
     )}
     {drawerAff && (
@@ -807,7 +919,7 @@ export default function Admin() {
 }
 
 /* ── BusinessDrawer ── */
-function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, affiliate, trialDate, onTrialDateChange, onSaveTrialDate, trialDateSaving, trialDateSaved, copied }) {
+function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, affiliate, trialDate, onTrialDateChange, onSaveTrialDate, trialDateSaving, trialDateSaved, copied, msgText, onMsgTextChange, msgUrl, onMsgUrlChange, msgLabel, onMsgLabelChange, msgSending, msgSent, onSendMessage }) {
   const status = getStatus(biz)
   const days   = trialDaysLeft(biz)
 
@@ -974,6 +1086,42 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
               disabled={notesSaving}
             >
               {notesSaving ? 'Salvataggio…' : notesSaved ? '✓ Salvato' : 'Salva note'}
+            </button>
+          </div>
+
+          {/* Messaggio al cliente */}
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Messaggio al cliente</div>
+            <textarea
+              className="adm-notes-area"
+              placeholder="Scrivi un messaggio per questo cliente…"
+              value={msgText}
+              onChange={e => onMsgTextChange(e.target.value)}
+              maxLength={500}
+              rows={3}
+            />
+            <input
+              className="adm-msg-input"
+              type="text"
+              placeholder="Link opzionale (es. /dashboard?s=editor)"
+              value={msgUrl}
+              onChange={e => onMsgUrlChange(e.target.value)}
+            />
+            {msgUrl.trim() && (
+              <input
+                className="adm-msg-input"
+                type="text"
+                placeholder="Testo del link (es. Vai all'editor sito)"
+                value={msgLabel}
+                onChange={e => onMsgLabelChange(e.target.value)}
+              />
+            )}
+            <button
+              className={`adm-notes-save-btn ${msgSent ? 'adm-notes-save-btn--saved' : ''}`}
+              onClick={onSendMessage}
+              disabled={msgSending || !msgText.trim()}
+            >
+              {msgSending ? 'Invio…' : msgSent ? '✓ Messaggio inviato' : 'Invia messaggio'}
             </button>
           </div>
 

@@ -44,6 +44,7 @@ export default function Dashboard() {
   const [checkoutError,      setCheckoutError]      = useState(null)
   const [pendingActivation,  setPendingActivation]  = useState(false)
   const [loadError,          setLoadError]          = useState(false)
+  const [adminMessages,      setAdminMessages]      = useState([])
 
   const trialExpired = business?.status === 'trial'
     && !!business?.trial_ends_at
@@ -60,11 +61,24 @@ export default function Dashboard() {
         .select('*')
         .eq('user_id', data.user.id)
         .maybeSingle()
-        .then(({ data: biz, error }) => {
+        .then(async ({ data: biz, error }) => {
           if (!alive) return
           if (error) { setLoadError(true); return }
           if (!biz) { navigate('/onboarding'); return }
           setBusiness(biz)
+
+          // Carica messaggi admin non letti
+          const [{ data: direct }, { data: broadcast }, { data: reads }] = await Promise.all([
+            supabase.from('admin_messages').select('id, message, link_url, link_label, created_at').eq('business_id', biz.id),
+            supabase.from('admin_messages').select('id, message, link_url, link_label, created_at').is('business_id', null).gt('created_at', biz.created_at),
+            supabase.from('admin_message_reads').select('message_id').eq('business_id', biz.id),
+          ])
+          if (!alive) return
+          const readSet = new Set((reads ?? []).map(r => r.message_id))
+          const allMsgs = [...(direct ?? []), ...(broadcast ?? [])]
+            .filter(m => !readSet.has(m.id))
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          setAdminMessages(allMsgs)
         })
     })
     return () => { alive = false }
@@ -73,6 +87,14 @@ export default function Dashboard() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     navigate('/auth')
+  }
+
+  const dismissAdminMessage = async (msg) => {
+    await supabase.from('admin_message_reads').insert({
+      message_id:  msg.id,
+      business_id: business.id,
+    })
+    setAdminMessages(prev => prev.filter(m => m.id !== msg.id))
   }
 
   // Handle ?s= query param for deep-linking into a section
@@ -332,6 +354,27 @@ export default function Dashboard() {
         </div>
 
         <main className="db-content">
+          {adminMessages.length > 0 && (
+            <div className="db-admin-message-banner">
+              <span className="db-admin-message-icon">📢</span>
+              <div className="db-admin-message-body">
+                <span className="db-admin-message-text">{adminMessages[0].message}</span>
+                {adminMessages[0].link_url && (
+                  adminMessages[0].link_url.startsWith('/')
+                    ? <button className="db-admin-message-link" onClick={() => { navigate(adminMessages[0].link_url); dismissAdminMessage(adminMessages[0]) }}>
+                        {adminMessages[0].link_label || 'Scopri di più'}
+                      </button>
+                    : <a className="db-admin-message-link" href={adminMessages[0].link_url} target="_blank" rel="noopener noreferrer">
+                        {adminMessages[0].link_label || 'Scopri di più'}
+                      </a>
+                )}
+              </div>
+              <button className="db-admin-message-close" onClick={() => dismissAdminMessage(adminMessages[0])} aria-label="Chiudi">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          )}
+
           {loadError && (
             <div className="db-expired-banner">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
