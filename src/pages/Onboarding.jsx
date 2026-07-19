@@ -140,7 +140,7 @@ export default function Onboarding() {
       if (!user) { navigate('/auth', { replace: true }); return }
 
       // 1. Insert business
-      const affiliateCode = localStorage.getItem('pium_ref') || null
+      const affiliateCode = localStorage.getItem('pium_ref')?.toLowerCase().trim() || null
       const { data: biz, error } = await supabase
         .from('businesses')
         .insert({

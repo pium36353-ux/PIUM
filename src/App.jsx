@@ -24,7 +24,7 @@ import { scheduleAllTodayNotifications } from './lib/notifications'
 
 function RefRedirect() {
   const { code } = useParams()
-  if (code) localStorage.setItem('pium_ref', code)
+  if (code) localStorage.setItem('pium_ref', code.toLowerCase().trim())
   return <Navigate to="/auth" replace />
 }
 

@@ -38,7 +38,7 @@ Periodo di prova gratuito: 14 giorni dalla data di registrazione, senza necessit
 
 Piano standard: 99,99 €/mese + IVA, fatturato mensilmente al termine del periodo di prova
 
-Promozione fondatori (ove applicabile, su invito o tramite codice promozionale): sconto percentuale sul prezzo di listino per un periodo limitato comunicato al momento dell'attivazione (a titolo esemplificativo, 12 mesi). Al termine del periodo promozionale, il prezzo si adegua automaticamente al piano standard in vigore, salvo diversa comunicazione di PIUM
+Promozione fondatori (ove applicabile, su invito o tramite il codice referral di un partner autorizzato): sconto percentuale sul prezzo di listino per un periodo limitato comunicato al momento dell'attivazione (a titolo esemplificativo, 12 mesi). Al termine del periodo promozionale, il prezzo si adegua automaticamente al piano standard in vigore, salvo diversa comunicazione di PIUM
 
 Il pagamento avviene tramite carta di credito/debito attraverso il sistema Stripe
 

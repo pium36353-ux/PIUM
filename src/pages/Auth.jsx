@@ -30,7 +30,7 @@ export default function Auth() {
   useEffect(() => {
     // Salva codice referral se presente nell'URL (?ref=CODICE)
     const ref = new URLSearchParams(window.location.search).get('ref')
-    if (ref) localStorage.setItem('pium_ref', ref)
+    if (ref) localStorage.setItem('pium_ref', ref.toLowerCase().trim())
 
     let alive = true
     supabase.auth.getSession().then(({ data: { session } }) => {
