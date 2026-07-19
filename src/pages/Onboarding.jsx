@@ -68,6 +68,7 @@ export default function Onboarding() {
   const [loadingMsg, setLoadingMsg] = useState('')
   const [serverError, setServerError] = useState(null)
   const mountedRef = useRef(true)
+  const submittingRef = useRef(false)
   useEffect(() => () => { mountedRef.current = false }, [])
 
   useEffect(() => {
@@ -128,6 +129,8 @@ export default function Onboarding() {
   /* ── Submit ── */
   const handleSubmit = async () => {
     if (!validate()) return
+    if (submittingRef.current) return
+    submittingRef.current = true
     setLoading(true)
     setLoadingMsg('Salvataggio in corso…')
     setServerError(null)
@@ -160,7 +163,11 @@ export default function Onboarding() {
 
       if (error) {
         if (!mountedRef.current) return
-        setServerError('Errore nel salvataggio. Riprova tra qualche istante.')
+        if (error.code === '23505') {
+          setServerError('Risulta già un\'attività registrata per questo account. Ricarica la pagina.')
+        } else {
+          setServerError('Errore nel salvataggio. Riprova tra qualche istante.')
+        }
         return
       }
 
@@ -208,6 +215,7 @@ export default function Onboarding() {
       navigate('/dashboard', { replace: true })
     } finally {
       if (mountedRef.current) setLoading(false)
+      submittingRef.current = false
     }
   }
 
