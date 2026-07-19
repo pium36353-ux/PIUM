@@ -37,6 +37,7 @@ export default function Affiliates() {
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [flowError, setFlowError] = useState('')
+  const [commStats, setCommStats] = useState({ earned: 0, pending: 0 })
   const acceptanceAttemptedRef = useRef(new Set())
   const bootstrapAttemptedRef = useRef(new Set())
 
@@ -141,14 +142,28 @@ export default function Affiliates() {
     setAffiliate(aff ?? null)
 
     if (aff) {
-      const { data: biz } = await supabase
-        .from('businesses')
-        .select('id, name, city, plan, is_active, created_at')
-        .eq('affiliate_code', aff.code)
-        .order('created_at', { ascending: false })
+      const [{ data: biz }, { data: commData }] = await Promise.all([
+        supabase
+          .from('businesses')
+          .select('id, name, city, plan, is_active, created_at')
+          .eq('affiliate_code', aff.code)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('affiliate_commissions')
+          .select('amount, status')
+          .eq('affiliate_id', aff.id),
+      ])
       setClients(biz ?? [])
+
+      let earned = 0, pending = 0
+      for (const row of (commData ?? [])) {
+        if (row.status === 'pending' || row.status === 'paid') earned += Number(row.amount)
+        if (row.status === 'pending') pending += Number(row.amount)
+      }
+      setCommStats({ earned, pending })
     } else {
       setClients([])
+      setCommStats({ earned: 0, pending: 0 })
     }
 
     setLoading(false)
@@ -229,14 +244,14 @@ export default function Affiliates() {
             </p>
           </div>
         ) : (
-          <Dashboard affiliate={affiliate} clients={clients} copied={copied} onCopy={copyLink} />
+          <Dashboard affiliate={affiliate} clients={clients} copied={copied} onCopy={copyLink} commStats={commStats} />
         )}
       </div>
     </div>
   )
 }
 
-function Dashboard({ affiliate, clients, copied, onCopy }) {
+function Dashboard({ affiliate, clients, copied, onCopy, commStats }) {
   const refLink = `https://piumapp.com/auth?ref=${affiliate.code}`
   const activeCount = clients.filter(c => c.is_active && c.plan === 'pro').length
 
@@ -251,11 +266,11 @@ function Dashboard({ affiliate, clients, copied, onCopy }) {
 
       <div className="af-stats-row">
         <div className="af-stat-card">
-          <span className="af-stat-value">€{Number(affiliate.total_earned).toFixed(2)}</span>
+          <span className="af-stat-value">€{commStats.earned.toFixed(2)}</span>
           <span className="af-stat-label">Guadagnato totale</span>
         </div>
         <div className="af-stat-card af-stat-card--pending">
-          <span className="af-stat-value">€{Number(affiliate.total_pending).toFixed(2)}</span>
+          <span className="af-stat-value">€{commStats.pending.toFixed(2)}</span>
           <span className="af-stat-label">In attesa di pagamento</span>
         </div>
         <div className="af-stat-card">
