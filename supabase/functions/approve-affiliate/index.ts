@@ -107,151 +107,156 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Method not allowed' }, 405)
   }
 
-  const envError = missingEnvResponse()
-  if (envError) return envError
-
-  const token = extractBearerToken(req.headers.get('Authorization'))
-  if (!token) {
-    return jsonResponse({ error: 'Unauthorized: missing bearer token' }, 401)
-  }
-
-  const authClient = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!)
-  const { data: authData, error: authError } = await authClient.auth.getUser(token)
-  const user = authData?.user
-
-  if (authError || !user) {
-    return jsonResponse({ error: 'Unauthorized: invalid user token' }, 401)
-  }
-
-  if (user.app_metadata?.role !== 'admin') {
-    return jsonResponse({ error: 'Forbidden: admin role required' }, 403)
-  }
-
-  let payload: Payload
   try {
-    payload = (await req.json()) as Payload
-  } catch {
-    return jsonResponse({ error: 'Invalid JSON body' }, 400)
-  }
+    const envError = missingEnvResponse()
+    if (envError) return envError
 
-  const affiliateId = payload.affiliate_id
-  const targetStatus = payload.target_status
+    const token = extractBearerToken(req.headers.get('Authorization'))
+    if (!token) {
+      return jsonResponse({ error: 'Unauthorized: missing bearer token' }, 401)
+    }
 
-  if (!affiliateId || typeof affiliateId !== 'string') {
-    return jsonResponse({ error: 'Invalid affiliate_id' }, 400)
-  }
-  if (!targetStatus || !ALLOWED_TARGET_STATUSES.has(targetStatus)) {
-    return jsonResponse({ error: 'Invalid target_status' }, 400)
-  }
+    const authClient = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!)
+    const { data: authData, error: authError } = await authClient.auth.getUser(token)
+    const user = authData?.user
 
-  const adminClient = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!)
+    if (authError || !user) {
+      return jsonResponse({ error: 'Unauthorized: invalid user token' }, 401)
+    }
 
-  const { data: affiliate, error: readError } = await adminClient
-    .from('affiliates')
-    .select('id, name, email, status, approved_email_sent_at')
-    .eq('id', affiliateId)
-    .maybeSingle()
+    if (user.app_metadata?.role !== 'admin') {
+      return jsonResponse({ error: 'Forbidden: admin role required' }, 403)
+    }
 
-  if (readError) {
-    return jsonResponse({ error: 'affiliate_read_failed', detail: readError.message }, 500)
-  }
-  if (!affiliate) {
-    return jsonResponse({ error: 'Affiliate not found' }, 404)
-  }
+    let payload: Payload
+    try {
+      payload = (await req.json()) as Payload
+    } catch {
+      return jsonResponse({ error: 'Invalid JSON body' }, 400)
+    }
 
-  const previousStatus = affiliate.status
-  const updated = previousStatus !== targetStatus
+    const affiliateId = payload.affiliate_id
+    const targetStatus = payload.target_status
 
-  const { error: updateError } = await adminClient
-    .from('affiliates')
-    .update({ status: targetStatus })
-    .eq('id', affiliateId)
+    if (!affiliateId || typeof affiliateId !== 'string') {
+      return jsonResponse({ error: 'Invalid affiliate_id' }, 400)
+    }
+    if (!targetStatus || !ALLOWED_TARGET_STATUSES.has(targetStatus)) {
+      return jsonResponse({ error: 'Invalid target_status' }, 400)
+    }
 
-  if (updateError) {
-    return jsonResponse(
-      {
-        error: 'affiliate_update_failed',
-        detail: updateError.message,
-        updated: false,
+    const adminClient = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!)
+
+    const { data: affiliate, error: readError } = await adminClient
+      .from('affiliates')
+      .select('id, name, email, status, approved_email_sent_at')
+      .eq('id', affiliateId)
+      .maybeSingle()
+
+    if (readError) {
+      return jsonResponse({ error: 'affiliate_read_failed', detail: readError.message }, 500)
+    }
+    if (!affiliate) {
+      return jsonResponse({ error: 'Affiliate not found' }, 404)
+    }
+
+    const previousStatus = affiliate.status
+    const updated = previousStatus !== targetStatus
+
+    const { error: updateError } = await adminClient
+      .from('affiliates')
+      .update({ status: targetStatus })
+      .eq('id', affiliateId)
+
+    if (updateError) {
+      return jsonResponse(
+        {
+          error: 'affiliate_update_failed',
+          detail: updateError.message,
+          updated: false,
+          email_sent: false,
+          previous_status: previousStatus,
+          status: targetStatus,
+        },
+        500
+      )
+    }
+
+    const shouldSendApprovedEmail =
+      targetStatus === 'approved' &&
+      previousStatus === 'pending' &&
+      affiliate.approved_email_sent_at === null
+
+    if (!shouldSendApprovedEmail) {
+      return jsonResponse({
+        updated,
         email_sent: false,
         previous_status: previousStatus,
         status: targetStatus,
-      },
-      500
-    )
-  }
+      })
+    }
 
-  const shouldSendApprovedEmail =
-    targetStatus === 'approved' &&
-    previousStatus === 'pending' &&
-    affiliate.approved_email_sent_at === null
+    if (!affiliate.email) {
+      return jsonResponse(
+        {
+          error: 'affiliate_email_missing',
+          updated,
+          email_sent: false,
+          previous_status: previousStatus,
+          status: targetStatus,
+        },
+        500
+      )
+    }
 
-  if (!shouldSendApprovedEmail) {
+    try {
+      await sendApprovedEmail({
+        affiliateId,
+        name: affiliate.name,
+        email: affiliate.email,
+      })
+    } catch (err) {
+      return jsonResponse(
+        {
+          error: 'affiliate_approved_email_failed',
+          detail: String(err),
+          updated,
+          email_sent: false,
+          previous_status: previousStatus,
+          status: targetStatus,
+        },
+        502
+      )
+    }
+
+    const approvedEmailSentAt = new Date().toISOString()
+    const { error: markSentError } = await adminClient
+      .from('affiliates')
+      .update({ approved_email_sent_at: approvedEmailSentAt })
+      .eq('id', affiliateId)
+
+    if (markSentError) {
+      return jsonResponse(
+        {
+          error: 'approved_email_sent_at_update_failed',
+          detail: markSentError.message,
+          updated,
+          email_sent: true,
+          previous_status: previousStatus,
+          status: targetStatus,
+        },
+        500
+      )
+    }
+
     return jsonResponse({
       updated,
-      email_sent: false,
+      email_sent: true,
       previous_status: previousStatus,
       status: targetStatus,
     })
-  }
-
-  if (!affiliate.email) {
-    return jsonResponse(
-      {
-        error: 'affiliate_email_missing',
-        updated,
-        email_sent: false,
-        previous_status: previousStatus,
-        status: targetStatus,
-      },
-      500
-    )
-  }
-
-  try {
-    await sendApprovedEmail({
-      affiliateId,
-      name: affiliate.name,
-      email: affiliate.email,
-    })
   } catch (err) {
-    return jsonResponse(
-      {
-        error: 'affiliate_approved_email_failed',
-        detail: String(err),
-        updated,
-        email_sent: false,
-        previous_status: previousStatus,
-        status: targetStatus,
-      },
-      502
-    )
+    console.error('approve-affiliate unhandled error:', err?.message ?? String(err))
+    return jsonResponse({ error: 'internal_error' }, 500)
   }
-
-  const approvedEmailSentAt = new Date().toISOString()
-  const { error: markSentError } = await adminClient
-    .from('affiliates')
-    .update({ approved_email_sent_at: approvedEmailSentAt })
-    .eq('id', affiliateId)
-
-  if (markSentError) {
-    return jsonResponse(
-      {
-        error: 'approved_email_sent_at_update_failed',
-        detail: markSentError.message,
-        updated,
-        email_sent: true,
-        previous_status: previousStatus,
-        status: targetStatus,
-      },
-      500
-    )
-  }
-
-  return jsonResponse({
-    updated,
-    email_sent: true,
-    previous_status: previousStatus,
-    status: targetStatus,
-  })
 })
