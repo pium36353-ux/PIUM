@@ -165,6 +165,7 @@ export default function BookingSection({ business, services }) {
       p_date:           date,
       p_time:           slot,
       p_service_names:  selectedServices.map(s => s.name).join(', '),
+      p_service_ids:    selectedServices.map(s => s.id),
     })
     submittingRef.current = false
     setSubmitting(false)
