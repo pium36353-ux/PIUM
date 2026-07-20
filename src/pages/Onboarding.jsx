@@ -145,6 +145,7 @@ export default function Onboarding() {
         .from('businesses')
         .insert({
           user_id:             user.id,
+          owner_email:         user.email,
           name:                form.name.trim(),
           slug:                await generateSlug(form.name.trim()),
           category:            form.category,

@@ -127,7 +127,7 @@ export default function Admin() {
     setLoading(true)
     const { data, error } = await supabase
       .from('businesses')
-      .select('id, name, email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
+      .select('id, name, email, owner_email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
       .order('created_at', { ascending: false })
     if (signal?.cancelled) return
     if (error) {
@@ -605,7 +605,7 @@ export default function Admin() {
                                 </div>
                               </button>
                             </td>
-                            <td><span className="adm-cell-email">{b.email ?? '—'}</span></td>
+                            <td><span className="adm-cell-email">{b.owner_email ?? b.email ?? '—'}</span></td>
                             <td><StatusBadge status={status} /></td>
                             <td><TrialCell days={days} trialEndsAt={b.trial_ends_at} status={status} /></td>
                             <td>
@@ -995,7 +995,8 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
           <div className="adm-drawer-section">
             <div className="adm-drawer-section-title">Dati attività</div>
             {[
-              { label: 'Email',      value: biz.email },
+              { label: 'Email di registrazione', value: biz.owner_email },
+              { label: 'Email pubblica sito',     value: biz.email },
               { label: 'Città',      value: biz.city  },
               { label: 'Slug',       value: biz.slug  },
               { label: 'Registrato', value: formatDate(biz.created_at) },
