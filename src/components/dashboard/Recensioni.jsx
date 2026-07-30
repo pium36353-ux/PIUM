@@ -139,11 +139,16 @@ export default function Recensioni({ business }) {
 
   const saveReply = async (review) => {
     const text = replies[review.id]?.text ?? ''
-    await supabase.from('reviews').update({
+    const { error } = await supabase.from('reviews').update({
       reply:      text.trim() || null,
       replied_at: text.trim() ? new Date().toISOString() : null,
     }).eq('id', review.id)
-    setReply(review.id, { saved: !!text.trim(), editing: false })
+    if (error) {
+      console.error('[Recensioni] saveReply error:', error)
+      setReply(review.id, { error: 'Errore nel salvataggio della risposta. Riprova.' })
+      return
+    }
+    setReply(review.id, { saved: !!text.trim(), editing: false, error: null })
     if (text.trim()) {
       logActivity(business.id, business.user_id, 'review_replied', `Risposta inviata a: ${review.author_name}`)
     }
@@ -160,7 +165,7 @@ export default function Recensioni({ business }) {
   const handleAdd = async () => {
     if (!validateAdd()) return
     setAddSaving(true)
-    const { data: row } = await supabase.from('reviews').insert({
+    const { data: row, error } = await supabase.from('reviews').insert({
       business_id:  business.id,
       author_name:  addForm.author_name.trim(),
       rating:       Number(addForm.rating),
@@ -170,6 +175,11 @@ export default function Recensioni({ business }) {
       is_visible:   true,
     }).select().single()
     setAddSaving(false)
+    if (error) {
+      console.error('[Recensioni] handleAdd error:', error)
+      setAddErrors({ _global: 'Errore nel salvataggio della recensione. Riprova.' })
+      return
+    }
     setAddModal(false)
     setAddForm(EMPTY_FORM)
     if (row) {
@@ -382,6 +392,10 @@ export default function Recensioni({ business }) {
                 />
               </div>
             </div>
+
+            {addErrors._global && (
+              <p className="rv-field-error" style={{ margin: '0 20px 4px', textAlign: 'center' }}>{addErrors._global}</p>
+            )}
 
             <div className="rv-modal-footer">
               <button className="rv-btn-cancel" onClick={() => setAddModal(false)}>Annulla</button>

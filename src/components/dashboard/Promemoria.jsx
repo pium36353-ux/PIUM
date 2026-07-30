@@ -162,15 +162,27 @@ export default function Promemoria({ business }) {
     }
 
     if (modal === 'add') {
-      await supabase.from('reminders').insert({
+      const { error } = await supabase.from('reminders').insert({
         ...payload,
         business_id: business.id,
         user_id:     user.id,
         status:      'pending',
       })
+      if (error) {
+        console.error('[Promemoria] handleSave error:', error)
+        setSaving(false)
+        setErrors({ _global: 'Errore nel salvataggio. Riprova.' })
+        return
+      }
       logActivity(business.id, user.id, 'reminder_created', `Promemoria creato: ${payload.title}`)
     } else {
-      await supabase.from('reminders').update(payload).eq('id', editId)
+      const { error } = await supabase.from('reminders').update(payload).eq('id', editId)
+      if (error) {
+        console.error('[Promemoria] handleSave error:', error)
+        setSaving(false)
+        setErrors({ _global: 'Errore nel salvataggio. Riprova.' })
+        return
+      }
     }
 
     setSaving(false)
@@ -181,8 +193,14 @@ export default function Promemoria({ business }) {
   /* ── Toggle done/pending ── */
   const toggleDone = async (r) => {
     const next = r.status === 'done' ? 'pending' : 'done'
-    await supabase.from('reminders').update({ status: next }).eq('id', r.id)
     setReminders(prev => prev.map(x => x.id === r.id ? { ...x, status: next } : x))
+    const { error } = await supabase.from('reminders').update({ status: next }).eq('id', r.id)
+    if (error) {
+      console.error('[Promemoria] toggleDone error:', error)
+      setReminders(prev => prev.map(x => x.id === r.id ? { ...x, status: r.status } : x))
+      setDeleteError('Errore nell\'aggiornamento. Riprova.')
+      setTimeout(() => setDeleteError(null), 3000)
+    }
   }
 
   /* ── Delete ── */
@@ -444,6 +462,10 @@ export default function Promemoria({ business }) {
                 </div>
               </div>
             </div>
+
+            {errors._global && (
+              <p className="pr-field-error" style={{ margin: '0 20px 4px', textAlign: 'center' }}>{errors._global}</p>
+            )}
 
             <div className="pr-modal-footer">
               <button className="pr-btn-cancel" onClick={closeModal}>Annulla</button>

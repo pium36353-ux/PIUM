@@ -206,7 +206,7 @@ export default function Social({ business }) {
       .map(t => t.startsWith('#') ? t : `#${t}`)
       .filter(t => t.length > 1)
 
-    await supabase.from('social_drafts').update({
+    const { error } = await supabase.from('social_drafts').update({
       content:  editForm.content.trim(),
       hashtags: hashtags.length > 0 ? hashtags : null,
       platform: editForm.platform,
@@ -214,6 +214,11 @@ export default function Social({ business }) {
     }).eq('id', editId)
 
     setEditSaving(false)
+    if (error) {
+      console.error('[Social] handleEditSave error:', error)
+      setEditErrors({ _global: 'Errore nel salvataggio. Riprova.' })
+      return
+    }
     setEditModal(false)
     load()
   }
@@ -221,8 +226,15 @@ export default function Social({ business }) {
   /* ── Approve quick action ── */
   const toggleApprove = async (d) => {
     const next = d.status === 'approved' ? 'draft' : 'approved'
-    await supabase.from('social_drafts').update({ status: next }).eq('id', d.id)
     setDrafts(prev => prev.map(x => x.id === d.id ? { ...x, status: next } : x))
+    const { error } = await supabase.from('social_drafts').update({ status: next }).eq('id', d.id)
+    if (error) {
+      console.error('[Social] toggleApprove error:', error)
+      setDrafts(prev => prev.map(x => x.id === d.id ? { ...x, status: d.status } : x))
+      setDeleteError('Errore nell\'aggiornamento dello stato. Riprova.')
+      setTimeout(() => setDeleteError(null), 3000)
+      return
+    }
     if (next === 'approved') {
       logActivity(business.id, business.user_id, 'draft_approved', `Bozza approvata: ${d.platform ?? 'social'}`)
     }
@@ -510,6 +522,10 @@ export default function Social({ business }) {
                 </select>
               </div>
             </div>
+
+            {editErrors._global && (
+              <p className="so-field-error" style={{ margin: '0 20px 4px', textAlign: 'center' }}>{editErrors._global}</p>
+            )}
 
             <div className="so-modal-footer">
               <button className="so-btn-cancel" onClick={() => setEditModal(false)}>Annulla</button>
