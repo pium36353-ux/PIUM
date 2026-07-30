@@ -42,6 +42,7 @@ export default function Orari({ business }) {
     )
   })
   const [saving,          setSaving]          = useState(null)
+  const [saveError,       setSaveError]       = useState(null)
   const [capacity,        setCapacity]        = useState(business?.booking_capacity ?? 1)
   const [savingCapacity,  setSavingCapacity]  = useState(false)
   const [capacitySaved,   setCapacitySaved]   = useState(false)
@@ -52,14 +53,19 @@ export default function Orari({ business }) {
     </div>
   )
 
-  const persist = async (next, day) => {
+  const persist = async (next, day, prevHours) => {
     setSaving(day)
     const { error } = await supabase
       .from('businesses')
       .update({ opening_hours: next })
       .eq('id', business.id)
-    if (error) console.error('Errore salvataggio orari:', error)
     setSaving(null)
+    if (error) {
+      console.error('Errore salvataggio orari:', error)
+      setHours(prevHours)
+      setSaveError('Errore nel salvataggio degli orari. Le modifiche sono state annullate. Riprova.')
+      setTimeout(() => setSaveError(null), 3000)
+    }
   }
 
   const saveCapacity = async () => {
@@ -76,13 +82,15 @@ export default function Orari({ business }) {
       setTimeout(() => setCapacitySaved(false), 2000)
     } else {
       console.error('Errore salvataggio capacità:', error)
+      setSaveError('Errore nel salvataggio della capacità. Riprova.')
+      setTimeout(() => setSaveError(null), 3000)
     }
   }
 
   const updateDay = (day, patch) => {
     const next = { ...hours, [day]: { ...hours[day], ...patch } }
     setHours(next)
-    persist(next, day)
+    persist(next, day, hours)
   }
 
   const updateSlot = (day, slot, patch) => {
@@ -91,11 +99,12 @@ export default function Orari({ business }) {
       [day]: { ...hours[day], [slot]: { ...hours[day][slot], ...patch } },
     }
     setHours(next)
-    persist(next, day)
+    persist(next, day, hours)
   }
 
   return (
     <div className="db-section">
+      {saveError && <div className="db-deleted-toast" style={{ background: '#ef4444' }}>{saveError}</div>}
       <div className="oh-list">
         {DAY_ORDER.map(day => {
           const d = hours[day]
