@@ -95,6 +95,7 @@ export default function Social({ business }) {
 
   // Delete feedback
   const [deletedToast, setDeletedToast] = useState(false)
+  const [deleteError,  setDeleteError]  = useState(null)
 
   /* ── Load ── */
   const load = useCallback(async (signal = null) => {
@@ -240,9 +241,15 @@ export default function Social({ business }) {
   /* ── Delete ── */
   const handleDelete = async (id) => {
     setDeletingId(id)
-    await supabase.from('social_drafts').delete().eq('id', id)
-    setDrafts(prev => prev.filter(d => d.id !== id))
+    const { error } = await supabase.from('social_drafts').delete().eq('id', id)
     setDeletingId(null)
+    if (error) {
+      console.error('[Social] handleDelete error:', error)
+      setDeleteError('Errore nell\'eliminazione. Riprova.')
+      setTimeout(() => setDeleteError(null), 3000)
+      return
+    }
+    setDrafts(prev => prev.filter(d => d.id !== id))
     setConfirmId(null)
     setDeletedToast(true)
     setTimeout(() => setDeletedToast(false), 2500)
@@ -260,6 +267,7 @@ export default function Social({ business }) {
     <div className="db-section">
 
       {deletedToast && <div className="db-deleted-toast">Eliminato ✓</div>}
+      {deleteError  && <div className="db-deleted-toast" style={{ background: '#ef4444' }}>{deleteError}</div>}
 
       {/* Toolbar */}
       <div className="db-section-toolbar">

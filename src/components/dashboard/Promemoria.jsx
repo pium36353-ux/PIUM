@@ -71,6 +71,7 @@ export default function Promemoria({ business }) {
   const [saving, setSaving]         = useState(false)
   const [confirmId, setConfirmId]   = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+  const [deleteError, setDeleteError] = useState(null)
 
   /* ── Load ── */
   const load = useCallback(async (signal = null) => {
@@ -187,9 +188,15 @@ export default function Promemoria({ business }) {
   /* ── Delete ── */
   const handleDelete = async (id) => {
     setDeletingId(id)
-    await supabase.from('reminders').delete().eq('id', id)
-    setReminders(prev => prev.filter(r => r.id !== id))
+    const { error } = await supabase.from('reminders').delete().eq('id', id)
     setDeletingId(null)
+    if (error) {
+      console.error('[Promemoria] handleDelete error:', error)
+      setDeleteError('Errore nell\'eliminazione. Riprova.')
+      setTimeout(() => setDeleteError(null), 3000)
+      return
+    }
+    setReminders(prev => prev.filter(r => r.id !== id))
     setConfirmId(null)
   }
 
@@ -203,6 +210,8 @@ export default function Promemoria({ business }) {
 
   return (
     <div className="db-section">
+
+      {deleteError && <div className="db-deleted-toast" style={{ background: '#ef4444' }}>{deleteError}</div>}
 
       {/* Toolbar */}
       <div className="db-section-toolbar">

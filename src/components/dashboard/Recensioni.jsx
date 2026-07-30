@@ -76,6 +76,7 @@ export default function Recensioni({ business }) {
   const [confirmId, setConfirmId]       = useState(null)
   const [deletingId, setDeletingId]     = useState(null)
   const [deletedToast, setDeletedToast] = useState(false)
+  const [deleteError,  setDeleteError]  = useState(null)
   const [visibilityError, setVisibilityError] = useState(null)
 
   /* ── Load ── */
@@ -193,10 +194,16 @@ export default function Recensioni({ business }) {
   /* ── Delete ── */
   const handleDelete = async (id) => {
     setDeletingId(id)
-    await supabase.from('reviews').delete().eq('id', id)
+    const { error } = await supabase.from('reviews').delete().eq('id', id)
+    setDeletingId(null)
+    if (error) {
+      console.error('[Recensioni] handleDelete error:', error)
+      setDeleteError('Errore nell\'eliminazione. Riprova.')
+      setTimeout(() => setDeleteError(null), 3000)
+      return
+    }
     setReviews(prev => prev.filter(r => r.id !== id))
     setReplies(prev => { const n = { ...prev }; delete n[id]; return n })
-    setDeletingId(null)
     setConfirmId(null)
     setDeletedToast(true)
     setTimeout(() => setDeletedToast(false), 2500)
@@ -210,6 +217,7 @@ export default function Recensioni({ business }) {
     <div className="db-section">
 
       {deletedToast    && <div className="db-deleted-toast">Eliminato ✓</div>}
+      {deleteError     && <div className="db-deleted-toast" style={{ background: '#ef4444' }}>{deleteError}</div>}
       {visibilityError && <div className="db-deleted-toast" style={{ background: '#ef4444' }}>{visibilityError}</div>}
 
       {/* Toolbar */}
