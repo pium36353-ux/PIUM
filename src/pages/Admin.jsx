@@ -67,6 +67,7 @@ export default function Admin() {
   const [statusFilter, setStatusFilter] = useState('tutti')
   const [updatingId,   setUpdatingId]   = useState(null)
   const [copied,       setCopied]       = useState(null)
+  const [bizActionError, setBizActionError] = useState(null)
 
   const [section,      setSection]      = useState('clienti')
   const [affiliates,   setAffiliates]   = useState([])
@@ -150,6 +151,7 @@ export default function Admin() {
     setDrawerBiz(biz)
     setDrawerNotes(biz.admin_notes ?? '')
     setNotesSaved(false)
+    setBizActionError(null)
     setDrawerHealth(null)
     setDrawerAffiliate(null)
     setDrawerTrialDate(biz.trial_ends_at ? biz.trial_ends_at.slice(0, 10) : '')
@@ -173,6 +175,7 @@ export default function Admin() {
     setDrawerHealth(null)
     setDrawerNotes('')
     setDrawerAffiliate(null)
+    setBizActionError(null)
     setDrawerTrialDate('')
     setTrialDateSaved(false)
     setMsgText('')
@@ -250,20 +253,26 @@ export default function Admin() {
   /* ── Business actions ── */
   const updatePlan = async (id, plan) => {
     setUpdatingId(id)
-    await supabase.from('businesses').update({ plan }).eq('id', id)
-    setBusinesses(prev => prev.map(b => b.id === id ? { ...b, plan } : b))
+    const { error } = await supabase.from('businesses').update({ plan }).eq('id', id)
     setUpdatingId(null)
+    if (error) { setBizActionError('Modifica piano non riuscita. Riprova.'); return }
+    setBizActionError(null)
+    setBusinesses(prev => prev.map(b => b.id === id ? { ...b, plan } : b))
   }
 
   const setBizStatus = async (id, status) => {
     setUpdatingId(id)
-    await supabase.from('businesses').update({ status }).eq('id', id)
-    setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status } : b))
+    const { error } = await supabase.from('businesses').update({ status }).eq('id', id)
     setUpdatingId(null)
+    if (error) { setBizActionError('Modifica stato account non riuscita. Riprova.'); return }
+    setBizActionError(null)
+    setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status } : b))
   }
 
   const updatePlanPrice = async (id, plan_price) => {
-    await supabase.from('businesses').update({ plan_price }).eq('id', id)
+    const { error } = await supabase.from('businesses').update({ plan_price }).eq('id', id)
+    if (error) { setBizActionError('Modifica prezzo non riuscita. Riprova.'); return }
+    setBizActionError(null)
     setBusinesses(prev => prev.map(b => b.id === id ? { ...b, plan_price } : b))
   }
 
@@ -273,14 +282,18 @@ export default function Admin() {
     base.setDate(base.getDate() + 30)
     const trial_ends_at = base.toISOString()
     setUpdatingId(biz.id)
-    await supabase.from('businesses').update({ trial_ends_at, status: 'trial' }).eq('id', biz.id)
-    setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, trial_ends_at, status: 'trial' } : b))
+    const { error } = await supabase.from('businesses').update({ trial_ends_at, status: 'trial' }).eq('id', biz.id)
     setUpdatingId(null)
+    if (error) { setBizActionError('Estensione trial non riuscita. Riprova.'); return }
+    setBizActionError(null)
+    setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, trial_ends_at, status: 'trial' } : b))
   }
 
   const toggleAiUnlimited = useCallback(async (biz) => {
     const next = !biz.ai_unlimited
-    await supabase.from('businesses').update({ ai_unlimited: next }).eq('id', biz.id)
+    const { error } = await supabase.from('businesses').update({ ai_unlimited: next }).eq('id', biz.id)
+    if (error) { setBizActionError('Modifica AI non riuscita. Riprova.'); return }
+    setBizActionError(null)
     setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, ai_unlimited: next } : b))
     setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, ai_unlimited: next } : prev)
   }, [])
@@ -883,6 +896,7 @@ export default function Admin() {
         onCopyLink={copyLink}
         onToggleAiUnlimited={toggleAiUnlimited}
         copied={copied}
+        actionError={bizActionError}
         msgText={msgText}
         onMsgTextChange={setMsgText}
         msgUrl={msgUrl}
@@ -919,7 +933,7 @@ export default function Admin() {
 }
 
 /* ── BusinessDrawer ── */
-function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, affiliate, trialDate, onTrialDateChange, onSaveTrialDate, trialDateSaving, trialDateSaved, copied, msgText, onMsgTextChange, msgUrl, onMsgUrlChange, msgLabel, onMsgLabelChange, msgSending, msgSent, onSendMessage }) {
+function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, affiliate, trialDate, onTrialDateChange, onSaveTrialDate, trialDateSaving, trialDateSaved, copied, actionError, msgText, onMsgTextChange, msgUrl, onMsgUrlChange, msgLabel, onMsgLabelChange, msgSending, msgSent, onSendMessage }) {
   const status = getStatus(biz)
   const days   = trialDaysLeft(biz)
 
@@ -955,6 +969,7 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
           {/* Stato account */}
           <div className="adm-drawer-section">
             <div className="adm-drawer-section-title">Stato account</div>
+            {actionError && <div className="adm-aff-save-msg adm-aff-save-msg--error">{actionError}</div>}
             <div className="adm-drawer-row">
               <span className="adm-drawer-label">Stato</span>
               <StatusBadge status={status} />
