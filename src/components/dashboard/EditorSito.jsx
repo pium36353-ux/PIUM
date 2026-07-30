@@ -335,11 +335,14 @@ function CoverBlock({ business, row, onSaved }) {
   }
 
   const handleRemove = async () => {
+    setFileError(null)
     const { data, error } = await saveBlock(business, row, 'cover', { cover_image_url: null })
-    if (!error) {
-      setPreview(null)
-      onSaved(data)
+    if (error) {
+      setFileError('Errore nella rimozione. Riprova.')
+      return
     }
+    setPreview(null)
+    onSaved(data)
   }
 
   return (
@@ -438,6 +441,7 @@ function GalleryBlock({ business, row, onSaved }) {
     }
 
     setUploadProgress({ done: 0, total: valid.length })
+    const prevImages = images
     let current = [...images]
 
     for (let i = 0; i < valid.length; i++) {
@@ -461,14 +465,23 @@ function GalleryBlock({ business, row, onSaved }) {
       setUploadProgress({ done: i + 1, total: valid.length })
     }
 
-    await persist(current)
+    const persistErr = await persist(current)
+    if (persistErr) {
+      setImages(prevImages)
+      setFileError('Foto caricate ma non salvate. Riprova.')
+    }
     setUploadProgress(null)
   }
 
   const handleDelete = async (url) => {
+    setFileError(null)
     const newImages = images.filter(u => u !== url)
+    const error = await persist(newImages)
+    if (error) {
+      setFileError('Errore nell\'eliminazione della foto. Riprova.')
+      return
+    }
     setImages(newImages)
-    await persist(newImages)
   }
 
   const uploading = uploadProgress !== null
@@ -621,8 +634,13 @@ function ProfileImageBlock({ business }) {
   }
 
   const handleRemove = async () => {
+    setFileError(null)
     const { error } = await supabase.from('businesses').update({ profile_image: null }).eq('id', business.id)
-    if (!error) setPreview(null)
+    if (error) {
+      setFileError('Errore nella rimozione. Riprova.')
+      return
+    }
+    setPreview(null)
   }
 
   return (
