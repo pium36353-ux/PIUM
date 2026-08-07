@@ -1,8 +1,15 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
 const STEPS = { SERVICE: 0, DATE: 1, SLOT: 2, FORM: 3, CONFIRM: 4, SUCCESS: 5 }
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+// Anti-bot: la creazione prenotazione passa dalla Edge Function create-booking,
+// che verifica il token Cloudflare Turnstile. Il widget è attivo solo se è
+// configurata la site key; senza, il flusso resta funzionante ma senza anti-bot.
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
+const BOOKING_ENDPOINT   = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-booking`
+const SUPABASE_ANON_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 function todayStr() {
   const d = new Date()
@@ -82,6 +89,50 @@ export default function BookingSection({ business, services }) {
   const [error, setError]                 = useState(null)
   const submittingRef                     = useRef(false)
 
+  const [turnstileToken, setTurnstileToken] = useState(null)
+  const turnstileRef                        = useRef(null)
+  const widgetIdRef                         = useRef(null)
+
+  // Carica lo script Turnstile una sola volta (solo se la site key è configurata).
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return
+    if (document.querySelector('script[data-turnstile]')) return
+    const s = document.createElement('script')
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+    s.async = true
+    s.defer = true
+    s.setAttribute('data-turnstile', '1')
+    document.head.appendChild(s)
+  }, [])
+
+  // Renderizza il widget quando si arriva al riepilogo; lo rimuove uscendo dallo step.
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY || step !== STEPS.CONFIRM) return
+    let cancelled = false
+    const tryRender = () => {
+      if (cancelled) return
+      if (window.turnstile && turnstileRef.current && widgetIdRef.current === null) {
+        widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+          sitekey: TURNSTILE_SITE_KEY,
+          callback: (token) => setTurnstileToken(token),
+          'error-callback': () => setTurnstileToken(null),
+          'expired-callback': () => setTurnstileToken(null),
+        })
+      } else if (!window.turnstile) {
+        setTimeout(tryRender, 300)
+      }
+    }
+    tryRender()
+    return () => {
+      cancelled = true
+      if (window.turnstile && widgetIdRef.current !== null) {
+        try { window.turnstile.remove(widgetIdRef.current) } catch { /* noop */ }
+      }
+      widgetIdRef.current = null
+      setTurnstileToken(null)
+    }
+  }, [step])
+
   const totalDuration = selectedServices.reduce((acc, s) => acc + s.duration_min, 0)
   const totalPrice    = selectedServices.reduce((acc, s) => acc + (s.price ?? 0), 0)
   const hasPrice      = selectedServices.some(s => s.price != null)
@@ -151,26 +202,58 @@ export default function BookingSection({ business, services }) {
     setStep(STEPS.CONFIRM)
   }
 
+  function resetTurnstile() {
+    if (window.turnstile && widgetIdRef.current !== null) {
+      try { window.turnstile.reset(widgetIdRef.current) } catch { /* noop */ }
+    }
+    setTurnstileToken(null)
+  }
+
   async function submitBooking() {
     if (submittingRef.current) return
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError('Completa la verifica di sicurezza prima di inviare.')
+      return
+    }
     submittingRef.current = true
     setSubmitting(true)
     setError(null)
-    const { error: e } = await supabase.rpc('create_booking', {
-      p_business_id:    business.id,
-      p_service_id:     selectedServices[0].id,
-      p_customer_name:  form.name.trim(),
-      p_customer_email: form.email.trim(),
-      p_customer_phone: form.phone.trim(),
-      p_date:           date,
-      p_time:           slot,
-      p_service_names:  selectedServices.map(s => s.name).join(', '),
-      p_service_ids:    selectedServices.map(s => s.id),
-    })
-    submittingRef.current = false
-    setSubmitting(false)
-    if (e) { setError('Si è verificato un errore. Riprova tra qualche istante.'); return }
-    setStep(STEPS.SUCCESS)
+    try {
+      const res = await fetch(BOOKING_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey':        SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          business_id:     business.id,
+          service_id:      selectedServices[0].id,
+          customer_name:   form.name.trim(),
+          customer_email:  form.email.trim(),
+          customer_phone:  form.phone.trim(),
+          date,
+          time:            slot,
+          service_names:   selectedServices.map(s => s.name).join(', '),
+          service_ids:     selectedServices.map(s => s.id),
+          turnstile_token: turnstileToken,
+        }),
+        signal: AbortSignal.timeout(20_000),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(body.error || 'Si è verificato un errore. Riprova tra qualche istante.')
+        resetTurnstile()  // consuma il token: obbliga a rifare la verifica al retry
+        return
+      }
+      setStep(STEPS.SUCCESS)
+    } catch {
+      setError('Si è verificato un errore. Riprova tra qualche istante.')
+      resetTurnstile()
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
+    }
   }
 
   const slots = step === STEPS.SLOT ? generateSlots(totalDuration, date, business.opening_hours, takenSlots, business.booking_capacity ?? 1) : []
@@ -332,7 +415,14 @@ export default function BookingSection({ business, services }) {
           <p className="bk-privacy-note">
             Inserendo i dati e inviando la richiesta di prenotazione, dichiari di aver preso visione della <a href="https://www.piumapp.com/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>. I dati saranno trattati per gestire la prenotazione presso l'attivit&agrave; selezionata.
           </p>
-          <button className="bk-submit-btn" onClick={submitBooking} disabled={submitting}>
+          {TURNSTILE_SITE_KEY && (
+            <div ref={turnstileRef} className="bk-turnstile" style={{ margin: '0 0 12px' }} />
+          )}
+          <button
+            className="bk-submit-btn"
+            onClick={submitBooking}
+            disabled={submitting || (!!TURNSTILE_SITE_KEY && !turnstileToken)}
+          >
             {submitting ? 'Invio in corso...' : 'Invia richiesta'}
           </button>
         </div>
