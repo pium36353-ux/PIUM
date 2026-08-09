@@ -91,6 +91,8 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [form,         setForm]         = useState(EMPTY_FORM)
   const [errors,       setErrors]       = useState({})
   const [saving,       setSaving]       = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deletingApt,       setDeletingApt]       = useState(false)
 
   const [showSettings,  setShowSettings]  = useState(false)
   const [empForm,       setEmpForm]       = useState(EMPTY_EMP)
@@ -257,6 +259,7 @@ export default function Agenda({ business, initialView = 'day' }) {
     setShowModal(false)
     setEditingId(null)
     setAddAnotherTime(null)
+    setShowDeleteConfirm(false)
   }
   const setField = (f) => (e) => { setForm(p => ({ ...p, [f]: e.target.value })); setErrors(p => ({ ...p, [f]: null })) }
 
@@ -433,6 +436,16 @@ export default function Agenda({ business, initialView = 'day' }) {
     if (error) { console.error('[deleteAppointment]', error); return }
     setAppointments(prev => prev.filter(a => a.id !== id))
     setConfirmDelId(null)
+  }
+
+  // Elimina dal modal dettaglio: riusa deleteAppointment, poi chiude il modal.
+  const handleModalDelete = async () => {
+    if (!editingId) return
+    setDeletingApt(true)
+    await deleteAppointment(editingId)
+    setDeletingApt(false)
+    setShowDeleteConfirm(false)
+    closeModal()
   }
 
   const confirmPendingBooking = async (id) => {
@@ -645,10 +658,12 @@ export default function Agenda({ business, initialView = 'day' }) {
       {confirmDialogId && (() => {
         const b = pendingBookings.find(x => x.id === confirmDialogId)
         if (!b) return null
+        const dataLabel = new Date(b.appointment_date + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })
+        const oraLabel  = b.appointment_time?.slice(0, 5)
         return (
           <div className="ag-dialog-overlay" onClick={() => setConfirmDialogId(null)}>
             <div className="ag-dialog-box" onClick={e => e.stopPropagation()}>
-              <p className="ag-dialog-text">Hai ricevuto conferma da <strong>{b.customer_name}</strong>?</p>
+              <p className="ag-dialog-text">Hai ricevuto conferma da <strong>{b.customer_name}</strong> per l'appuntamento del {dataLabel} alle {oraLabel}?</p>
               <div className="ag-dialog-actions">
                 <button
                   className="ag-pending-btn ag-pending-btn--confirm"
@@ -842,6 +857,16 @@ export default function Agenda({ business, initialView = 'day' }) {
 
               {editingId && (
                 <button
+                  type="button"
+                  className="ag-modal-delete-btn"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  <IconTrash /> Elimina appuntamento
+                </button>
+              )}
+
+              {editingId && (
+                <button
                   className="ag-add-another-btn"
                   onClick={() => {
                     const date = form.date
@@ -1024,6 +1049,29 @@ export default function Agenda({ business, initialView = 'day' }) {
               </div>
             )}
           </div>
+
+          {/* Conferma eliminazione dal modal dettaglio (sopra il modal) */}
+          {showDeleteConfirm && (() => {
+            const delData = form.date ? new Date(form.date + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }) : ''
+            const delOra  = form.start_time?.slice(0, 5)
+            return (
+              <div className="ag-dialog-overlay" style={{ zIndex: 100 }} onClick={() => setShowDeleteConfirm(false)}>
+                <div className="ag-dialog-box" onClick={e => e.stopPropagation()}>
+                  <p className="ag-dialog-text">Sei sicuro di voler eliminare l'appuntamento di <strong>{form.client_name}</strong> del {delData} alle {delOra}?</p>
+                  <div className="ag-dialog-actions">
+                    <button
+                      className="ag-pending-btn ag-pending-btn--reject"
+                      onClick={handleModalDelete}
+                      disabled={deletingApt}
+                    >
+                      {deletingApt ? '…' : 'Sì, elimina'}
+                    </button>
+                    <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setShowDeleteConfirm(false)}>Annulla</button>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -1305,13 +1353,17 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
               const color  = apt.employees?.color ?? '#94a3b8'
               const pct    = 100 / apt.maxCols
               const isDone = apt.completed
+              // Contenuto a livelli in base all'altezza reale del blocco (px, già device-adjusted da SLOT_H).
+              // Soglie conservative 70/110 per avere sempre margine anche con font più grandi.
+              const tier     = height < 70 ? 'compact' : height < 110 ? 'medium' : 'full'
+              const isNarrow = apt.maxCols > 1   // blocchi sovrapposti/affiancati
               const waReminderLink = apt.bookings?.customer_phone
                 ? buildWaLink(apt.bookings.customer_phone, `Ciao ${apt.client_name}, ti ricordiamo l'appuntamento di domani alle ${apt.start_time?.slice(0, 5)} per ${apt.bookings?.services?.name ?? 'il tuo appuntamento'}. A presto! — ${businessName}`)
                 : null
               return (
                 <div
                   key={apt.id}
-                  className={`ag-apt ${isDone ? 'ag-apt--done' : ''}`}
+                  className={`ag-apt ${isDone ? 'ag-apt--done' : ''} ${isNarrow ? 'ag-apt--narrow' : ''}`}
                   style={{
                     position: 'absolute',
                     top,
@@ -1341,46 +1393,59 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                   }}
                 >
                   <div className="ag-apt-inner">
-                    <div className="ag-apt-top-row">
-                      <span className="ag-apt-time">{apt.start_time?.slice(0, 5)}</span>
-                      <div className="ag-apt-btns" onClick={e => e.stopPropagation()}>
-                        <button
-                          className={`ag-apt-btn-check ${isDone ? 'ag-apt-btn-check--on' : ''}`}
-                          onClick={e => { e.stopPropagation(); toggleCompleted(apt) }}
-                          disabled={togglingId === apt.id}
-                          title={isDone ? 'Annulla completamento' : 'Segna completato'}
-                        ><IconCheck /></button>
-                        {confirmDelId === apt.id ? (
-                          <>
-                            <button className="ag-apt-btn-del ag-apt-btn-del--confirm" onClick={e => { e.stopPropagation(); deleteAppointment(apt.id) }} title="Conferma"><IconCheck /></button>
-                            <button className="ag-apt-btn" onClick={e => { e.stopPropagation(); setConfirmDelId(null) }}><IconX /></button>
-                          </>
-                        ) : (
-                          <button className="ag-apt-btn-del" onClick={e => { e.stopPropagation(); setConfirmDelId(apt.id) }} title="Elimina"><IconTrash /></button>
-                        )}
+                    {tier === 'compact' ? (
+                      // Compact: ora + nome su una riga. L'ora resta intera; il nome tronca con "…".
+                      <div className="ag-apt-compact-line">
+                        <span className="ag-apt-time">{apt.start_time?.slice(0, 5)}</span>
+                        <span className="ag-apt-client">{apt.client_name}</span>
                       </div>
-                    </div>
-                    <span className="ag-apt-client">{apt.client_name}</span>
-                    {apt.employees && (
-                      <span className="ag-apt-employee" style={{ color: isDone ? '#22c55e' : color }}>
-                        {apt.employees.name}
-                      </span>
+                    ) : (
+                      <>
+                        <div className="ag-apt-top-row">
+                          <span className="ag-apt-time">{apt.start_time?.slice(0, 5)}</span>
+                        </div>
+                        <span className="ag-apt-client">{apt.client_name}</span>
+                        {apt.employees && (
+                          <span className="ag-apt-employee" style={{ color: isDone ? '#22c55e' : color }}>
+                            {apt.employees.name}
+                          </span>
+                        )}
+                        {(apt.price != null || apt.duration_minutes) && (
+                          <span className="ag-apt-detail">
+                            {fmtDuration(apt.duration_minutes)}{apt.price != null ? ` · ${fmtCurrency(apt.price)}` : ''}
+                          </span>
+                        )}
+                        {tier === 'full' && apt.notes && <span className="ag-apt-notes">{apt.notes}</span>}
+                        {tier === 'full' && waReminderLink && (
+                          <a
+                            className="ag-apt-wa"
+                            href={waReminderLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                          >Promemoria</a>
+                        )}
+                      </>
                     )}
-                    {(apt.price != null || apt.duration_minutes) && (
-                      <span className="ag-apt-detail">
-                        {fmtDuration(apt.duration_minutes)}{apt.price != null ? ` · ${fmtCurrency(apt.price)}` : ''}
-                      </span>
-                    )}
-                    {apt.notes && <span className="ag-apt-notes">{apt.notes}</span>}
-                    {waReminderLink && (
-                      <a
-                        className="ag-apt-wa"
-                        href={waReminderLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                      >Promemoria</a>
-                    )}
+                  </div>
+                  {/* Bottoni in absolute (angolo alto-destra): non occupano spazio verticale,
+                      così ora+nome non vengono mai spinti fuori. Su blocchi stretti solo l'azione
+                      principale (completa); l'eliminazione resta accessibile aprendo il dettaglio. */}
+                  <div className="ag-apt-btns" onClick={e => e.stopPropagation()}>
+                    <button
+                      className={`ag-apt-btn-check ${isDone ? 'ag-apt-btn-check--on' : ''}`}
+                      onClick={e => { e.stopPropagation(); toggleCompleted(apt) }}
+                      disabled={togglingId === apt.id}
+                      title={isDone ? 'Annulla completamento' : 'Segna completato'}
+                    ><IconCheck /></button>
+                    {!isNarrow && (confirmDelId === apt.id ? (
+                      <>
+                        <button className="ag-apt-btn-del ag-apt-btn-del--confirm" onClick={e => { e.stopPropagation(); deleteAppointment(apt.id) }} title="Conferma"><IconCheck /></button>
+                        <button className="ag-apt-btn" onClick={e => { e.stopPropagation(); setConfirmDelId(null) }}><IconX /></button>
+                      </>
+                    ) : (
+                      <button className="ag-apt-btn-del" onClick={e => { e.stopPropagation(); setConfirmDelId(apt.id) }} title="Elimina"><IconTrash /></button>
+                    ))}
                   </div>
                 </div>
               )

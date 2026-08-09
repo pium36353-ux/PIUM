@@ -101,8 +101,10 @@ Deno.serve(async (req) => {
     checkoutParams.set('locale',                                'it')
     checkoutParams.set('allow_promotion_codes',                 'false')
 
-    if (biz.affiliate_code) {
-      const coupon = Deno.env.get('STRIPE_COUPON_FOUNDER') ?? ''
+    // Coupon sconto SOLO per il canale "-on" (codice affiliato che termina in -on, salvato lowercased).
+    // Qualsiasi altro codice, o nessun codice → prezzo pieno (STRIPE_PRICE_ID), nessun coupon.
+    if (biz.affiliate_code && biz.affiliate_code.toLowerCase().endsWith('-on')) {
+      const coupon = Deno.env.get('STRIPE_COUPON_ON') ?? ''
       if (coupon) {
         checkoutParams.set('discounts[0][coupon]', coupon)
       }

@@ -11,8 +11,14 @@ function generateCode(name) {
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]/g, '')
     .slice(0, 3)
-  const rand = Math.random().toString(36).slice(2, 6)
-  return (base || 'aff') + rand
+  // Sicurezza: il suffisso "-on" marca il canale scontato al checkout. Un codice base
+  // che finisse per "-on" verrebbe scambiato per quel marcatore, quindi lo si rigenera.
+  // (Oggi strutturalmente impossibile — il codice non contiene trattini — ma a prova di futuro.)
+  let code
+  do {
+    code = (base || 'aff') + Math.random().toString(36).slice(2, 6)
+  } while (code.toLowerCase().endsWith('-on'))
+  return code
 }
 
 export default function AffiliatesAuth() {

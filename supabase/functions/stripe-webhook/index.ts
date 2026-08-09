@@ -1,7 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const COMMISSION_AMOUNT = 25.00
-const COMMISSION_MONTHS_CAP = 12
+// ── Commissioni affiliato — UNICO punto di configurazione (facile da modificare) ──
+const COMMISSION_TIER_MONTHS = 12      // mesi 1..12 tariffa piena; oltre, tariffa ridotta (nessun cap)
+const COMMISSION_FULL  = 29.99         // canale FULL (cliente paga 99,99€), mesi 1..12
+const COMMISSION_ON    = 19.99         // canale ON  (cliente paga 69,99€), mesi 1..12
+const COMMISSION_LATE  = 15.00         // qualsiasi canale, mesi > 12 (commissione a vita)
+
+// Tier deciso dal suffisso "-on" del codice (robusto, a prova di IVA/proration),
+// non da amount_paid. Oltre i 12 mesi vale la tariffa ridotta per entrambi i canali.
+function commissionFor(hadOnSuffix: boolean, monthNumber: number): number {
+  if (monthNumber > COMMISSION_TIER_MONTHS) return COMMISSION_LATE
+  return hadOnSuffix ? COMMISSION_ON : COMMISSION_FULL
+}
 
 // Verify Stripe webhook signature using Web Crypto (no SDK needed)
 async function verifyStripeSignature(body: string, sigHeader: string, secret: string): Promise<boolean> {
@@ -204,8 +214,9 @@ Deno.serve(async (req) => {
 
     else if (event.type === 'invoice.paid') {
       const invoice    = event.data.object
-      const customerId = invoice['customer'] as string | null
-      const invoiceId  = invoice['id']       as string | null
+      const customerId = invoice['customer']    as string | null
+      const invoiceId  = invoice['id']          as string | null
+      const amountPaid = (invoice['amount_paid'] as number | null) ?? null   // centesimi, solo per cross-check nei log
 
       if (!customerId || !invoiceId) {
         console.log('invoice.paid: missing customer or invoice id, skipping')
@@ -223,14 +234,20 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ received: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
 
+      // Il suffisso "-on" marca il canale scontato ma NON fa parte del codice base
+      // salvato in affiliates.code: va tolto prima del match, altrimenti i clienti -on
+      // non troverebbero l'affiliato e la commissione andrebbe persa.
+      const hadOnSuffix = biz.affiliate_code.toLowerCase().endsWith('-on')
+      const baseCode    = biz.affiliate_code.toLowerCase().replace(/-on$/, '')
+
       const { data: aff, error: affErr } = await supabase
         .from('affiliates')
         .select('id, status')
-        .eq('code', biz.affiliate_code)
+        .eq('code', baseCode)
         .maybeSingle()
 
       if (affErr || !aff || aff.status !== 'approved') {
-        console.log(`invoice.paid: affiliate not found or not approved for code ${biz.affiliate_code}, skipping`)
+        console.log(`invoice.paid: affiliate not found or not approved for code ${baseCode}, skipping`)
         return new Response(JSON.stringify({ received: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
 
@@ -244,11 +261,10 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ received: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
 
+      // Nessun cap: la commissione continua finché il cliente paga (mesi >12 → tariffa ridotta).
       const existingCount = count ?? 0
-      if (existingCount >= COMMISSION_MONTHS_CAP) {
-        console.log(`invoice.paid: commission cap (${COMMISSION_MONTHS_CAP}) reached for business ${biz.id}, skipping`)
-        return new Response(JSON.stringify({ received: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-      }
+      const monthNumber   = existingCount + 1
+      const commission    = commissionFor(hadOnSuffix, monthNumber)
 
       const { error: insertErr } = await supabase
         .from('affiliate_commissions')
@@ -256,8 +272,8 @@ Deno.serve(async (req) => {
           affiliate_id:      aff.id,
           business_id:       biz.id,
           stripe_invoice_id: invoiceId,
-          amount:            COMMISSION_AMOUNT,
-          month_number:      existingCount + 1,
+          amount:            commission,
+          month_number:      monthNumber,
           status:            'pending',
         })
 
@@ -268,7 +284,8 @@ Deno.serve(async (req) => {
           console.error('invoice.paid: insert error (non-blocking):', insertErr)
         }
       } else {
-        console.log(`invoice.paid: commission ${existingCount + 1}/${COMMISSION_MONTHS_CAP} recorded for business ${biz.id}, affiliate ${aff.id}`)
+        // amountPaid è un cross-check: canale=ON atteso ~6999, FULL atteso ~9999 (al netto di IVA/proration).
+        console.log(`invoice.paid: commission €${commission} (month ${monthNumber}, ${hadOnSuffix ? 'ON' : 'FULL'}, amount_paid=${amountPaid}) recorded for business ${biz.id}, affiliate ${aff.id}`)
       }
     }
 
