@@ -1,0 +1,25 @@
+-- ============================================================
+-- Rimozione overload a 8 parametri di create_booking
+-- ============================================================
+-- Nel DB esistono due overload di create_booking per la presenza di p_service_ids:
+--   * 8 parametri (senza p_service_ids) — residuo pre-multi-servizio
+--     (ultima definizione: 20260719_create_booking_advisory_lock.sql).
+--     Ha advisory lock, validazione servizi, anti-doppione email e check capacità,
+--     ma NON i controlli di hardening aggiunti alla v9 (orari di apertura, data
+--     passata, formato email/telefono, backstop pending e anti-flood). È quindi
+--     una via che bypassa i nuovi controlli di sicurezza.
+--   * 9 parametri (con p_service_ids) — versione corrente, aggiornata da
+--     20260806_create_booking_hardening.sql. È l'unica che deve restare.
+--
+-- Verificato in sola lettura il 2026-08-07: l'unico chiamante applicativo è la
+-- Edge Function create-booking, che passa SEMPRE p_service_ids -> risolve alla
+-- versione a 9 parametri. BookingSection.jsx non chiama più la RPC direttamente.
+-- Nessun altro punto del codice invoca create_booking.
+--
+-- Questa migration rimuove SOLO l'overload a 8 parametri. La firma a 9 parametri
+-- resta intatta. IF EXISTS rende l'operazione idempotente; nessun CASCADE, così
+-- se (inaspettatamente) esistesse una dipendenza il DROP fallirebbe in modo
+-- visibile invece di rimuovere silenziosamente altri oggetti.
+-- ============================================================
+
+DROP FUNCTION IF EXISTS public.create_booking(uuid, uuid, text, text, date, time, text, text);
