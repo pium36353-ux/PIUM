@@ -21,6 +21,9 @@ export default function Settings() {
   const [pwdStatus, setPwdStatus] = useState('idle')
   const [pwdError, setPwdError] = useState('')
 
+  const [confirmLogoutAll, setConfirmLogoutAll] = useState(false)
+  const [logoutAllStatus, setLogoutAllStatus]   = useState('idle')
+
   const [notifPerm, setNotifPerm] = useState(() =>
     'Notification' in window ? Notification.permission : 'unsupported'
   )
@@ -101,10 +104,22 @@ export default function Settings() {
 
   const handlePasswordSave = async (e) => {
     e.preventDefault()
+    if (!pwd.current.trim()) { setPwdError('Inserisci la password attuale.'); return }
     if (!pwd.next.trim()) { setPwdError('Inserisci la nuova password.'); return }
     if (pwd.next.length < 6) { setPwdError('La password deve essere di almeno 6 caratteri.'); return }
     if (pwd.next !== pwd.confirm) { setPwdError('Le password non coincidono.'); return }
     setPwdStatus('saving')
+    // updateUser non richiede la vecchia password: la verifichiamo esplicitamente
+    // ri-autenticando l'utente prima di consentire il cambio.
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email:    user?.email,
+      password: pwd.current,
+    })
+    if (reauthError) {
+      setPwdError('La password attuale non è corretta.')
+      setPwdStatus('error')
+      return
+    }
     const { error } = await supabase.auth.updateUser({ password: pwd.next })
     if (error) { setPwdError(translateError(error.message)); setPwdStatus('error') }
     else { setPwdStatus('ok'); setPwd({ current: '', next: '', confirm: '' }) }
@@ -112,6 +127,18 @@ export default function Settings() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
+    navigate('/auth', { replace: true })
+  }
+
+  // Termina TUTTE le sessioni, inclusa quella corrente (scope 'global'), a differenza
+  // del cambio password che di proposito non disconnette nessuno (vedi handlePasswordSave).
+  const handleSignOutAll = async () => {
+    setLogoutAllStatus('saving')
+    const { error } = await supabase.auth.signOut({ scope: 'global' })
+    if (error) {
+      setLogoutAllStatus('error')
+      return
+    }
     navigate('/auth', { replace: true })
   }
 
@@ -261,6 +288,18 @@ export default function Settings() {
           <h3 className="sett-subsection-title">Cambia password</h3>
           <form onSubmit={handlePasswordSave} noValidate className="sett-pwd-form">
             <div className="sett-field">
+              <label className="sett-label" htmlFor="sett-pwd-current">Password attuale</label>
+              <input
+                id="sett-pwd-current"
+                className="sett-input"
+                type="password"
+                value={pwd.current}
+                onChange={e => setP('current', e.target.value)}
+                placeholder="La tua password attuale"
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="sett-field">
               <label className="sett-label" htmlFor="sett-pwd-next">Nuova password</label>
               <input
                 id="sett-pwd-next"
@@ -290,6 +329,33 @@ export default function Settings() {
               {pwdStatus === 'saving' ? 'Salvataggio…' : 'Aggiorna password'}
             </button>
           </form>
+
+          <div className="sett-divider" />
+
+          <h3 className="sett-subsection-title">Disconnetti tutti i dispositivi</h3>
+          <p className="sett-notif-hint" style={{ margin: '0 0 12px' }}>
+            Termina tutte le sessioni attive, incluse quelle su altri dispositivi e su questo stesso dispositivo.
+          </p>
+          {!confirmLogoutAll ? (
+            <button className="sett-btn-danger" type="button" onClick={() => setConfirmLogoutAll(true)}>
+              <IconLogout /> Disconnetti tutti i dispositivi
+            </button>
+          ) : (
+            <div className="sett-field">
+              <p className="sett-error" style={{ marginBottom: 10 }}>
+                <IconAlert /> Sei sicuro? Dovrai rifare l'accesso ovunque, incluso questo dispositivo.
+              </p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="sett-btn-danger" type="button" onClick={handleSignOutAll} disabled={logoutAllStatus === 'saving'}>
+                  {logoutAllStatus === 'saving' ? 'Disconnessione…' : 'Sì, disconnetti tutti'}
+                </button>
+                <button className="sett-test-link" type="button" onClick={() => setConfirmLogoutAll(false)}>Annulla</button>
+              </div>
+            </div>
+          )}
+          {logoutAllStatus === 'error' && (
+            <p className="sett-error" style={{ marginTop: 10 }}><IconAlert /> Errore durante la disconnessione. Riprova.</p>
+          )}
         </section>
 
         {/* ── Esci ── */}

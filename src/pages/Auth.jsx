@@ -233,6 +233,10 @@ export default function Auth() {
             {mode === 'login' ? 'Registrati' : 'Accedi'}
           </button>
         </p>
+
+        <p className="auth-back-link">
+          <Link to="/" className="auth-link-btn">← Torna alla pagina principale</Link>
+        </p>
       </div>
     </div>
   )
