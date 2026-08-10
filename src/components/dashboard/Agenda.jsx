@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
@@ -27,6 +27,10 @@ const DAY_LETTER  = ['L','M','M','G','V','S','D']
 
 const EMPTY_FORM = { date: '', client_name: '', client_phone: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '', selected_services: [] }
 const EMPTY_EMP  = { name: '', color: COLORS[0] }
+
+// Smart Time: oltre questa soglia un timer rimasto aperto non è più attendibile —
+// il recupero non propone più "conferma tempo trascorso", solo correzione manuale o scarto.
+const OPEN_TIMER_SAFETY_HOURS = 8
 
 const SLOT_H = window.innerWidth < 768 ? 56 : 40 // px per 30-minute slot (56 su mobile, 40 su desktop)
 
@@ -61,6 +65,15 @@ function getHoliday(date) {
 function fmtTime(t)      { return t ? t.slice(0, 5) : '' }
 function fmtCurrency(v)  { return (v == null || v === '') ? '' : `€${Number(v).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` }
 function fmtDuration(m)  { if (m < 60) return `${m} min`; const h = Math.floor(m/60), r = m%60; return r ? `${h}h ${r}min` : `${h}h` }
+
+// Tempo trascorso in HH:MM:SS tra uno start ISO e un istante in ms (Date.now() o Date.parse(end)).
+function formatElapsed(startIso, endMs) {
+  const elapsedSec = Math.max(0, Math.floor((endMs - Date.parse(startIso)) / 1000))
+  const h = Math.floor(elapsedSec / 3600)
+  const m = Math.floor((elapsedSec % 3600) / 60)
+  const s = elapsedSec % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
 
 // Returns 6 weeks of Date objects covering the given month (Mon-Sun rows)
 function getMonthGrid(year, month) {
@@ -121,6 +134,12 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [confirmDialogId,       setConfirmDialogId]       = useState(null)
   const [rejectDialogId,        setRejectDialogId]        = useState(null)
   const [showOutOfHoursConfirm, setShowOutOfHoursConfirm] = useState(false)
+
+  // Smart Time
+  const [now,               setNow]               = useState(() => Date.now())
+  const [timerBusyId,       setTimerBusyId]        = useState(null)
+  const [openTimers,        setOpenTimers]         = useState([])
+  const [showTimerRecovery, setShowTimerRecovery]  = useState(false)
 
   const scrollToTimeRef  = useRef(null)
   const suggestTimerRef  = useRef(null)
@@ -200,6 +219,22 @@ export default function Agenda({ business, initialView = 'day' }) {
     setPendingBookings(data ?? [])
   }, [business])
 
+  // Smart Time — recupero: cerca TUTTI i timer rimasti aperti per il business
+  // (non solo quelli del giorno/mese in vista), per l'indicatore "N timer da chiudere".
+  const loadOpenTimers = useCallback(async (signal = null) => {
+    if (!business?.smart_time_enabled) { setOpenTimers([]); return }
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('id, client_name, date, start_time, actual_start_at')
+      .eq('business_id', business.id)
+      .not('actual_start_at', 'is', null)
+      .is('actual_end_at', null)
+      .order('actual_start_at')
+    if (signal?.cancelled) return
+    if (error) { console.error('[loadOpenTimers]', error); return }
+    setOpenTimers(data ?? [])
+  }, [business])
+
   useEffect(() => {
     const signal = { cancelled: false }
     loadEmployees(signal)
@@ -215,6 +250,24 @@ export default function Agenda({ business, initialView = 'day' }) {
     loadPendingBookings(signal)
     return () => { signal.cancelled = true }
   }, [loadPendingBookings])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadOpenTimers(signal)
+    return () => { signal.cancelled = true }
+  }, [loadOpenTimers])
+
+  // Smart Time — UN SOLO interval globale per il cronometro che scorre, attivo solo
+  // se c'è almeno un timer in corso NELLA VISTA CORRENTE e la modalità è attiva.
+  // Pulito automaticamente (clearInterval) quando non serve più o al cambio pagina.
+  const hasRunningTimer = useMemo(
+    () => !!business?.smart_time_enabled && appointments.some(a => a.actual_start_at && !a.actual_end_at),
+    [appointments, business?.smart_time_enabled]
+  )
+  useEffect(() => {
+    if (!hasRunningTimer) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [hasRunningTimer])
 
   /* ── Modal helpers ── */
   const openModal = (date = formatDate(selectedDay), time = '09:00') => {
@@ -438,6 +491,47 @@ export default function Agenda({ business, initialView = 'day' }) {
     setConfirmDelId(null)
   }
 
+  // Smart Time — start/stop timer
+  const startTimer = async (apt) => {
+    setTimerBusyId(apt.id)
+    const nowIso = new Date().toISOString()
+    const { error } = await supabase.from('appointments')
+      .update({ actual_start_at: nowIso, time_status: 'temp' })
+      .eq('id', apt.id)
+    setTimerBusyId(null)
+    if (error) { console.error('[startTimer]', error); return }
+    setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, actual_start_at: nowIso, time_status: 'temp' } : a))
+  }
+
+  const stopTimer = async (apt) => {
+    setTimerBusyId(apt.id)
+    const nowIso = new Date().toISOString()
+    // Fermare il timer completa l'appuntamento (decisione confermata): a differenza
+    // del completamento manuale senza timer, che non crea alcun record tempo.
+    const { error } = await supabase.from('appointments')
+      .update({ actual_end_at: nowIso, completed: true })
+      .eq('id', apt.id)
+    setTimerBusyId(null)
+    if (error) { console.error('[stopTimer]', error); return }
+    const updated = appointments.map(a => a.id === apt.id ? { ...a, actual_end_at: nowIso, completed: true } : a)
+    setAppointments(updated)
+    notifyNextAppointment(updated)
+  }
+
+  // Smart Time — risoluzione di un timer rimasto aperto (recupero alla riapertura)
+  const resolveOpenTimer = async (timer, action, manualMinutes) => {
+    const nowIso = new Date().toISOString()
+    const patch =
+      action === 'confirm' ? { actual_end_at: nowIso, time_status: 'confirmed', completed: true }
+      : action === 'manual' ? { manual_minutes: manualMinutes, actual_end_at: nowIso, time_status: 'confirmed', completed: true }
+      : { actual_end_at: nowIso, time_status: 'excluded', completed: true }
+
+    const { error } = await supabase.from('appointments').update(patch).eq('id', timer.id)
+    if (error) { console.error('[resolveOpenTimer]', error); return }
+    setOpenTimers(prev => prev.filter(t => t.id !== timer.id))
+    setAppointments(prev => prev.map(a => a.id === timer.id ? { ...a, ...patch } : a))
+  }
+
   // Elimina dal modal dettaglio: riusa deleteAppointment, poi chiude il modal.
   const handleModalDelete = async () => {
     if (!editingId) return
@@ -571,6 +665,20 @@ export default function Agenda({ business, initialView = 'day' }) {
 
         {/* Actions */}
         <div className="ag-header-actions">
+          {business?.smart_time_enabled && (
+            <span className="ag-smart-time-indicator" title="Tracciamento tempo attivo per questa attività">
+              ⏱ Smart Time
+            </span>
+          )}
+          {openTimers.length > 0 && (
+            <button
+              className="ag-timer-badge"
+              onClick={() => setShowTimerRecovery(true)}
+              title="Timer avviati ma non fermati"
+            >
+              ⏱ {openTimers.length} timer da chiudere
+            </button>
+          )}
           <button className="db-btn-primary" onClick={() => openModal(view === 'day' ? formatDate(selectedDay) : formatDate(today))}>
             + Appuntamento
           </button>
@@ -778,6 +886,8 @@ export default function Agenda({ business, initialView = 'day' }) {
             openingHours={business?.opening_hours}
             businessName={business?.name ?? ''}
             scrollToTimeRef={scrollToTimeRef}
+            now={now}
+            smartTimeEnabled={!!business?.smart_time_enabled}
           />
 
           {/* Daily summary */}
@@ -864,6 +974,45 @@ export default function Agenda({ business, initialView = 'day' }) {
                   <IconTrash /> Elimina appuntamento
                 </button>
               )}
+
+              {editingId && business?.smart_time_enabled && (() => {
+                const editingApt = appointments.find(a => a.id === editingId)
+                if (!editingApt) return null
+                const isRunning = !!editingApt.actual_start_at && !editingApt.actual_end_at
+                const isStopped = !!editingApt.actual_start_at && !!editingApt.actual_end_at
+                return (
+                  <div className="ag-timer-box">
+                    {!editingApt.actual_start_at && (
+                      <button
+                        type="button"
+                        className="ag-timer-start-btn"
+                        onClick={() => startTimer(editingApt)}
+                        disabled={timerBusyId === editingApt.id}
+                      >
+                        ▶ Inizia timer
+                      </button>
+                    )}
+                    {isRunning && (
+                      <>
+                        <span className="ag-timer-live">⏱ {formatElapsed(editingApt.actual_start_at, now)}</span>
+                        <button
+                          type="button"
+                          className="ag-timer-stop-btn"
+                          onClick={() => stopTimer(editingApt)}
+                          disabled={timerBusyId === editingApt.id}
+                        >
+                          ⏹ Ferma timer
+                        </button>
+                      </>
+                    )}
+                    {isStopped && (
+                      <span className="ag-timer-summary">
+                        Tempo registrato: {formatElapsed(editingApt.actual_start_at, Date.parse(editingApt.actual_end_at))}
+                      </span>
+                    )}
+                  </div>
+                )
+              })()}
 
               {editingId && (
                 <button
@@ -1075,6 +1224,15 @@ export default function Agenda({ business, initialView = 'day' }) {
         </div>
       )}
 
+      {/* ── Smart Time: recupero timer rimasti aperti ── */}
+      {showTimerRecovery && (
+        <TimerRecoveryModal
+          timers={openTimers}
+          onResolve={resolveOpenTimer}
+          onClose={() => setShowTimerRecovery(false)}
+        />
+      )}
+
     </div>
   )
 }
@@ -1249,7 +1407,7 @@ function buildClosedOverlays(openRanges) {
   return closed
 }
 
-function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName, scrollToTimeRef }) {
+function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName, scrollToTimeRef, now, smartTimeEnabled }) {
   const wrapRef      = useRef(null)
   const touchStartY  = useRef(null)
 
@@ -1357,13 +1515,18 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
               // Soglie conservative 70/110 per avere sempre margine anche con font più grandi.
               const tier     = height < 70 ? 'compact' : height < 110 ? 'medium' : 'full'
               const isNarrow = apt.maxCols > 1   // blocchi sovrapposti/affiancati
+              // Smart Time: cronometro in corso — sostituisce l'ora pianificata con
+              // il tempo trascorso, nello stesso identico slot .ag-apt-time in ogni
+              // tier, così il layout a livelli non cambia.
+              const isRunning = smartTimeEnabled && !!apt.actual_start_at && !apt.actual_end_at
+              const timeLabel = isRunning ? `⏱ ${formatElapsed(apt.actual_start_at, now)}` : apt.start_time?.slice(0, 5)
               const waReminderLink = apt.bookings?.customer_phone
                 ? buildWaLink(apt.bookings.customer_phone, `Ciao ${apt.client_name}, ti ricordiamo l'appuntamento di domani alle ${apt.start_time?.slice(0, 5)} per ${apt.bookings?.services?.name ?? 'il tuo appuntamento'}. A presto! — ${businessName}`)
                 : null
               return (
                 <div
                   key={apt.id}
-                  className={`ag-apt ${isDone ? 'ag-apt--done' : ''} ${isNarrow ? 'ag-apt--narrow' : ''}`}
+                  className={`ag-apt ${isDone ? 'ag-apt--done' : ''} ${isNarrow ? 'ag-apt--narrow' : ''} ${isRunning ? 'ag-apt--running' : ''}`}
                   style={{
                     position: 'absolute',
                     top,
@@ -1396,13 +1559,13 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                     {tier === 'compact' ? (
                       // Compact: ora + nome su una riga. L'ora resta intera; il nome tronca con "…".
                       <div className="ag-apt-compact-line">
-                        <span className="ag-apt-time">{apt.start_time?.slice(0, 5)}</span>
+                        <span className={`ag-apt-time ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
                         <span className="ag-apt-client">{apt.client_name}</span>
                       </div>
                     ) : (
                       <>
                         <div className="ag-apt-top-row">
-                          <span className="ag-apt-time">{apt.start_time?.slice(0, 5)}</span>
+                          <span className={`ag-apt-time ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
                         </div>
                         <span className="ag-apt-client">{apt.client_name}</span>
                         {apt.employees && (
@@ -1452,6 +1615,92 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
             })}
           </div>
 
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Smart Time: recupero timer rimasti aperti ── */
+function TimerRecoveryModal({ timers, onResolve, onClose }) {
+  return (
+    <div className="sv-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="ag-settings-modal">
+        <div className="ag-settings-head">
+          <span className="ag-settings-title">Timer da chiudere</span>
+          <button className="sv-modal-close" onClick={onClose}><IconX /></button>
+        </div>
+        {timers.length === 0 ? (
+          <p className="ag-emp-empty">Nessun timer aperto.</p>
+        ) : (
+          <div className="ag-timer-recovery-list">
+            {timers.map(t => (
+              <TimerRecoveryRow key={t.id} timer={t} onResolve={onResolve} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TimerRecoveryRow({ timer, onResolve }) {
+  const [mode,      setMode]      = useState(null) // null | 'manual'
+  const [manualVal, setManualVal] = useState('')
+  const [busy,      setBusy]      = useState(false)
+
+  const elapsedMs     = Date.now() - Date.parse(timer.actual_start_at)
+  const overThreshold = elapsedMs > OPEN_TIMER_SAFETY_HOURS * 3600 * 1000
+  const dataLabel      = new Date(timer.date + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })
+  const oraLabel        = timer.start_time?.slice(0, 5)
+  const startedLabel    = new Date(timer.actual_start_at).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+  const run = async (action, minutes) => {
+    setBusy(true)
+    await onResolve(timer, action, minutes)
+    setBusy(false)
+  }
+
+  return (
+    <div className="ag-timer-recovery-row">
+      <div className="ag-timer-recovery-info">
+        <span className="ag-timer-recovery-name">{timer.client_name}</span>
+        <span className="ag-timer-recovery-meta">{dataLabel} alle {oraLabel} · avviato {startedLabel}</span>
+        {overThreshold && (
+          <span className="ag-timer-recovery-warn">Aperto da molto tempo — il tempo rilevato non è affidabile.</span>
+        )}
+      </div>
+
+      {mode === 'manual' ? (
+        <div className="ag-timer-recovery-manual">
+          <input
+            type="number"
+            min="0"
+            className="sv-input"
+            style={{ width: 90 }}
+            placeholder="minuti"
+            value={manualVal}
+            onChange={e => setManualVal(e.target.value)}
+            autoFocus
+          />
+          <button
+            className="ag-pending-btn ag-pending-btn--confirm"
+            disabled={busy || !manualVal}
+            onClick={() => run('manual', Number(manualVal))}
+          >
+            Salva
+          </button>
+          <button className="ag-pending-btn ag-pending-btn--cancel" onClick={() => setMode(null)}>Annulla</button>
+        </div>
+      ) : (
+        <div className="ag-timer-recovery-actions">
+          {!overThreshold && (
+            <button className="ag-pending-btn ag-pending-btn--confirm" disabled={busy} onClick={() => run('confirm')}>
+              Conferma ({formatElapsed(timer.actual_start_at, Date.now())})
+            </button>
+          )}
+          <button className="ag-pending-btn" disabled={busy} onClick={() => setMode('manual')}>Correggi a mano</button>
+          <button className="ag-pending-btn ag-pending-btn--reject" disabled={busy} onClick={() => run('discard')}>Scarta</button>
         </div>
       )}
     </div>

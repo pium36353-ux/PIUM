@@ -18,7 +18,7 @@ const COVER_ACCEPT   = ['image/jpeg', 'image/png', 'image/webp']
 const GALLERY_MAX    = 20
 const GALLERY_MAX_MB = 50 // pre-compression limit (generous); target output is 0.8 MB via compression
 
-export default function EditorSito({ business }) {
+export default function EditorSito({ business, onBusinessPatch }) {
   const [active,      setActive]      = useState('hero')
   const [content,     setContent]     = useState(null)
   const [loading,     setLoading]     = useState(true)
@@ -115,7 +115,7 @@ export default function EditorSito({ business }) {
         </div>
       </div>
 
-      <Orari business={business} />
+      <Orari business={business} onBusinessPatch={onBusinessPatch} />
       <ContactsBlock business={business} />
       <SocialBlock business={business} />
     </div>

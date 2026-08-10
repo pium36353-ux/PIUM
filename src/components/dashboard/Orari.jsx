@@ -31,7 +31,7 @@ function migrateDay(saved) {
 
 export { DAY_ORDER, DAY_LABELS, DEFAULT_HOURS }
 
-export default function Orari({ business }) {
+export default function Orari({ business, onBusinessPatch }) {
   const [hours, setHours] = useState(() => {
     const saved = business?.opening_hours ?? {}
     return Object.fromEntries(
@@ -46,6 +46,8 @@ export default function Orari({ business }) {
   const [capacity,        setCapacity]        = useState(business?.booking_capacity ?? 1)
   const [savingCapacity,  setSavingCapacity]  = useState(false)
   const [capacitySaved,   setCapacitySaved]   = useState(false)
+  const [smartTime,       setSmartTime]       = useState(business?.smart_time_enabled ?? false)
+  const [savingSmartTime, setSavingSmartTime] = useState(false)
 
   if (!business) return (
     <div className="db-section">
@@ -85,6 +87,27 @@ export default function Orari({ business }) {
       setSaveError('Errore nel salvataggio della capacità. Riprova.')
       setTimeout(() => setSaveError(null), 3000)
     }
+  }
+
+  const toggleSmartTime = async () => {
+    const next = !smartTime
+    setSmartTime(next)
+    setSavingSmartTime(true)
+    const { error } = await supabase
+      .from('businesses')
+      .update({ smart_time_enabled: next })
+      .eq('id', business.id)
+    setSavingSmartTime(false)
+    if (error) {
+      console.error('Errore salvataggio smart time:', error)
+      setSmartTime(!next)
+      setSaveError('Errore nel salvataggio. Riprova.')
+      setTimeout(() => setSaveError(null), 3000)
+      return
+    }
+    // Propaga subito il nuovo valore alle altre sezioni già montate (es. Agenda),
+    // che ricevono lo stesso oggetto business da Dashboard.
+    onBusinessPatch?.({ smart_time_enabled: next })
   }
 
   const updateDay = (day, patch) => {
@@ -195,6 +218,25 @@ export default function Orari({ business }) {
             type="button"
           >
             {savingCapacity ? '…' : capacitySaved ? '✓ Salvato' : 'Salva'}
+          </button>
+        </div>
+      </div>
+
+      <div className="oh-capacity-row">
+        <div className="oh-capacity-label">
+          <span className="oh-day-label">Tracciamento tempo (Smart Time)</span>
+          <span className="oh-capacity-hint">Attiva il cronometro inizio/fine sugli appuntamenti in agenda, per misurare il tempo reale di lavorazione</span>
+        </div>
+        <div className="oh-capacity-controls">
+          {savingSmartTime && <OhSpinner />}
+          <button
+            className={`sett-toggle ${smartTime ? 'sett-toggle--on' : ''}`}
+            onClick={toggleSmartTime}
+            aria-pressed={smartTime}
+            disabled={savingSmartTime}
+            type="button"
+          >
+            <span className="sett-toggle-thumb" />
           </button>
         </div>
       </div>

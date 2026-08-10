@@ -46,6 +46,11 @@ export default function Dashboard() {
   const [loadError,          setLoadError]          = useState(false)
   const [adminMessages,      setAdminMessages]      = useState([])
 
+  // Aggiorna lo stato business condiviso quando una sezione (es. Orari) scrive una
+  // config per-business — così le altre sezioni già montate (es. Agenda) vedono
+  // subito il nuovo valore senza bisogno di un reload.
+  const patchBusiness = (patch) => setBusiness(prev => prev ? { ...prev, ...patch } : prev)
+
   const trialExpired = business?.status === 'trial'
     && !!business?.trial_ends_at
     && new Date(business.trial_ends_at) < new Date()
@@ -449,7 +454,7 @@ export default function Dashboard() {
           )}
           {Section && (
             <ErrorBoundary key={section}>
-              <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} />
+              <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} onBusinessPatch={patchBusiness} />
             </ErrorBoundary>
           )}
         </main>
