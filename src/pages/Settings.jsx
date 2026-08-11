@@ -345,7 +345,7 @@ export default function Settings() {
               <p className="sett-error" style={{ marginBottom: 10 }}>
                 <IconAlert /> Sei sicuro? Dovrai rifare l'accesso ovunque, incluso questo dispositivo.
               </p>
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 <button className="sett-btn-danger" type="button" onClick={handleSignOutAll} disabled={logoutAllStatus === 'saving'}>
                   {logoutAllStatus === 'saving' ? 'Disconnessione…' : 'Sì, disconnetti tutti'}
                 </button>
