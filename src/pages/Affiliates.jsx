@@ -35,7 +35,7 @@ export default function Affiliates() {
   const [affiliate, setAffiliate] = useState(null)
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState(null)
   const [flowError, setFlowError] = useState('')
   const [commStats, setCommStats] = useState({ earned: 0, pending: 0 })
   const acceptanceAttemptedRef = useRef(new Set())
@@ -188,9 +188,9 @@ export default function Affiliates() {
     return () => { alive = false }
   }, [session, ensureAffiliateAcceptance, loadData])
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(`https://piumapp.com/auth?ref=${affiliate.code}`)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500) })
+  const copyLink = (url, key) => {
+    navigator.clipboard.writeText(url)
+      .then(() => { setCopied(key); setTimeout(() => setCopied(null), 2500) })
   }
 
   if (loading || session === undefined) {
@@ -252,7 +252,10 @@ export default function Affiliates() {
 }
 
 function Dashboard({ affiliate, clients, copied, onCopy, commStats }) {
-  const refLink = `https://piumapp.com/auth?ref=${affiliate.code}`
+  // Il suffisso "-on" e riservato al canale scontato: il codice base deve restare pulito.
+  const baseCode = affiliate.code.replace(/-on$/i, '')
+  const directLink = `https://piumapp.com/auth?ref=${baseCode}`
+  const onlineLink = `https://piumapp.com/auth?ref=${baseCode}-on`
   const activeCount = clients.filter(c => c.is_active && c.plan === 'pro').length
 
   return (
@@ -284,16 +287,37 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats }) {
       </div>
 
       <div className="af-link-card">
-        <div className="af-link-label">Il tuo link di referral</div>
-        <div className="af-link-row">
-          <code className="af-link-code">{refLink}</code>
-          <button className={`af-copy-btn ${copied ? 'af-copy-btn--done' : ''}`} onClick={onCopy}>
-            {copied ? '✓ Copiato' : 'Copia link'}
-          </button>
+        <div className="af-link-label">I tuoi link di referral</div>
+
+        <div className="af-link-block">
+          <div className="af-link-name">Link diretto (prezzo pieno)</div>
+          <div className="af-link-row">
+            <code className="af-link-code">{directLink}</code>
+            <button className={`af-copy-btn ${copied === 'direct' ? 'af-copy-btn--done' : ''}`} onClick={() => onCopy(directLink, 'direct')}>
+              {copied === 'direct' ? '✓ Copiato' : 'Copia link'}
+            </button>
+          </div>
+          <p className="af-link-hint">Il cliente paga 99,99€/mese · Tu guadagni 29,99€/mese*</p>
         </div>
+
+        <div className="af-link-block">
+          <div className="af-link-name">Link online (scontato)</div>
+          <div className="af-link-row">
+            <code className="af-link-code">{onlineLink}</code>
+            <button className={`af-copy-btn ${copied === 'online' ? 'af-copy-btn--done' : ''}`} onClick={() => onCopy(onlineLink, 'online')}>
+              {copied === 'online' ? '✓ Copiato' : 'Copia link'}
+            </button>
+          </div>
+          <p className="af-link-hint">Il cliente paga 69,99€/mese · Tu guadagni 19,99€/mese*</p>
+        </div>
+
         <p className="af-link-hint">
-          Codice: <strong>{affiliate.code}</strong> - condividi il link con i tuoi clienti.
-          Chi si registra tramite questo link viene associato al tuo account.
+          Codice: <strong>{baseCode}</strong> - condividi il link con i tuoi clienti.
+          Chi si registra tramite questi link viene associato al tuo account.
+        </p>
+        <p className="af-link-note">
+          *I rapporti si rinnovano ogni 12 mesi: alla scadenza puoi scegliere se continuare
+          ad ampliare il tuo portafoglio o mantenere solo l'assistenza dei clienti già acquisiti.
         </p>
       </div>
 
