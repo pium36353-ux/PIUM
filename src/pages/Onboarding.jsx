@@ -32,6 +32,7 @@ const EMPTY = {
   email:               '',
   address:             '',
   city:                '',
+  affiliate_code:      '',
 }
 
 function baseSlug(name) {
@@ -61,7 +62,13 @@ async function generateSlug(name) {
 export default function Onboarding() {
   const navigate = useNavigate()
   const [step, setStep]     = useState(0)
-  const [form, setForm]     = useState(EMPTY)
+  // Precompila il codice affiliato da localStorage (pium_ref, salvato al click sul
+  // link referral) — resta comunque modificabile: è il fallback per quando il valore
+  // in localStorage si perde (conferma email cross-device, storage isolato in PWA).
+  const [form, setForm]     = useState(() => ({
+    ...EMPTY,
+    affiliate_code: (localStorage.getItem('pium_ref') || '').toLowerCase().trim(),
+  }))
   const [errors, setErrors] = useState({})
   const [checking, setChecking]     = useState(true)
   const [loading, setLoading]       = useState(false)
@@ -140,7 +147,9 @@ export default function Onboarding() {
       if (!user) { navigate('/auth', { replace: true }); return }
 
       // 1. Insert business
-      const affiliateCode = localStorage.getItem('pium_ref')?.toLowerCase().trim() || null
+      // Fonte unica: il campo del form (precompilato da localStorage ma modificabile
+      // a mano) — così il fallback manuale e l'auto-capture non possono disallinearsi.
+      const affiliateCode = form.affiliate_code.trim().toLowerCase() || null
       const { data: biz, error } = await supabase
         .from('businesses')
         .insert({
@@ -164,15 +173,20 @@ export default function Onboarding() {
 
       if (error) {
         if (!mountedRef.current) return
+        const msg = String(error.message || '')
         if (error.code === '23505') {
           setServerError('Risulta già un\'attività registrata per questo account. Ricarica la pagina.')
+        } else if (msg.includes('AFFILIATE_CODE_INVALID') || error.code === '23503') {
+          setServerError('Codice affiliato non valido. Controlla il codice o il link che ti è stato fornito, oppure lascia il campo vuoto.')
         } else {
           setServerError('Errore nel salvataggio. Riprova tra qualche istante.')
         }
         return
       }
 
-      if (affiliateCode) localStorage.removeItem('pium_ref')
+      // Pulizia incondizionata (non solo se affiliateCode è valorizzato): evita che
+      // pium_ref si riattacchi a una registrazione successiva sullo stesso device.
+      localStorage.removeItem('pium_ref')
 
       const { error: acceptanceError } = await supabase
         .from('legal_acceptances')
@@ -302,6 +316,20 @@ export default function Onboarding() {
                 />
               </div>
             )}
+
+            <div className="ob-field" style={{ marginTop: 12 }}>
+              <label className="ob-label" htmlFor="affiliate_code">Codice affiliato <span className="ob-optional">(se hai un invito)</span></label>
+              <input
+                id="affiliate_code"
+                className="ob-input"
+                type="text"
+                value={form.affiliate_code}
+                onChange={set('affiliate_code')}
+                placeholder="es. mar1a2b"
+                maxLength={40}
+                autoCapitalize="none"
+              />
+            </div>
           </div>
         )}
 
