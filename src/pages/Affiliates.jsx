@@ -146,7 +146,7 @@ export default function Affiliates() {
         supabase
           .from('businesses')
           .select('id, name, city, plan, is_active, created_at')
-          .eq('affiliate_code', aff.code)
+          .in('affiliate_code', [aff.code, `${aff.code}-on`])
           .order('created_at', { ascending: false }),
         supabase
           .from('affiliate_commissions')
