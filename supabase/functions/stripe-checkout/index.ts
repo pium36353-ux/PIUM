@@ -99,7 +99,6 @@ Deno.serve(async (req) => {
     checkoutParams.set('success_url',                           `${APP_URL}/dashboard?stripe_success=true`)
     checkoutParams.set('cancel_url',                            `${APP_URL}/dashboard`)
     checkoutParams.set('locale',                                'it')
-    checkoutParams.set('allow_promotion_codes',                 'false')
 
     // Coupon sconto SOLO per il canale "-on" (codice affiliato che termina in -on, salvato lowercased).
     // Qualsiasi altro codice, o nessun codice → prezzo pieno (STRIPE_PRICE_ID), nessun coupon.
