@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
@@ -10,25 +10,6 @@ const PLAN_META = {
   pro: { label: 'Pro', bg: '#ede9fe', color: '#5b21b6' },
 }
 
-function generateCode(name) {
-  const base = String(name || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]/g, '')
-    .slice(0, 3)
-  const rand = Math.random().toString(36).slice(2, 6)
-  return (base || 'aff') + rand
-}
-
-function getAffiliateName(user) {
-  const fullName = user?.user_metadata?.full_name
-  if (typeof fullName === 'string' && fullName.trim()) return fullName.trim()
-  const localPart = user?.email?.split('@')?.[0]
-  if (localPart) return localPart
-  return 'Affiliato'
-}
-
 export default function Affiliates() {
   const navigate = useNavigate()
   const [session, setSession] = useState(undefined)
@@ -38,8 +19,6 @@ export default function Affiliates() {
   const [copied, setCopied] = useState(null)
   const [flowError, setFlowError] = useState('')
   const [commStats, setCommStats] = useState({ earned: 0, pending: 0 })
-  const acceptanceAttemptedRef = useRef(new Set())
-  const bootstrapAttemptedRef = useRef(new Set())
 
   useEffect(() => {
     let alive = true
@@ -54,91 +33,27 @@ export default function Affiliates() {
     return () => { alive = false }
   }, [navigate])
 
-  const ensureAffiliateAcceptance = useCallback(async (userId) => {
-    if (!userId) return
-    if (acceptanceAttemptedRef.current.has(userId)) return
-    acceptanceAttemptedRef.current.add(userId)
-
-    const { error } = await supabase
-      .from('legal_acceptances')
-      .upsert({
-        user_id: userId,
-        context: 'affiliate',
-        acceptance_type: 'affiliate_contract_privacy',
-        document_versions: {
-          contratto_affiliazione: '2026-05-28',
-          privacy: '2026-05-28',
-        },
-        source: 'affiliate_register_confirmed',
-      }, { onConflict: 'user_id,acceptance_type', ignoreDuplicates: true })
-
-    if (error) {
-      setFlowError('Accesso riuscito, ma non e stato possibile salvare l accettazione dei documenti. Ricarica la pagina o contatta l assistenza.')
-      return
-    }
-
-    setFlowError('')
-  }, [])
-
-  const ensureAffiliateProfile = useCallback(async (user) => {
-    const userId = user?.id
-    if (!userId) return null
-
-    const { data: existing, error: existingError } = await supabase
+  // Sola lettura: un record affiliato esiste solo se creato esplicitamente in
+  // AffiliatesAuth.jsx (form + accettazione contratto). Questa pagina non deve
+  // MAI crearne uno solo perche un utente autenticato la visita (era il bug:
+  // trasformava qualunque cliente loggato in un affiliato "fantasma").
+  const loadAffiliateProfile = useCallback(async (userId) => {
+    const { data, error } = await supabase
       .from('affiliates')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle()
 
-    if (existingError) {
+    if (error) {
       setFlowError('Impossibile caricare il profilo affiliato. Riprova tra poco.')
       return null
     }
 
-    if (existing) return existing
-
-    if (bootstrapAttemptedRef.current.has(userId)) return null
-    bootstrapAttemptedRef.current.add(userId)
-
-    const name = getAffiliateName(user)
-    const email = (user?.email || '').trim()
-
-    let inserted = false
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const code = generateCode(name)
-      const { error: insertError } = await supabase.from('affiliates').insert({
-        user_id: userId,
-        code,
-        name,
-        email,
-        status: 'pending',
-      })
-
-      if (!insertError) {
-        inserted = true
-        break
-      }
-
-      const msg = String(insertError.message || '').toLowerCase()
-      if (!msg.includes('duplicate')) break
-    }
-
-    if (!inserted) {
-      setFlowError('Il profilo affiliato non e ancora disponibile. Riprova tra qualche secondo o contatta l assistenza.')
-      return null
-    }
-
-    const { data: created } = await supabase
-      .from('affiliates')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle()
-
-    return created ?? null
+    return data ?? null
   }, [])
 
   const loadData = useCallback(async (user) => {
-    const aff = await ensureAffiliateProfile(user)
+    const aff = await loadAffiliateProfile(user.id)
     setAffiliate(aff ?? null)
 
     if (aff) {
@@ -167,7 +82,7 @@ export default function Affiliates() {
     }
 
     setLoading(false)
-  }, [ensureAffiliateProfile])
+  }, [loadAffiliateProfile])
 
   useEffect(() => {
     let alive = true
@@ -179,14 +94,12 @@ export default function Affiliates() {
         return
       }
 
-      await ensureAffiliateAcceptance(session.user.id)
-      if (!alive) return
       await loadData(session.user)
     }
 
     run()
     return () => { alive = false }
-  }, [session, ensureAffiliateAcceptance, loadData])
+  }, [session, loadData])
 
   const copyLink = (url, key) => {
     navigator.clipboard.writeText(url)
@@ -232,8 +145,9 @@ export default function Affiliates() {
           </div>
         ) : !affiliate ? (
           <div className="af-card">
-            <h1 className="af-title">Account non trovato</h1>
-            <p className="af-subtitle">Non risulta un account affiliato per questo utente. Contattaci a <a href="mailto:info@piumapp.com" style={{ color: 'var(--accent)' }}>info@piumapp.com</a> per assistenza.</p>
+            <h1 className="af-title">Non sei ancora un affiliato</h1>
+            <p className="af-subtitle">Questo account non ha un profilo affiliato. Se vuoi guadagnare una commissione per ogni cliente che porti su PIUM, registrati al programma.</p>
+            <Link to="/affiliates/auth" className="af-cta-btn">Registrati come affiliato</Link>
           </div>
         ) : affiliate.status === 'pending' ? (
           <div className="af-card">
