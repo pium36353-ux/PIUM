@@ -945,6 +945,20 @@ body {
   padding: 8px 12px;
   margin: 0;
 }
+.db-block-logout {
+  width: 100%;
+  margin-top: 2px;
+  padding: 10px 24px;
+  background: none;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s;
+  &:hover { background: var(--accent-bg); }
+}
 
 /* Stripe success toast */
 .db-stripe-success {

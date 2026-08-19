@@ -1,10 +1,19 @@
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import Logo from './Logo'
 
 // Schermata a tutto schermo condivisa da ogni route operativa autenticata
 // (Dashboard, Settings, ...) quando isBusinessBlocked(business) è vero.
-// Unica eccezione al blocco: il pulsante di pagamento stesso. Nessun'altra
-// funzione dell'app è raggiungibile finché resta montata al posto della pagina.
+// Le uniche due azioni possibili da bloccato: pagare (per sbloccarsi) o
+// uscire — mai intrappolare l'utente, specie da PWA senza barra del browser.
 export default function SubscriptionGate({ checkoutLoading, checkoutError, onCheckout }) {
+  const navigate = useNavigate()
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    navigate('/auth', { replace: true })
+  }
+
   return (
     <div className="db-block-shell">
       <div className="db-block-card">
@@ -17,6 +26,9 @@ export default function SubscriptionGate({ checkoutLoading, checkoutError, onChe
         {checkoutError && (
           <p className="db-block-error" role="alert">{checkoutError}</p>
         )}
+        <button className="db-block-logout" onClick={handleSignOut}>
+          Esci
+        </button>
       </div>
     </div>
   )
