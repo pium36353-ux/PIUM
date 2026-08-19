@@ -5,6 +5,16 @@ import Logo from '../components/Logo'
 import { requestPermission, testNotification } from '../lib/notifications'
 import { subscribePush, unsubscribePush, isPushSubscribed } from '../lib/pushSubscription'
 import { translateError } from '../lib/errors'
+import { useStripeCheckout } from '../lib/useStripeCheckout'
+import { isBusinessBlocked } from '../lib/businessGate'
+import SubscriptionGate from '../components/SubscriptionGate'
+
+// Stati che possono raggiungere questa pagina: isBusinessBlocked intercetta
+// suspended/expired prima del render (vedi sotto), qui restano solo trial/active.
+const STATUS_LABEL = {
+  trial:  { label: 'Prova gratuita', cls: 'sett-badge--off' },
+  active: { label: 'Attivo',         cls: 'sett-badge--on'  },
+}
 
 const NOTIF_KEY = 'pium_notification_settings'
 const DEFAULT_NOTIF = { appointmentMinutesBefore: 15, notifyNextOnComplete: false }
@@ -12,6 +22,8 @@ const DEFAULT_NOTIF = { appointmentMinutesBefore: 15, notifyNextOnComplete: fals
 export default function Settings() {
   const navigate = useNavigate()
   const [user, setUser] = useState(null)
+  const [business, setBusiness] = useState(null)
+  const { checkoutLoading, checkoutError, handleCheckout } = useStripeCheckout()
 
   const [email, setEmail]           = useState('')
   const [emailStatus, setEmailStatus] = useState('idle')
@@ -42,6 +54,12 @@ export default function Settings() {
       if (!alive) return
       if (!data.user) { navigate('/auth', { replace: true }); return }
       setUser(data.user)
+      supabase
+        .from('businesses')
+        .select('status, trial_ends_at')
+        .eq('user_id', data.user.id)
+        .maybeSingle()
+        .then(({ data: biz }) => { if (alive && biz) setBusiness(biz) })
     })
     return () => { alive = false }
   }, [navigate])
@@ -144,6 +162,19 @@ export default function Settings() {
 
   const notifActive = notifPerm === 'granted'
 
+  // Stesso gate di Dashboard.jsx: da bloccato, /settings non deve esporre
+  // NULLA (email, password, notifiche, logout-tutti) oltre al pagamento —
+  // altrimenti sarebbe una via per aggirare il blocco della dashboard.
+  if (isBusinessBlocked(business)) {
+    return (
+      <SubscriptionGate
+        checkoutLoading={checkoutLoading}
+        checkoutError={checkoutError}
+        onCheckout={handleCheckout}
+      />
+    )
+  }
+
   return (
     <div className="sett-shell">
       <header className="sett-header">
@@ -155,6 +186,38 @@ export default function Settings() {
 
       <main className="sett-main">
         <h1 className="sett-title">Impostazioni</h1>
+
+        {/* ── Abbonamento — punto fisso per gestire/rinnovare in anticipo da
+             trial o active, senza aspettare che il banner in Dashboard scompaia
+             o perda il bottone. Da suspended/expired non si arriva qui: il gate
+             sopra ha già intercettato con la sola opzione di pagare. ── */}
+        <section className="sett-card">
+          <div className="sett-section-header">
+            <span className="sett-section-icon"><IconCard /></span>
+            <h2 className="sett-section-title">Abbonamento</h2>
+            {business?.status && (
+              <span className={`sett-badge ${STATUS_LABEL[business.status]?.cls ?? 'sett-badge--off'}`}>
+                {STATUS_LABEL[business.status]?.label ?? business.status}
+              </span>
+            )}
+          </div>
+
+          <p className="sett-notif-hint">
+            {business?.status === 'active'
+              ? "Il tuo piano è attivo. Puoi comunque gestire l'abbonamento da qui in qualsiasi momento."
+              : 'Attiva o rinnova il piano PIUM per continuare a usare tutte le funzioni.'}
+          </p>
+
+          <button
+            className="sett-btn-primary sett-btn-primary--full"
+            onClick={handleCheckout}
+            disabled={checkoutLoading}
+          >
+            <IconCard /> {checkoutLoading ? 'Caricamento…' : 'Attiva / Rinnova abbonamento'}
+          </button>
+
+          {checkoutError && <p className="sett-error"><IconAlert /> {checkoutError}</p>}
+        </section>
 
         {/* ── Notifiche ── */}
         <section className="sett-card">
@@ -374,6 +437,9 @@ export default function Settings() {
   )
 }
 
+function IconCard() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+}
 function IconBell() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
 }

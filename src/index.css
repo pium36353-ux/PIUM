@@ -895,6 +895,57 @@ body {
   .db-trial-expired-banner .db-trial-banner-text { color: #fca5a5; }
 }
 
+/* Gate abbonamento — schermata a tutto schermo, sostituisce l'intera dashboard */
+.db-block-shell {
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.db-block-card {
+  background: var(--card-bg, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.db-block-logo { margin-bottom: 4px; }
+.db-block-title { font-size: 20px; font-weight: 700; color: var(--text-h); margin: 0; }
+.db-block-text { font-size: 14px; color: var(--text); margin: 0; line-height: 1.5; }
+.db-block-btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px 24px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s;
+  &:hover:not(:disabled) { opacity: .85; }
+  &:disabled { opacity: .6; cursor: not-allowed; }
+}
+.db-block-error {
+  width: 100%;
+  font-size: 13px;
+  color: #dc2626;
+  background: rgba(239,68,68,0.06);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 7px;
+  padding: 8px 12px;
+  margin: 0;
+}
+
 /* Stripe success toast */
 .db-stripe-success {
   display: flex;

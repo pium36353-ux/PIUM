@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 import ErrorBoundary from '../components/ErrorBoundary'
 import { notifyNewBooking } from '../lib/notifications'
+import { useStripeCheckout } from '../lib/useStripeCheckout'
+import { isBusinessBlocked } from '../lib/businessGate'
+import SubscriptionGate from '../components/SubscriptionGate'
 import Panoramica  from '../components/dashboard/Panoramica'
 import EditorSito  from '../components/dashboard/EditorSito'
 import Servizi     from '../components/dashboard/Servizi'
@@ -40,8 +43,7 @@ export default function Dashboard() {
   const [pendingCount,       setPendingCount]       = useState(0)
   const [agendaInitialView,  setAgendaInitialView]  = useState('day')
   const [stripeSuccess,      setStripeSuccess]      = useState(false)
-  const [checkoutLoading,    setCheckoutLoading]    = useState(false)
-  const [checkoutError,      setCheckoutError]      = useState(null)
+  const { checkoutLoading, checkoutError, handleCheckout } = useStripeCheckout()
   const [pendingActivation,  setPendingActivation]  = useState(false)
   const [loadError,          setLoadError]          = useState(false)
   const [adminMessages,      setAdminMessages]      = useState([])
@@ -54,6 +56,12 @@ export default function Dashboard() {
   const trialExpired = business?.status === 'trial'
     && !!business?.trial_ends_at
     && new Date(business.trial_ends_at) < new Date()
+
+  // Gate: abbonamento sospeso (bloccato a mano dall'admin) o cessato
+  // (subscription Stripe cancellata) impedisce l'uso dell'intera dashboard,
+  // non solo di funzioni singole. 'trial' e 'active' passano liberi.
+  // Stessa regola/UI applicata anche in Settings.jsx — vedi isBusinessBlocked.
+  const isBlocked = isBusinessBlocked(business)
 
   useEffect(() => {
     let alive = true
@@ -152,39 +160,6 @@ export default function Dashboard() {
     }
   }, [pendingActivation, user]) // eslint-disable-line
 
-  const handleCheckout = async () => {
-    setCheckoutLoading(true)
-    setCheckoutError(null)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) {
-        setCheckoutError('Sessione scaduta. Effettua di nuovo il login.')
-        setCheckoutLoading(false)
-        return
-      }
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-      const data = await res.json()
-      if (data.url) {
-        window.location.href = data.url
-      } else {
-        setCheckoutError('Errore nel caricamento del pagamento. Riprova o contatta info@piumapp.com.')
-      }
-    } catch {
-      setCheckoutError('Errore nel caricamento del pagamento. Riprova o contatta info@piumapp.com.')
-    } finally {
-      setCheckoutLoading(false)
-    }
-  }
-
   const Section = {
     panoramica: Panoramica,
     editor:     EditorSito,
@@ -261,6 +236,16 @@ export default function Dashboard() {
     if (id === 'agenda') setAgendaInitialView(opts.view ?? 'day')
     setSection(id)
     setSideOpen(false)
+  }
+
+  if (isBlocked) {
+    return (
+      <SubscriptionGate
+        checkoutLoading={checkoutLoading}
+        checkoutError={checkoutError}
+        onCheckout={handleCheckout}
+      />
+    )
   }
 
   return (
@@ -384,13 +369,6 @@ export default function Dashboard() {
             <div className="db-expired-banner">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               Errore di connessione. <button className="db-load-retry" onClick={() => window.location.reload()}>Ricarica la pagina</button>
-            </div>
-          )}
-
-          {business?.status === 'expired' && (
-            <div className="db-expired-banner">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Il tuo periodo di prova è scaduto. Contatta <a href="mailto:info@piumapp.com">info@piumapp.com</a> per attivare il tuo piano.
             </div>
           )}
 
