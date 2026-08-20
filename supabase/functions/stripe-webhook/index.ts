@@ -213,10 +213,11 @@ Deno.serve(async (req) => {
     }
 
     else if (event.type === 'invoice.paid') {
-      const invoice    = event.data.object
-      const customerId = invoice['customer']    as string | null
-      const invoiceId  = invoice['id']          as string | null
-      const amountPaid = (invoice['amount_paid'] as number | null) ?? null   // centesimi, solo per cross-check nei log
+      const invoice        = event.data.object
+      const customerId     = invoice['customer']     as string | null
+      const invoiceId      = invoice['id']           as string | null
+      const subscriptionId = invoice['subscription'] as string | null
+      const amountPaid     = (invoice['amount_paid'] as number | null) ?? null   // centesimi, solo per cross-check nei log
 
       if (!customerId || !invoiceId) {
         console.log('invoice.paid: missing customer or invoice id, skipping')
@@ -225,12 +226,51 @@ Deno.serve(async (req) => {
 
       const { data: biz, error: bizErr } = await supabase
         .from('businesses')
-        .select('id, affiliate_code')
+        .select('id, status, affiliate_code')
         .eq('stripe_customer_id', customerId)
         .maybeSingle()
 
-      if (bizErr || !biz || !biz.affiliate_code) {
-        console.log(`invoice.paid: no business or no affiliate_code for customer ${customerId}, skipping`)
+      if (bizErr || !biz) {
+        console.log(`invoice.paid: no business found for customer ${customerId}, skipping`)
+        return new Response(JSON.stringify({ received: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+
+      // Riattivazione: una fattura pagata è il segnale più diretto che il cliente
+      // è in regola, ma NON ci fidiamo solo dell'evento fattura — rileggiamo lo
+      // stato REALE della subscription su Stripe prima di scrivere 'active', per
+      // non riattivare un business la cui subscription resta past_due per altre
+      // fatture ancora insolute. Corregge qualunque disallineamento tra status
+      // locale e Stripe, incluso un blocco manuale admin su un cliente la cui
+      // subscription in realtà non si è mai fermata.
+      if (subscriptionId && biz.status !== 'active') {
+        const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') ?? ''
+        const subRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subscriptionId}`, {
+          headers: { 'Authorization': `Bearer ${stripeKey}` },
+          signal: AbortSignal.timeout(10_000),
+        })
+        if (subRes.ok) {
+          const sub = await subRes.json()
+          if (sub.status === 'active' || sub.status === 'trialing') {
+            const newStatus = sub.status === 'trialing' ? 'trial' : 'active'
+            const { error: reactivateErr } = await supabase
+              .from('businesses')
+              .update({ status: newStatus })
+              .eq('id', biz.id)
+            if (reactivateErr) {
+              console.error('invoice.paid: reactivation error (non-blocking):', reactivateErr)
+            } else {
+              console.log(`invoice.paid: business ${biz.id} riallineato a status=${newStatus}`)
+            }
+          } else {
+            console.log(`invoice.paid: subscription ${subscriptionId} status=${sub.status}, nessuna riattivazione`)
+          }
+        } else {
+          console.error('invoice.paid: impossibile leggere la subscription per la riattivazione')
+        }
+      }
+
+      if (!biz.affiliate_code) {
+        console.log(`invoice.paid: no affiliate_code for customer ${customerId}, skipping commission`)
         return new Response(JSON.stringify({ received: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
 

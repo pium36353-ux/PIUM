@@ -90,6 +90,43 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Anti-duplicazione: un customer con una subscription già attiva o in trial
+    // non deve poterne aprire una seconda — rischio di doppio addebito mensile.
+    // Capita tipicamente quando lo status locale è disallineato da quello reale
+    // su Stripe (es. blocco manuale admin su un cliente mai davvero sospeso lato
+    // Stripe) e l'utente preme "Rinnova ora" per sbloccarsi. In quel caso non
+    // apriamo un secondo checkout: riallineiamo lo status locale a quello vero
+    // e segnaliamo al frontend che non c'è bisogno di pagare di nuovo.
+    const existingSubsRes = await fetch(
+      `https://api.stripe.com/v1/subscriptions?customer=${customerId}&status=all&limit=10`,
+      {
+        headers: { 'Authorization': `Bearer ${stripeKey}` },
+        signal: AbortSignal.timeout(10_000),
+      }
+    )
+    if (existingSubsRes.ok) {
+      const existingSubs = await existingSubsRes.json()
+      const activeSub = (existingSubs.data ?? []).find(
+        (s: { status: string }) => s.status === 'active' || s.status === 'trialing'
+      )
+      if (activeSub) {
+        const newStatus = activeSub.status === 'trialing' ? 'trial' : 'active'
+        const { error: realignErr } = await supabase
+          .from('businesses')
+          .update({ status: newStatus, stripe_subscription_id: activeSub.id })
+          .eq('id', biz.id)
+        if (realignErr) {
+          console.error('stripe-checkout: realign error (non-blocking):', realignErr)
+        }
+        console.log(`stripe-checkout: business ${biz.id} ha già una subscription ${activeSub.status}, checkout evitato`)
+        return new Response(JSON.stringify({ already_active: true }), {
+          status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
+        })
+      }
+    } else {
+      console.error('stripe-checkout: impossibile verificare subscription esistenti, procedo comunque')
+    }
+
     const priceId = Deno.env.get('STRIPE_PRICE_ID') ?? ''
     const checkoutParams = new URLSearchParams()
     checkoutParams.set('mode',                                  'subscription')

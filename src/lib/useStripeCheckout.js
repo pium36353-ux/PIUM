@@ -31,6 +31,11 @@ export function useStripeCheckout() {
       const data = await res.json()
       if (data.url) {
         window.location.href = data.url
+      } else if (data.already_active) {
+        // stripe-checkout ha trovato una subscription già attiva/in trial su
+        // Stripe e ha riallineato lo status locale invece di aprirne una
+        // seconda: non è un errore, basta ricaricare per vedere lo sblocco.
+        window.location.reload()
       } else {
         setCheckoutError('Errore nel caricamento del pagamento. Riprova o contatta info@piumapp.com.')
       }
