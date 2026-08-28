@@ -3310,9 +3310,14 @@ body {
   padding-top: 38px;
 }
 
-/* ── Hero ── */
+/* ── Hero ──
+   background qui sotto è solo un fallback statico: PublicSite.jsx imposta
+   sempre uno sfondo scuro via style inline (gradiente tema, con la foto di
+   copertina come layer aggiuntivo sopra quando presente — vedi commento su
+   heroStyle). Il testo dell'hero è sempre bianco: deve poter contare su uno
+   sfondo scuro in OGNI caso, non solo quando la foto carica con successo. */
 .ps-hero {
-  background: linear-gradient(135deg, var(--accent-bg) 0%, var(--bg) 60%);
+  background: linear-gradient(135deg, #2a1a40 0%, #14101f 100%);
   border-bottom: 1px solid var(--border);
   padding: 48px 24px 40px;
   min-height: 60vh;
@@ -3324,10 +3329,14 @@ body {
   .ps-hero { min-height: 40vh; }
 }
 
+/* Velo sopra la foto di copertina, dietro al testo: rende il testo bianco
+   sempre leggibile qualunque sia la foto (chiara, scura, contrastata), più
+   scuro verso il basso dove tipicamente ricade il testo su mobile (layout a
+   colonna). Non serve senza copertina: il gradiente del tema è già scuro. */
 .ps-hero-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.55) 100%);
   z-index: 0;
 }
 
@@ -3374,6 +3383,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0; /* nome attività lungo e senza spazi: va a capo invece di sfondare .ps-hero-inner */
 }
 
 .ps-category-badge {
@@ -3395,6 +3405,7 @@ body {
   margin: 0 !important;
   letter-spacing: -0.8px;
   line-height: 1.15;
+  overflow-wrap: anywhere;
 
   @media (max-width: 560px) { font-size: 26px !important; }
 }
@@ -3448,7 +3459,13 @@ body {
   display: block;
 }
 
-/* ── Body layout ── */
+/* ── Body layout ──
+   min-width: 0 sulla catena flex/grid qui sotto (.ps-body come flex item di
+   .ps-shell, .ps-sidebar/.ps-main come grid item di .ps-body): per default un
+   elemento flex o grid non si restringe mai sotto la dimensione naturale del
+   proprio contenuto (min-width: auto). Un testo lungo senza spazi in un
+   discendente (es. email in .ps-contact-btn) sfondava quindi ogni livello
+   della catena fino al viewport, invece di essere contenuto/troncato. */
 .ps-body {
   flex: 1;
   max-width: 860px;
@@ -3460,6 +3477,7 @@ body {
   grid-template-columns: 1fr 280px;
   gap: 28px;
   align-items: start;
+  min-width: 0;
 
   @media (max-width: 720px) {
     grid-template-columns: 1fr;
@@ -3470,12 +3488,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 36px;
+  min-width: 0;
 }
 
 .ps-sidebar {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 
   @media (max-width: 720px) {
     order: -1;
@@ -3504,6 +3524,7 @@ body {
   line-height: 1.7;
   margin: 0 !important;
   white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 /* ── Services ── */
@@ -3559,6 +3580,7 @@ body {
   color: var(--text);
   margin: 0 !important;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .ps-service-duration {
@@ -3579,6 +3601,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .ps-card-title {
@@ -3595,6 +3618,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
 .ps-contact-btn {
@@ -3607,9 +3631,13 @@ body {
   font-weight: 500;
   text-decoration: none;
   transition: opacity 0.15s, box-shadow 0.15s;
+  min-width: 0;
 
   svg { flex-shrink: 0; }
-  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* flex: 1 + min-width: 0 sono ciò che fa scattare davvero l'ellissi: senza,
+     lo span si allarga sul contenuto (es. un'email lunga senza spazi) invece
+     di restringersi nello spazio disponibile del bottone. */
+  span { flex: 1 1 0%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   &:hover { opacity: 0.88; box-shadow: var(--shadow); }
 }
@@ -3905,6 +3933,7 @@ body {
   color: var(--text);
   margin: 0 !important;
   white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 .ps-review-reply {

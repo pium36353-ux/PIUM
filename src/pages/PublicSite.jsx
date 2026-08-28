@@ -19,6 +19,7 @@ export default function PublicSite() {
   const [reviews,     setReviews]     = useState([])
   const [status,      setStatus]      = useState('loading') // loading | found | notfound
   const [isOwner,     setIsOwner]     = useState(false)
+  const [avatarBroken, setAvatarBroken] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -71,6 +72,7 @@ export default function PublicSite() {
       setServices(svcs)
       setReviews(rvs)
       setIsOwner(session?.user?.id === biz.user_id)
+      setAvatarBroken(false)
       setStatus('found')
 
       const pageTitle = biz.city
@@ -197,19 +199,34 @@ export default function PublicSite() {
   const theme = getTheme(category)
   const hasImgBg = !!cover_image_url
 
-  const heroStyle = hasImgBg
-    ? { backgroundImage: `url(${cover_image_url})`, backgroundSize: 'cover', backgroundPosition: 'center center', backgroundRepeat: 'no-repeat', position: 'relative' }
-    : { background: theme.heroBg }
+  // Sfondo hero SEMPRE scuro, foto o non foto — niente più "scegli i colori in
+  // base a se la foto ha caricato": il testo è sempre chiaro e sta sempre su
+  // uno sfondo abbastanza scuro da garantirne la leggibilità.
+  // - Con copertina: due layer in background-image, la foto sopra e il
+  //   gradiente scuro del tema sotto. Se l'URL della foto non carica, il
+  //   browser dipinge semplicemente il layer sotto: nessun JS, nessun
+  //   rilevamento di errore necessario, il fallback è gestito dal CSS stesso.
+  // - Senza copertina: solo il gradiente scuro del tema.
+  const heroStyle = {
+    backgroundImage:    hasImgBg ? `url(${cover_image_url}), ${theme.heroBg}` : theme.heroBg,
+    backgroundSize:      'cover',
+    backgroundPosition:  'center center',
+    backgroundRepeat:    'no-repeat',
+    position:            'relative',
+  }
 
-  const txtColor  = hasImgBg ? '#ffffff' : theme.textColor
-  const subColor  = hasImgBg ? 'rgba(255,255,255,0.82)' : theme.subtitleColor
-  const badgeBg   = hasImgBg ? 'rgba(255,255,255,0.15)' : theme.accentLight
-  const badgeFg   = hasImgBg ? '#ffffff' : theme.accent
-  const badgeBdr  = hasImgBg ? 'rgba(255,255,255,0.35)' : theme.accentBorder
-  const avatarBg  = hasImgBg ? 'rgba(255,255,255,0.18)' : theme.accentLight
-  const avatarBdr = hasImgBg ? 'rgba(255,255,255,0.4)'  : theme.accentBorder
-  const avatarFg  = hasImgBg ? '#ffffff' : theme.accent
-  const ctaBg     = hasImgBg ? 'rgba(255,255,255,0.22)' : theme.accent
+  // Il velo scuro sopra la foto (vedi .ps-hero-overlay) serve solo quando c'è
+  // una foto da normalizzare — senza foto il gradiente del tema è già scuro
+  // di suo, non serve scurirlo ulteriormente.
+  const txtColor  = '#ffffff'
+  const subColor  = 'rgba(255,255,255,0.82)'
+  const badgeBg   = 'rgba(255,255,255,0.15)'
+  const badgeFg   = '#ffffff'
+  const badgeBdr  = 'rgba(255,255,255,0.35)'
+  const avatarBg  = 'rgba(255,255,255,0.18)'
+  const avatarBdr = 'rgba(255,255,255,0.4)'
+  const avatarFg  = '#ffffff'
+  const ctaBg     = 'rgba(255,255,255,0.22)'
 
   return (
     <div className={`ps-shell${isOwner ? ' ps-shell--preview' : ''}`}>
@@ -227,8 +244,8 @@ export default function PublicSite() {
         {hasImgBg && <div className="ps-hero-overlay" />}
         <div className="ps-hero-inner" style={{ position: 'relative', zIndex: 1 }}>
           <div className="ps-avatar" style={{ background: avatarBg, borderColor: avatarBdr }}>
-            {profile_image
-              ? <img src={profile_image} alt={name} className="ps-avatar-img" />
+            {profile_image && !avatarBroken
+              ? <img src={profile_image} alt={name} className="ps-avatar-img" onError={() => setAvatarBroken(true)} />
               : <span className="ps-avatar-letter" style={{ color: avatarFg }}>{name?.[0]?.toUpperCase() ?? '?'}</span>
             }
           </div>
@@ -528,91 +545,61 @@ function Carousel({ images }) {
   )
 }
 
-/* ── Temi visivi per categoria ── */
+/* ── Temi visivi per categoria ──
+   heroBg è SEMPRE un gradiente scuro (vedi PublicSite: il testo hero è ormai
+   sempre bianco, quindi lo sfondo deve garantire contrasto a prescindere da
+   foto di copertina presente/assente/rotta). accent/accentLight/accentBorder/
+   textColor/subtitleColor non servono più: erano usati solo nei rami "niente
+   foto" della vecchia logica condizionale sui colori dell'hero, ora rimossa. */
 const THEMES = {
   default: {
-    heroBg:        'linear-gradient(135deg, var(--accent-bg) 0%, var(--bg) 60%)',
-    accent:        'var(--accent)',
-    accentLight:   'var(--accent-bg)',
-    accentBorder:  'var(--accent-border)',
-    titleWeight:   '800',
-    textColor:     undefined,
-    subtitleColor: undefined,
-    emoji:         null,
-    patternImage:  'radial-gradient(rgba(168,85,247,0.12) 1px, transparent 1px)',
-    patternSize:   '18px 18px',
+    heroBg:       'linear-gradient(135deg, #3c1668 0%, #1c0a30 100%)',
+    titleWeight:  '800',
+    emoji:        null,
+    patternImage: 'radial-gradient(rgba(168,85,247,0.12) 1px, transparent 1px)',
+    patternSize:  '18px 18px',
   },
   bar: {
-    heroBg:        'linear-gradient(135deg, #FFF0DC 0%, #FFFAF4 70%)',
-    accent:        '#6F4E37',
-    accentLight:   'rgba(111,78,55,0.1)',
-    accentBorder:  'rgba(111,78,55,0.28)',
-    titleWeight:   '800',
-    textColor:     '#3B2314',
-    subtitleColor: '#7A5C47',
-    emoji:         '☕',
-    patternImage:  'radial-gradient(circle, rgba(111,78,55,0.13) 2px, transparent 2px)',
-    patternSize:   '22px 22px',
+    heroBg:       'linear-gradient(135deg, #3a2a1c 0%, #1c130c 100%)',
+    titleWeight:  '800',
+    emoji:        '☕',
+    patternImage: 'radial-gradient(circle, rgba(111,78,55,0.13) 2px, transparent 2px)',
+    patternSize:  '22px 22px',
   },
   fitness: {
-    heroBg:        'linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%)',
-    accent:        '#FFD700',
-    accentLight:   'rgba(255,215,0,0.15)',
-    accentBorder:  'rgba(255,215,0,0.4)',
-    titleWeight:   '900',
-    textColor:     '#FFD700',
-    subtitleColor: 'rgba(255,255,255,0.65)',
-    emoji:         '💪',
-    patternImage:  'repeating-linear-gradient(45deg, rgba(255,215,0,0.13) 0, rgba(255,215,0,0.13) 1px, transparent 0, transparent 50%)',
-    patternSize:   '10px 10px',
+    heroBg:       'linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%)',
+    titleWeight:  '900',
+    emoji:        '💪',
+    patternImage: 'repeating-linear-gradient(45deg, rgba(255,215,0,0.13) 0, rgba(255,215,0,0.13) 1px, transparent 0, transparent 50%)',
+    patternSize:  '10px 10px',
   },
   ristorante: {
-    heroBg:        'linear-gradient(135deg, #F2E0CC 0%, #FAF0E6 70%)',
-    accent:        '#8B0000',
-    accentLight:   'rgba(139,0,0,0.08)',
-    accentBorder:  'rgba(139,0,0,0.22)',
-    titleWeight:   '800',
-    textColor:     '#4A0000',
-    subtitleColor: '#7A3030',
-    emoji:         '🍽️',
-    patternImage:  'repeating-linear-gradient(45deg, rgba(139,0,0,0.11) 0, rgba(139,0,0,0.11) 1px, transparent 0, transparent 50%), repeating-linear-gradient(-45deg, rgba(139,0,0,0.11) 0, rgba(139,0,0,0.11) 1px, transparent 0, transparent 50%)',
-    patternSize:   '16px 16px',
+    heroBg:       'linear-gradient(135deg, #4a0000 0%, #220000 100%)',
+    titleWeight:  '800',
+    emoji:        '🍽️',
+    patternImage: 'repeating-linear-gradient(45deg, rgba(139,0,0,0.11) 0, rgba(139,0,0,0.11) 1px, transparent 0, transparent 50%), repeating-linear-gradient(-45deg, rgba(139,0,0,0.11) 0, rgba(139,0,0,0.11) 1px, transparent 0, transparent 50%)',
+    patternSize:  '16px 16px',
   },
   parrucchiere: {
-    heroBg:        'linear-gradient(135deg, #FAF0F0 0%, #FFFFFF 70%)',
-    accent:        '#A87070',
-    accentLight:   'rgba(201,160,160,0.14)',
-    accentBorder:  'rgba(201,160,160,0.38)',
-    titleWeight:   '800',
-    textColor:     '#4A2C2C',
-    subtitleColor: '#9A7070',
-    emoji:         '✂️',
-    patternImage:  'radial-gradient(circle, rgba(201,160,160,0.15) 1.5px, transparent 1.5px)',
-    patternSize:   '14px 14px',
+    heroBg:       'linear-gradient(135deg, #4a2c2c 0%, #241515 100%)',
+    titleWeight:  '800',
+    emoji:        '✂️',
+    patternImage: 'radial-gradient(circle, rgba(201,160,160,0.15) 1.5px, transparent 1.5px)',
+    patternSize:  '14px 14px',
   },
   spa: {
-    heroBg:        'linear-gradient(135deg, #E4F0E4 0%, #F8FFF8 70%)',
-    accent:        '#5A8A5A',
-    accentLight:   'rgba(143,175,143,0.14)',
-    accentBorder:  'rgba(143,175,143,0.35)',
-    titleWeight:   '700',
-    textColor:     '#2A4A2A',
-    subtitleColor: '#5A7A5A',
-    emoji:         '🌿',
-    patternImage:  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='20'%3E%3Cpath d='M0 15 Q10 5 20 15 Q30 25 40 15' fill='none' stroke='%238FAF8F' stroke-opacity='0.15' stroke-width='1.5'/%3E%3C/svg%3E")`,
-    patternSize:   '40px 20px',
+    heroBg:       'linear-gradient(135deg, #223a22 0%, #0f1f0f 100%)',
+    titleWeight:  '700',
+    emoji:        '🌿',
+    patternImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='20'%3E%3Cpath d='M0 15 Q10 5 20 15 Q30 25 40 15' fill='none' stroke='%238FAF8F' stroke-opacity='0.15' stroke-width='1.5'/%3E%3C/svg%3E")`,
+    patternSize:  '40px 20px',
   },
   professionista: {
-    heroBg:        'linear-gradient(135deg, #DDE4F0 0%, #F5F5F5 70%)',
-    accent:        '#1B2A4A',
-    accentLight:   'rgba(27,42,74,0.08)',
-    accentBorder:  'rgba(27,42,74,0.2)',
-    titleWeight:   '700',
-    textColor:     '#0D1A30',
-    subtitleColor: '#4A5A70',
-    emoji:         '💼',
-    patternImage:  'linear-gradient(rgba(27,42,74,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(27,42,74,0.12) 1px, transparent 1px)',
-    patternSize:   '24px 24px',
+    heroBg:       'linear-gradient(135deg, #16233f 0%, #0a1220 100%)',
+    titleWeight:  '700',
+    emoji:        '💼',
+    patternImage: 'linear-gradient(rgba(27,42,74,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(27,42,74,0.12) 1px, transparent 1px)',
+    patternSize:  '24px 24px',
   },
 }
 
