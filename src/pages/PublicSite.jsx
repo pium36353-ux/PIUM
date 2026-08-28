@@ -95,6 +95,55 @@ export default function PublicSite() {
       setMetaTag('name',     'twitter:description', metaDesc)
       setMetaTag('name',     'twitter:image',       ogImage)
       setLinkCanonical(canonical)
+
+      // ── JSON-LD LocalBusiness — additivo, riusa i dati già in memoria (biz,
+      // svcs, rvs), nessuna nuova query. Campi assenti vengono omessi invece
+      // di finti/vuoti (es. niente AggregateRating se non ci sono recensioni).
+      const ratedReviews = rvs.filter(r => typeof r.rating === 'number')
+
+      const localBusinessSchema = {
+        '@context': 'https://schema.org',
+        '@type':    categoryToSchemaType(biz.category),
+        name:       biz.name,
+        url:        canonical,
+        image:      ogImage,
+      }
+      if (biz.phone) localBusinessSchema.telephone = biz.phone
+      if (biz.address || biz.city) {
+        localBusinessSchema.address = {
+          '@type': 'PostalAddress',
+          ...(biz.address ? { streetAddress: biz.address } : {}),
+          ...(biz.city    ? { addressLocality: biz.city }  : {}),
+          addressCountry: 'IT',
+        }
+      }
+      const hoursSpec = buildOpeningHoursSpecification(biz.opening_hours)
+      if (hoursSpec.length > 0) localBusinessSchema.openingHoursSpecification = hoursSpec
+      if (ratedReviews.length > 0) {
+        localBusinessSchema.aggregateRating = {
+          '@type':      'AggregateRating',
+          ratingValue:  Math.round((ratedReviews.reduce((s, r) => s + r.rating, 0) / ratedReviews.length) * 10) / 10,
+          reviewCount:  ratedReviews.length,
+          bestRating:   5,
+          worstRating:  1,
+        }
+      }
+      if (svcs.length > 0) {
+        localBusinessSchema.hasOfferCatalog = {
+          '@type': 'OfferCatalog',
+          name:    'Servizi',
+          itemListElement: svcs.map(s => ({
+            '@type': 'Offer',
+            itemOffered: {
+              '@type': 'Service',
+              name: s.name,
+              ...(s.description ? { description: s.description } : {}),
+            },
+            ...(s.price != null ? { price: s.price, priceCurrency: 'EUR' } : {}),
+          })),
+        }
+      }
+      setJsonLd(localBusinessSchema)
     }
     load()
     return () => {
@@ -110,6 +159,7 @@ export default function PublicSite() {
         document.head.querySelector(`meta[name="${k}"]`)?.remove()
       })
       document.head.querySelector('link[rel="canonical"]')?.remove()
+      removeJsonLd()
     }
   }, [slug])
 
@@ -597,6 +647,67 @@ function setLinkCanonical(href) {
     document.head.appendChild(el)
   }
   el.setAttribute('href', href)
+}
+
+// JSON-LD costruito SEMPRE con JSON.stringify (mai concatenazione manuale) e
+// assegnato via textContent (nodo DOM, non parsing HTML: già di per sé non
+// vulnerabile a injection). L'escape di "<" resta comunque esplicito come
+// ulteriore rete di sicurezza, per non affidarsi solo al meccanismo interno
+// di textContent se in futuro questa logica venisse riusata in un contesto
+// che costruisce HTML come stringa (es. un'eventuale funzione SSR/bot).
+function setJsonLd(data) {
+  let el = document.head.querySelector('script[data-ps-jsonld]')
+  if (!el) {
+    el = document.createElement('script')
+    el.type = 'application/ld+json'
+    el.setAttribute('data-ps-jsonld', 'true')
+    document.head.appendChild(el)
+  }
+  el.textContent = JSON.stringify(data).replace(/</g, '\\u003c')
+}
+
+function removeJsonLd() {
+  document.head.querySelector('script[data-ps-jsonld]')?.remove()
+}
+
+// Stessa logica di matching di getTheme(), ma verso i tipi schema.org validi
+// per LocalBusiness invece che verso un tema visivo.
+function categoryToSchemaType(category) {
+  if (!category) return 'LocalBusiness'
+  const c = category.toLowerCase()
+  if (c.includes('bar') || c.includes('caffè') || c.includes('caffe') || c.includes('café')) return 'CafeOrCoffeeShop'
+  if (c.includes('palestra') || c.includes('fitness') || c.includes('gym') || c.includes('crossfit')) return 'ExerciseGym'
+  if (c.includes('ristorante') || c.includes('trattoria') || c.includes('pizzeria') || c.includes('osteria')) return 'Restaurant'
+  if (c.includes('parrucchiere') || c.includes('barbiere') || c.includes('hair') || c.includes('coiffeur')) return 'HairSalon'
+  if (c.includes('estetista') || c.includes('estetica') || c.includes('spa') || c.includes('benessere') || c.includes('centro estetico')) return 'BeautySalon'
+  if (c.includes('professionista') || c.includes('studio') || c.includes('consulenza') || c.includes('avvocato') || c.includes('commercialista') || c.includes('notaio')) return 'ProfessionalService'
+  return 'LocalBusiness'
+}
+
+// Stessa logica di formatDayHours() (formato nuovo mattina/pomeriggio vs
+// vecchio open/close singolo), ma per produrre OpeningHoursSpecification
+// invece di una stringa da mostrare. Giorni chiusi o senza orari validi
+// vengono semplicemente omessi dall'array.
+function buildOpeningHoursSpecification(openingHours) {
+  if (!openingHours) return []
+  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+  const specs = []
+  for (const day of days) {
+    const d = openingHours[day]
+    if (!d || d.closed) continue
+    const dayOfWeek = `https://schema.org/${day.charAt(0).toUpperCase()}${day.slice(1)}`
+    if ('morning' in d || 'afternoon' in d) {
+      if (d.morning?.active && d.morning.open && d.morning.close) {
+        specs.push({ '@type': 'OpeningHoursSpecification', dayOfWeek, opens: d.morning.open, closes: d.morning.close })
+      }
+      if (d.afternoon?.active && d.afternoon.open && d.afternoon.close) {
+        specs.push({ '@type': 'OpeningHoursSpecification', dayOfWeek, opens: d.afternoon.open, closes: d.afternoon.close })
+      }
+    } else if (d.open && d.close) {
+      specs.push({ '@type': 'OpeningHoursSpecification', dayOfWeek, opens: d.open, closes: d.close })
+    }
+  }
+  return specs
 }
 
 function truncateToWord(text, max) {
