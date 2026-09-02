@@ -9133,7 +9133,11 @@ code {
   white-space: nowrap;
 }
 .af-status-dot--active   { background: #dcfce7; color: #16a34a; }
+.af-status-dot--trial    { background: #fef3c7; color: #ca8a04; }
+.af-status-dot--expired  { background: #ffedd5; color: #ea580c; }
+.af-status-dot--lost     { background: #fee2e2; color: #dc2626; }
 .af-status-dot--inactive { background: #f1f5f9; color: #64748b; }
+.af-client-commission { font-size: 12px; font-weight: 700; color: var(--text-h); white-space: nowrap; }
 
 /* Spinner */
 @keyframes af-spin { to { transform: rotate(360deg); } }

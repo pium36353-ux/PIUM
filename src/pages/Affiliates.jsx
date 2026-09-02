@@ -4,21 +4,15 @@ import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 import { getBusinessRealStatus } from '../lib/businessGate'
 
-const PLAN_META = {
-  trial: { label: 'Trial', bg: '#fef3c7', color: '#92400e' },
-  free: { label: 'Gratuito', bg: '#f1f5f9', color: '#475569' },
-  starter: { label: 'Starter', bg: '#dbeafe', color: '#1e40af' },
-  pro: { label: 'Pro', bg: '#ede9fe', color: '#5b21b6' },
-}
-
-// Etichette per lo stato reale del cliente (vedi businessGate.js) usate dallo
-// StatusDot: un trial scaduto senza subscription non deve mai apparire
-// "Attivo" solo perché is_active (flag di visibilità pubblica, scorrelato
-// dalla fatturazione) è true di default.
-const REAL_STATUS_LABEL = {
-  trial_expired: 'Scaduto',
-  expired:       'Scaduto',
-  suspended:     'Sospeso',
+// Etichette/colore per lo stato reale del cliente (vedi businessGate.js) —
+// quello che interessa davvero all'affiliato per curare il rapporto: paga,
+// è ancora in prova, o l'ha perso (e se sì, se non ha mai pagato o ha disdetto).
+const REAL_STATUS_META = {
+  active:        { label: 'Pagante',  cls: 'af-status-dot--active'   },
+  trial:         { label: 'In prova', cls: 'af-status-dot--trial'    },
+  trial_expired: { label: 'Scaduto',  cls: 'af-status-dot--expired'  },
+  expired:       { label: 'Perso',    cls: 'af-status-dot--lost'     },
+  suspended:     { label: 'Sospeso',  cls: 'af-status-dot--inactive' },
 }
 
 export default function Affiliates() {
@@ -30,6 +24,7 @@ export default function Affiliates() {
   const [copied, setCopied] = useState(null)
   const [flowError, setFlowError] = useState('')
   const [commStats, setCommStats] = useState({ earned: 0, pending: 0 })
+  const [commByBusiness, setCommByBusiness] = useState({})
 
   useEffect(() => {
     let alive = true
@@ -69,27 +64,44 @@ export default function Affiliates() {
 
     if (aff) {
       const [{ data: biz }, { data: commData }] = await Promise.all([
+        // Privacy: SOLO colonne commerciali (stato del rapporto). L'affiliato
+        // non deve mai vedere dati operativi del commerciante o dei suoi
+        // clienti finali (email, telefono, prenotazioni, ecc.) — questa select
+        // è l'unica barriera, perché la RLS su businesses ("public read") filtra
+        // le righe (is_active = true) ma non le colonne. Nota per il futuro:
+        // andrebbe irrobustita con una RLS/funzione dedicata alle sole colonne
+        // commerciali, invece di affidarsi alla disciplina di questa select.
         supabase
           .from('businesses')
-          .select('id, name, city, plan, is_active, status, trial_ends_at, stripe_subscription_id, created_at')
+          .select('id, name, city, status, trial_ends_at, stripe_subscription_id, affiliate_code, created_at')
           .in('affiliate_code', [aff.code, `${aff.code}-on`])
           .order('created_at', { ascending: false }),
         supabase
           .from('affiliate_commissions')
-          .select('amount, status')
+          .select('business_id, amount, status, month_number')
           .eq('affiliate_id', aff.id),
       ])
       setClients(biz ?? [])
 
+      // month_number non viene mostrato in UI (il ciclo 12 mesi/15€ resta un
+      // dettaglio interno, non enfatizzato all'affiliato): qui serve solo se
+      // in futuro servisse un calcolo lato client sulla fase della commissione.
       let earned = 0, pending = 0
+      const byBusiness = {}
       for (const row of (commData ?? [])) {
-        if (row.status === 'pending' || row.status === 'paid') earned += Number(row.amount)
+        const maturata = row.status === 'pending' || row.status === 'paid'
+        if (maturata) {
+          earned += Number(row.amount)
+          byBusiness[row.business_id] = (byBusiness[row.business_id] ?? 0) + Number(row.amount)
+        }
         if (row.status === 'pending') pending += Number(row.amount)
       }
       setCommStats({ earned, pending })
+      setCommByBusiness(byBusiness)
     } else {
       setClients([])
       setCommStats({ earned: 0, pending: 0 })
+      setCommByBusiness({})
     }
 
     setLoading(false)
@@ -169,19 +181,19 @@ export default function Affiliates() {
             </p>
           </div>
         ) : (
-          <Dashboard affiliate={affiliate} clients={clients} copied={copied} onCopy={copyLink} commStats={commStats} />
+          <Dashboard affiliate={affiliate} clients={clients} copied={copied} onCopy={copyLink} commStats={commStats} commByBusiness={commByBusiness} />
         )}
       </div>
     </div>
   )
 }
 
-function Dashboard({ affiliate, clients, copied, onCopy, commStats }) {
+function Dashboard({ affiliate, clients, copied, onCopy, commStats, commByBusiness }) {
   // Il suffisso "-on" e riservato al canale scontato: il codice base deve restare pulito.
   const baseCode = affiliate.code.replace(/-on$/i, '')
   const directLink = `https://piumapp.com/auth?ref=${baseCode}`
   const onlineLink = `https://piumapp.com/auth?ref=${baseCode}-on`
-  const activeCount = clients.filter(c => c.is_active && c.plan === 'pro').length
+  const payingCount = clients.filter(c => getBusinessRealStatus(c) === 'active').length
 
   return (
     <div className="af-dashboard">
@@ -206,8 +218,8 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats }) {
           <span className="af-stat-label">Clienti portati</span>
         </div>
         <div className="af-stat-card">
-          <span className="af-stat-value">{activeCount}</span>
-          <span className="af-stat-label">Attivi (Pro)</span>
+          <span className="af-stat-value">{payingCount}</span>
+          <span className="af-stat-label">Clienti paganti</span>
         </div>
       </div>
 
@@ -252,21 +264,27 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats }) {
           <p className="af-empty">Nessun cliente ancora. Condividi il tuo link per iniziare!</p>
         ) : (
           <div className="af-clients-list">
-            {clients.map(c => (
-              <div key={c.id} className="af-client-row">
-                <div className="af-client-info">
-                  <span className="af-client-name">{c.name}</span>
-                  {c.city && <span className="af-client-city">{c.city}</span>}
+            {clients.map(c => {
+              const commissione = commByBusiness[c.id] ?? 0
+              return (
+                <div key={c.id} className="af-client-row">
+                  <div className="af-client-info">
+                    <span className="af-client-name">{c.name}</span>
+                    {c.city && <span className="af-client-city">{c.city}</span>}
+                  </div>
+                  <div className="af-client-meta">
+                    <ChannelBadge affiliateCode={c.affiliate_code} />
+                    <RealStatusBadge status={getBusinessRealStatus(c)} />
+                    <span className="af-client-commission">
+                      {commissione > 0 ? `€${commissione.toFixed(2)} maturati` : '—'}
+                    </span>
+                    <span className="af-client-date">
+                      {new Date(c.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
                 </div>
-                <div className="af-client-meta">
-                  <PlanBadge plan={c.plan} />
-                  <StatusDot status={getBusinessRealStatus(c)} />
-                  <span className="af-client-date">
-                    {new Date(c.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -274,22 +292,22 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats }) {
   )
 }
 
-function PlanBadge({ plan }) {
-  const meta = PLAN_META[plan] ?? PLAN_META.trial
-  return <span className="af-plan-badge" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+// Canale commerciale (deducibile dal solo suffisso "-on" di affiliate_code,
+// intatto da quando il cliente si è registrato — vedi migration
+// 20260816_affiliate_code_on_suffix_validation.sql), non dal piano app.
+function ChannelBadge({ affiliateCode }) {
+  const isOn = (affiliateCode ?? '').toLowerCase().endsWith('-on')
+  return (
+    <span
+      className="af-plan-badge"
+      style={isOn ? { background: '#dbeafe', color: '#1e40af' } : { background: '#ede9fe', color: '#5b21b6' }}
+    >
+      {isOn ? 'Scontato · 69,99€' : 'Pieno · 99,99€'}
+    </span>
+  )
 }
 
-// 'active' e 'trial' (in corso) sono gli unici stati usabili: un cliente
-// 'trial_expired' non paga da quando è scaduto e va mostrato come non attivo,
-// non più confuso con un trial in corso solo perché is_active (flag di
-// visibilità pubblica, scorrelato dalla fatturazione) resta true di default.
-const USABLE_STATUSES = new Set(['active', 'trial'])
-
-function StatusDot({ status }) {
-  const usable = USABLE_STATUSES.has(status)
-  // Per gli stati usabili il dot dice sempre "Attivo" (il tier è già nel
-  // PlanBadge accanto); solo gli stati non usabili prendono l'etichetta
-  // specifica (Scaduto/Sospeso) per non essere confusi con un generico "Inattivo".
-  const label = usable ? 'Attivo' : (REAL_STATUS_LABEL[status] ?? 'Inattivo')
-  return <span className={`af-status-dot ${usable ? 'af-status-dot--active' : 'af-status-dot--inactive'}`}>{label}</span>
+function RealStatusBadge({ status }) {
+  const meta = REAL_STATUS_META[status] ?? REAL_STATUS_META.trial
+  return <span className={`af-status-dot ${meta.cls}`}>{meta.label}</span>
 }
