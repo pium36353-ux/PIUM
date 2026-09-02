@@ -9120,8 +9120,23 @@ code {
 .af-client-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .af-client-name { font-size: 14px; font-weight: 600; color: var(--text-h); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .af-client-city { font-size: 12px; color: var(--text); }
-.af-client-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.af-client-badges { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.af-client-footer { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .af-client-date { font-size: 12px; color: var(--text); white-space: nowrap; }
+
+/* Sotto i 600px (mobile/PWA) la riga cliente non ha spazio per stare tutta in
+   orizzontale: nome+città, badge e commissione+data finiscono a competere per
+   lo stesso spazio (af-client-meta non si restringe mai) e il risultato è
+   testo tagliato o accavallato. Sopra i 600px resta il layout orizzontale. */
+@media (max-width: 600px) {
+  .af-client-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .af-client-badges { flex-wrap: wrap; }
+  .af-client-footer { justify-content: space-between; }
+}
 .af-plan-badge {
   font-size: 11px; font-weight: 700;
   padding: 3px 9px; border-radius: 20px;

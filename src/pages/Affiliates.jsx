@@ -272,9 +272,11 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats, commByBusine
                     <span className="af-client-name">{c.name}</span>
                     {c.city && <span className="af-client-city">{c.city}</span>}
                   </div>
-                  <div className="af-client-meta">
+                  <div className="af-client-badges">
                     <ChannelBadge affiliateCode={c.affiliate_code} />
                     <RealStatusBadge status={getBusinessRealStatus(c)} />
+                  </div>
+                  <div className="af-client-footer">
                     <span className="af-client-commission">
                       {commissione > 0 ? `€${commissione.toFixed(2)} maturati` : '—'}
                     </span>
