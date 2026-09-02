@@ -10,7 +10,7 @@ import { isBusinessBlocked } from '../lib/businessGate'
 import SubscriptionGate from '../components/SubscriptionGate'
 
 // Stati che possono raggiungere questa pagina: isBusinessBlocked intercetta
-// suspended/expired prima del render (vedi sotto), qui restano solo trial/active.
+// suspended/expired/trial_expired prima del render (vedi sotto), qui restano solo trial/active.
 const STATUS_LABEL = {
   trial:  { label: 'Prova gratuita', cls: 'sett-badge--off' },
   active: { label: 'Attivo',         cls: 'sett-badge--on'  },
@@ -56,7 +56,7 @@ export default function Settings() {
       setUser(data.user)
       supabase
         .from('businesses')
-        .select('status, trial_ends_at')
+        .select('status, trial_ends_at, stripe_subscription_id')
         .eq('user_id', data.user.id)
         .maybeSingle()
         .then(({ data: biz }) => { if (alive && biz) setBusiness(biz) })

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import { getBusinessRealStatus } from '../lib/businessGate'
 
 /* ── Security helper: slug deve contenere solo [a-z0-9-] prima di essere usato in href ── */
 function safePublicUrl(slug) {
@@ -16,11 +17,14 @@ const PLANS = [
   { value: 'starter', label: 'Starter' },
   { value: 'pro',     label: 'Pro'     },
 ]
-const STATUS_FILTERS      = ['tutti', 'active', 'trial', 'expired', 'suspended']
-const STATUS_FILTER_LABELS = { tutti: 'Tutti', active: 'Attivi', trial: 'Trial', expired: 'Scaduti', suspended: 'Sospesi' }
+const STATUS_FILTERS      = ['tutti', 'active', 'trial', 'trial_expired', 'expired', 'suspended']
+const STATUS_FILTER_LABELS = { tutti: 'Tutti', active: 'Attivi', trial: 'Trial', trial_expired: 'Trial scaduti', expired: 'Disdetti', suspended: 'Sospesi' }
 
 /* ── Helpers ── */
-function getStatus(biz) { return biz.status ?? 'trial' }
+// Stato "reale" derivato (vedi businessGate.js): distingue il trial scaduto
+// MAI pagato ('trial_expired') dallo status DB grezzo 'trial'/'expired'/ecc.
+// Unica fonte di verità qui in Admin — non leggere mai biz.status a mano.
+function getStatus(biz) { return getBusinessRealStatus(biz) }
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -49,7 +53,8 @@ function formatCityProvince(city, province) {
 }
 
 function trialDaysLeft(biz) {
-  if (getStatus(biz) !== 'trial' || !biz.trial_ends_at) return null
+  const status = getStatus(biz)
+  if ((status !== 'trial' && status !== 'trial_expired') || !biz.trial_ends_at) return null
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const end   = new Date(biz.trial_ends_at); end.setHours(0, 0, 0, 0)
   return Math.round((end - today) / 86400000)
@@ -128,7 +133,7 @@ export default function Admin() {
     setLoading(true)
     const { data, error } = await supabase
       .from('businesses')
-      .select('id, name, email, owner_email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
+      .select('id, name, email, owner_email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, stripe_subscription_id, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
       .order('created_at', { ascending: false })
     if (signal?.cancelled) return
     if (error) {
@@ -484,14 +489,15 @@ export default function Admin() {
   }), [businesses, statusFilter, search])
 
   /* ── Computed stats — memoized ── */
-  const { total, attivi, inTrial, scaduti, mrr, convRate } = useMemo(() => {
+  const { total, attivi, inTrial, trialScaduti, scaduti, mrr, convRate } = useMemo(() => {
     const tot     = businesses.length
     const act     = businesses.filter(b => getStatus(b) === 'active').length
     const tri     = businesses.filter(b => getStatus(b) === 'trial').length
+    const triExp  = businesses.filter(b => getStatus(b) === 'trial_expired').length
     const exp     = businesses.filter(b => getStatus(b) === 'expired').length
     const revenue = businesses.filter(b => getStatus(b) === 'active').reduce((s, b) => s + Number(b.plan_price ?? 99), 0)
     const base    = act + exp
-    return { total: tot, attivi: act, inTrial: tri, scaduti: exp, mrr: revenue, convRate: base > 0 ? Math.round((act / base) * 100) : null }
+    return { total: tot, attivi: act, inTrial: tri, trialScaduti: triExp, scaduti: exp, mrr: revenue, convRate: base > 0 ? Math.round((act / base) * 100) : null }
   }, [businesses])
 
   if (denied) return (
@@ -542,12 +548,13 @@ export default function Admin() {
 
         {section === 'clienti' ? (
           <>
-            {/* Stats — 6 card */}
-            <div className="adm-stats adm-stats--6">
+            {/* Stats — 7 card */}
+            <div className="adm-stats adm-stats--7">
               <StatCard label="Clienti totali"      value={total}                        icon={<IconUsers />}  color="accent"  />
               <StatCard label="Attivi"              value={attivi}                       icon={<IconCheck />}  color="green"   />
               <StatCard label="In trial"            value={inTrial}                      icon={<IconClock />}  color="yellow"  />
-              <StatCard label="Scaduti"             value={scaduti}                      icon={<IconPause />}  color="gray"    />
+              <StatCard label="Trial scaduti"       value={trialScaduti}                 icon={<IconPause />}  color="orange"  />
+              <StatCard label="Disdetti"            value={scaduti}                      icon={<IconPause />}  color="gray"    />
               <StatCard label="MRR"                 value={`€${mrr.toFixed(0)}`}         icon={<IconEuro />}   color="purple"  />
               <StatCard label="Conversione trial"   value={convRate !== null ? `${convRate}%` : '—'} icon={<IconTrend />}  color="blue"    />
             </div>
@@ -1340,7 +1347,7 @@ function AffiliateCell({ code }) {
 
 /* ── TrialCell ── */
 function TrialCell({ days, trialEndsAt, status }) {
-  if (status !== 'trial' || days === null) return <span className="adm-cell-text">—</span>
+  if ((status !== 'trial' && status !== 'trial_expired') || days === null) return <span className="adm-cell-text">—</span>
   const tier = days <= 0 ? 'red' : days <= 7 ? 'orange' : 'green'
   return (
     <div className="adm-trial-cell">
@@ -1367,10 +1374,11 @@ function StatCard({ label, value, icon, color }) {
 
 function StatusBadge({ status }) {
   const map = {
-    active:    { label: 'Attivo',  cls: 'adm-badge--green'  },
-    trial:     { label: 'Trial',   cls: 'adm-badge--yellow' },
-    expired:   { label: 'Scaduto', cls: 'adm-badge--red'    },
-    suspended: { label: 'Sospeso', cls: 'adm-badge--gray'   },
+    active:        { label: 'Attivo',        cls: 'adm-badge--green'  },
+    trial:         { label: 'Trial',         cls: 'adm-badge--yellow' },
+    trial_expired: { label: 'Trial scaduto', cls: 'adm-badge--orange' },
+    expired:       { label: 'Disdetto',      cls: 'adm-badge--red'    },
+    suspended:     { label: 'Sospeso',       cls: 'adm-badge--gray'   },
   }
   const { label, cls } = map[status] ?? { label: status, cls: 'adm-badge--gray' }
   return <span className={`adm-badge ${cls}`}>{label}</span>

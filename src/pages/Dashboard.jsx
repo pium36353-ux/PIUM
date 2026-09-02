@@ -53,14 +53,20 @@ export default function Dashboard() {
   // subito il nuovo valore senza bisogno di un reload.
   const patchBusiness = (patch) => setBusiness(prev => prev ? { ...prev, ...patch } : prev)
 
+  // Nota: a differenza di isTrialExpiredUnpaid (businessGate.js) questo calcolo
+  // locale non guarda stripe_subscription_id — resta true anche nel breve
+  // istante in cui una subscription Stripe esiste già (trial pagato appena
+  // scaduto) ma il webhook non ha ancora aggiornato status. In quel caso
+  // isBlocked resta false e qui sotto si vede comunque il banner "attiva ora"
+  // invece del gate a tutta pagina, finché il webhook non allinea lo status.
   const trialExpired = business?.status === 'trial'
     && !!business?.trial_ends_at
     && new Date(business.trial_ends_at) < new Date()
 
-  // Gate: abbonamento sospeso (bloccato a mano dall'admin) o cessato
-  // (subscription Stripe cancellata) impedisce l'uso dell'intera dashboard,
-  // non solo di funzioni singole. 'trial' e 'active' passano liberi.
-  // Stessa regola/UI applicata anche in Settings.jsx — vedi isBusinessBlocked.
+  // Gate: abbonamento sospeso (bloccato a mano dall'admin), cessato (subscription
+  // Stripe cancellata) o trial scaduto MAI pagato impedisce l'uso dell'intera
+  // dashboard, non solo di funzioni singole. 'trial' (in corso) e 'active' passano
+  // liberi. Stessa regola/UI applicata anche in Settings.jsx — vedi isBusinessBlocked.
   const isBlocked = isBusinessBlocked(business)
 
   useEffect(() => {

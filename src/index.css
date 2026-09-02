@@ -4775,6 +4775,12 @@ code {
   @media (max-width: 900px) { grid-template-columns: repeat(2, 1fr); }
   @media (max-width: 380px) { grid-template-columns: 1fr; }
 }
+/* Override per 7 card: 4 colonne, ultima riga da 3 */
+.adm-stats.adm-stats--7 {
+  grid-template-columns: repeat(4, 1fr);
+  @media (max-width: 900px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 380px) { grid-template-columns: 1fr; }
+}
 
 .adm-stat {
   display: flex;
@@ -4800,6 +4806,7 @@ code {
 .adm-stat--green  .adm-stat-icon { background: rgba(34,197,94,0.12);        color: #16a34a; }
 .adm-stat--yellow .adm-stat-icon { background: rgba(234,179,8,0.12);        color: #ca8a04; }
 .adm-stat--gray   .adm-stat-icon { background: var(--code-bg);              color: var(--text); }
+.adm-stat--orange .adm-stat-icon { background: rgba(249,115,22,0.12);       color: #ea580c; }
 
 .adm-stat-body {
   display: flex;
@@ -5124,6 +5131,7 @@ code {
 
 .adm-badge--green  { background: rgba(34,197,94,0.1);  color: #16a34a; border: 1px solid rgba(34,197,94,0.25); }
 .adm-badge--yellow { background: rgba(234,179,8,0.1);  color: #ca8a04; border: 1px solid rgba(234,179,8,0.3);  }
+.adm-badge--orange { background: rgba(249,115,22,0.1);  color: #ea580c; border: 1px solid rgba(249,115,22,0.3); }
 .adm-badge--red    { background: rgba(239,68,68,0.1);   color: #dc2626; border: 1px solid rgba(239,68,68,0.25); }
 .adm-badge--gray   { background: var(--code-bg);        color: var(--text); border: 1px solid var(--border);   }
 

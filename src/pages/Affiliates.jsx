@@ -2,12 +2,23 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import { getBusinessRealStatus } from '../lib/businessGate'
 
 const PLAN_META = {
   trial: { label: 'Trial', bg: '#fef3c7', color: '#92400e' },
   free: { label: 'Gratuito', bg: '#f1f5f9', color: '#475569' },
   starter: { label: 'Starter', bg: '#dbeafe', color: '#1e40af' },
   pro: { label: 'Pro', bg: '#ede9fe', color: '#5b21b6' },
+}
+
+// Etichette per lo stato reale del cliente (vedi businessGate.js) usate dallo
+// StatusDot: un trial scaduto senza subscription non deve mai apparire
+// "Attivo" solo perché is_active (flag di visibilità pubblica, scorrelato
+// dalla fatturazione) è true di default.
+const REAL_STATUS_LABEL = {
+  trial_expired: 'Scaduto',
+  expired:       'Scaduto',
+  suspended:     'Sospeso',
 }
 
 export default function Affiliates() {
@@ -60,7 +71,7 @@ export default function Affiliates() {
       const [{ data: biz }, { data: commData }] = await Promise.all([
         supabase
           .from('businesses')
-          .select('id, name, city, plan, is_active, created_at')
+          .select('id, name, city, plan, is_active, status, trial_ends_at, stripe_subscription_id, created_at')
           .in('affiliate_code', [aff.code, `${aff.code}-on`])
           .order('created_at', { ascending: false }),
         supabase
@@ -230,8 +241,8 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats }) {
           Chi si registra tramite questi link viene associato al tuo account.
         </p>
         <p className="af-link-note">
-          *I rapporti si rinnovano ogni 12 mesi: alla scadenza puoi scegliere se continuare
-          ad ampliare il tuo portafoglio o mantenere solo l'assistenza dei clienti già acquisiti.
+          *Commissione piena per i primi 12 mesi; dal 13° mese 15€/mese finché il cliente
+          resta abbonato (assistenza continuativa).
         </p>
       </div>
 
@@ -249,7 +260,7 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats }) {
                 </div>
                 <div className="af-client-meta">
                   <PlanBadge plan={c.plan} />
-                  <StatusDot active={c.is_active} />
+                  <StatusDot status={getBusinessRealStatus(c)} />
                   <span className="af-client-date">
                     {new Date(c.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </span>
@@ -268,6 +279,17 @@ function PlanBadge({ plan }) {
   return <span className="af-plan-badge" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
 }
 
-function StatusDot({ active }) {
-  return <span className={`af-status-dot ${active ? 'af-status-dot--active' : 'af-status-dot--inactive'}`}>{active ? 'Attivo' : 'Inattivo'}</span>
+// 'active' e 'trial' (in corso) sono gli unici stati usabili: un cliente
+// 'trial_expired' non paga da quando è scaduto e va mostrato come non attivo,
+// non più confuso con un trial in corso solo perché is_active (flag di
+// visibilità pubblica, scorrelato dalla fatturazione) resta true di default.
+const USABLE_STATUSES = new Set(['active', 'trial'])
+
+function StatusDot({ status }) {
+  const usable = USABLE_STATUSES.has(status)
+  // Per gli stati usabili il dot dice sempre "Attivo" (il tier è già nel
+  // PlanBadge accanto); solo gli stati non usabili prendono l'etichetta
+  // specifica (Scaduto/Sospeso) per non essere confusi con un generico "Inattivo".
+  const label = usable ? 'Attivo' : (REAL_STATUS_LABEL[status] ?? 'Inattivo')
+  return <span className={`af-status-dot ${usable ? 'af-status-dot--active' : 'af-status-dot--inactive'}`}>{label}</span>
 }
