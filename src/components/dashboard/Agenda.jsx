@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { notifyNextAppointment, scheduleAllTodayNotifications } from '../../lib/notifications'
+import { normalizePhone, buildWaLink } from '../../lib/phone'
 
 const COLORS    = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f43f5e','#84cc16','#a78bfa']
 const DURATIONS = [15, 30, 45, 60, 90, 120]
@@ -421,7 +422,7 @@ export default function Agenda({ business, initialView = 'day' }) {
     try {
       const payload = {
         client_name:      form.client_name.trim(),
-        client_phone:     form.client_phone.trim() || null,
+        client_phone:     normalizePhone(form.client_phone),
         employee_id:      form.employee_id || null,
         date:             form.date,
         start_time:       form.start_time,
@@ -1094,7 +1095,7 @@ export default function Agenda({ business, initialView = 'day' }) {
                   {form.client_phone.trim() && (
                     <a
                       className="ag-wa-btn"
-                      href={`https://wa.me/${form.client_phone.trim().replace(/^\+/, '').replace(/\s+/g, '')}`}
+                      href={buildWaLink(form.client_phone)}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Apri WhatsApp"
@@ -1338,13 +1339,6 @@ function WheelColumn({ items, value, onChange }) {
       </div>
     </div>
   )
-}
-
-/* ── WhatsApp helper ── */
-function buildWaLink(phone, message) {
-  const clean = phone?.replace(/\D/g, '')
-  if (!clean || clean.length < 6) return null
-  return `https://wa.me/${clean}?text=${encodeURIComponent(message)}`
 }
 
 /* ── Timeline helpers ── */

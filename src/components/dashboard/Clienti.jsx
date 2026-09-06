@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import VCard from 'vcf'
+import { normalizePhone, buildWaLink } from '../../lib/phone'
 
 const MONTHS = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic']
 
@@ -23,15 +24,6 @@ function fmtDuration(m) {
 function fmtCurrency(v) {
   if (v == null || v === 0) return null
   return `€${Number(v).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
-}
-
-function buildWaLink(phone) {
-  if (!phone) return null
-  return `https://wa.me/${phone.trim().replace(/^\+/, '').replace(/\s+/g, '')}`
-}
-
-function phoneKey(phone) {
-  return phone?.trim().replace(/\s+/g, '') || null
 }
 
 // Parsa il testo di un file .vcf e restituisce array { name, phone }
@@ -59,12 +51,12 @@ function groupClients(appointments, contacts = []) {
 
   // 1. Seed dai contatti importati (priorità più bassa)
   for (const ct of contacts) {
-    const key = phoneKey(ct.phone) ?? ('__name__' + ct.name.trim().toLowerCase())
+    const key = normalizePhone(ct.phone) ?? ('__name__' + ct.name.trim().toLowerCase())
     if (!map.has(key)) {
       map.set(key, {
         key,
         name:         ct.name,
-        phone:        phoneKey(ct.phone),
+        phone:        normalizePhone(ct.phone),
         email:        ct.email || null,
         source:       ct.source ?? 'manual',
         contactId:    ct.id,
@@ -83,7 +75,7 @@ function groupClients(appointments, contacts = []) {
   const sorted    = [...appointments].sort((a, b) => (a.date < b.date ? -1 : 1))
   const nameIndex = new Map()
   for (const apt of sorted) {
-    const phoneK    = phoneKey(apt.client_phone)
+    const phoneK    = normalizePhone(apt.client_phone)
     const cleanName = apt.client_name.trim().toLowerCase()
     let key
     if (phoneK) {
@@ -225,12 +217,12 @@ export default function Clienti({ business }) {
       .not('phone', 'is', null)
 
     const existingKeys = new Set(
-      (existing ?? []).map(c => phoneKey(c.phone)).filter(Boolean)
+      (existing ?? []).map(c => normalizePhone(c.phone)).filter(Boolean)
     )
 
     const toInsert = list.filter(c => {
-      if (!phoneKey(c.phone)) return true   // senza telefono: importa sempre
-      return !existingKeys.has(phoneKey(c.phone))
+      if (!normalizePhone(c.phone)) return true   // senza telefono: importa sempre
+      return !existingKeys.has(normalizePhone(c.phone))
     })
 
     if (toInsert.length > 0) {
@@ -238,7 +230,7 @@ export default function Clienti({ business }) {
         toInsert.map(c => ({
           business_id: business.id,
           name:        c.name,
-          phone:       phoneKey(c.phone) ?? null,
+          phone:       normalizePhone(c.phone) ?? null,
           source,
         }))
       )
@@ -530,7 +522,7 @@ function ClientDrawer({ client, business, onClose, onReload }) {
     try {
       const payload = {
         name:  editName.trim() || client.name,
-        phone: phoneKey(editPhone) || null,
+        phone: normalizePhone(editPhone) || null,
         notes: editNotes.trim() || null,
       }
       const { error } = client.contactId

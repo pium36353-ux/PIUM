@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
 import BookingSection from '../components/public/BookingSection'
 import { safeHref } from '../lib/safeUrl'
+import { buildWaLink } from '../lib/phone'
 
 export default function PublicSite() {
   const { slug: paramSlug } = useParams()
@@ -191,7 +192,7 @@ export default function PublicSite() {
   const ctaHref = phone
     ? `tel:${phone}`
     : whatsapp
-      ? `https://wa.me/${whatsapp.replace(/\D/g, '')}`
+      ? buildWaLink(whatsapp)
       : email
         ? `mailto:${email}`
         : '#ps-contacts'
@@ -345,7 +346,7 @@ export default function PublicSite() {
                 )}
                 {whatsapp && (
                   <a
-                    href={`https://wa.me/${whatsapp.replace(/\D/g, '')}`}
+                    href={buildWaLink(whatsapp)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="ps-contact-btn ps-contact-btn--whatsapp"

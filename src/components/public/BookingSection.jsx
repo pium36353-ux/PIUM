@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { normalizePhone } from '../../lib/phone'
 
 const STEPS = { SERVICE: 0, DATE: 1, SLOT: 2, FORM: 3, CONFIRM: 4, SUCCESS: 5 }
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
@@ -231,7 +232,7 @@ export default function BookingSection({ business, services }) {
           service_id:      selectedServices[0].id,
           customer_name:   form.name.trim(),
           customer_email:  form.email.trim(),
-          customer_phone:  form.phone.trim(),
+          customer_phone:  normalizePhone(form.phone.trim()),
           date,
           time:            slot,
           service_names:   selectedServices.map(s => s.name).join(', '),
