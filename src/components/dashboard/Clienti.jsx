@@ -513,6 +513,10 @@ function ClientDrawer({ client, business, onClose, onReload }) {
   const [saving,    setSaving]    = useState(false)
   const [saveError, setSaveError] = useState(null)
 
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting,      setDeleting]      = useState(false)
+  const [deleteError,   setDeleteError]   = useState(null)
+
   const apts = [...client.appointments]
     .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : b.start_time > a.start_time ? 1 : -1))
 
@@ -534,6 +538,25 @@ function ClientDrawer({ client, business, onClose, onReload }) {
       setSaveError('Errore nel salvataggio. Riprova.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Cancella SOLO il record contacts: nessuna FK verso appointments (tabelle
+  // indipendenti, il collegamento in UI è solo un merge applicativo per
+  // telefono — vedi groupClients). Un cliente con visite resta quindi visibile
+  // dopo il delete, derivato dagli appuntamenti, ma perde note/contactId.
+  const handleDelete = async () => {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const { error } = await supabase.from('contacts').delete().eq('id', client.contactId)
+      if (error) throw error
+      await onReload()
+      onClose()
+    } catch {
+      setDeleteError('Errore nell\'eliminazione. Riprova.')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -690,6 +713,41 @@ function ClientDrawer({ client, business, onClose, onReload }) {
               </div>
             )}
           </div>
+
+          {/* Elimina contatto — solo per i contatti con un record reale in
+              tabella; un cliente derivato solo da appuntamenti non ha nulla
+              da eliminare (contactId null). */}
+          {client.contactId && (
+            <div className="adm-drawer-section">
+              <div className="adm-drawer-section-title">Zona pericolosa</div>
+              {!confirmDelete ? (
+                <button className="cl-btn-delete" onClick={() => setConfirmDelete(true)}>
+                  Elimina contatto
+                </button>
+              ) : (
+                <div className="cl-delete-confirm">
+                  <p className="cl-delete-confirm-msg">
+                    {client.appointments.length > 0
+                      ? 'Questo cliente ha uno storico di appuntamenti. Eliminando il contatto, il cliente resterà visibile nello storico visite, ma perderai le note e i dati salvati sul contatto (email, nome corretto). Vuoi procedere?'
+                      : 'Il contatto verrà eliminato definitivamente. Vuoi procedere?'}
+                  </p>
+                  {deleteError && <p className="sv-field-error">{deleteError}</p>}
+                  <div className="cl-delete-confirm-actions">
+                    <button
+                      className="sv-btn-cancel"
+                      onClick={() => { setConfirmDelete(false); setDeleteError(null) }}
+                      disabled={deleting}
+                    >
+                      Annulla
+                    </button>
+                    <button className="cl-btn-delete cl-btn-delete--confirm" onClick={handleDelete} disabled={deleting}>
+                      {deleting ? 'Eliminazione…' : 'Elimina definitivamente'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
       </div>

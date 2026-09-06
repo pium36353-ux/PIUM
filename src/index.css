@@ -10139,6 +10139,47 @@ code {
   line-height: 1.4;
 }
 
+.cl-btn-delete {
+  width: 100%;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: #dc2626;
+  background: transparent;
+  border: 1px solid rgba(239,68,68,0.35);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: rgba(239,68,68,0.08); }
+  &:disabled { opacity: 0.55; cursor: not-allowed; }
+}
+.cl-btn-delete--confirm {
+  color: #fff;
+  background: #dc2626;
+  border-color: #dc2626;
+
+  &:hover { background: #b91c1c; }
+}
+.cl-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cl-delete-confirm-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.cl-delete-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+.cl-delete-confirm-actions .sv-btn-cancel { flex: 1; }
+.cl-delete-confirm-actions .cl-btn-delete--confirm { flex: 1; }
+
 @media (max-width: 480px) {
   .cl-stats-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .cl-stat-value { font-size: 16px; }
