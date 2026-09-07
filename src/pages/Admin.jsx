@@ -17,8 +17,8 @@ const PLANS = [
   { value: 'starter', label: 'Starter' },
   { value: 'pro',     label: 'Pro'     },
 ]
-const STATUS_FILTERS      = ['tutti', 'active', 'trial', 'trial_expired', 'expired', 'suspended']
-const STATUS_FILTER_LABELS = { tutti: 'Tutti', active: 'Attivi', trial: 'Trial', trial_expired: 'Trial scaduti', expired: 'Disdetti', suspended: 'Sospesi' }
+const STATUS_FILTERS      = ['tutti', 'active', 'trial', 'trial_expired', 'expired', 'suspended', 'gift']
+const STATUS_FILTER_LABELS = { tutti: 'Tutti', active: 'Attivi', trial: 'Trial', trial_expired: 'Trial scaduti', expired: 'Disdetti', suspended: 'Sospesi', gift: 'Omaggio' }
 
 /* ── Helpers ── */
 // Stato "reale" derivato (vedi businessGate.js): distingue il trial scaduto
@@ -133,7 +133,7 @@ export default function Admin() {
     setLoading(true)
     const { data, error } = await supabase
       .from('businesses')
-      .select('id, name, email, owner_email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, stripe_subscription_id, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
+      .select('id, name, email, owner_email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, stripe_subscription_id, is_free, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
       .order('created_at', { ascending: false })
     if (signal?.cancelled) return
     if (error) {
@@ -301,6 +301,15 @@ export default function Admin() {
     setBizActionError(null)
     setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, ai_unlimited: next } : b))
     setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, ai_unlimited: next } : prev)
+  }, [])
+
+  const toggleFree = useCallback(async (biz) => {
+    const next = !biz.is_free
+    const { error } = await supabase.from('businesses').update({ is_free: next }).eq('id', biz.id)
+    if (error) { setBizActionError('Modifica account omaggio non riuscita. Riprova.'); return }
+    setBizActionError(null)
+    setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, is_free: next } : b))
+    setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, is_free: next } : prev)
   }, [])
 
   const copyLink = useCallback((biz) => {
@@ -489,15 +498,16 @@ export default function Admin() {
   }), [businesses, statusFilter, search])
 
   /* ── Computed stats — memoized ── */
-  const { total, attivi, inTrial, trialScaduti, scaduti, mrr, convRate } = useMemo(() => {
+  const { total, attivi, inTrial, trialScaduti, scaduti, omaggio, mrr, convRate } = useMemo(() => {
     const tot     = businesses.length
     const act     = businesses.filter(b => getStatus(b) === 'active').length
     const tri     = businesses.filter(b => getStatus(b) === 'trial').length
     const triExp  = businesses.filter(b => getStatus(b) === 'trial_expired').length
     const exp     = businesses.filter(b => getStatus(b) === 'expired').length
+    const gift    = businesses.filter(b => getStatus(b) === 'gift').length
     const revenue = businesses.filter(b => getStatus(b) === 'active').reduce((s, b) => s + Number(b.plan_price ?? 99), 0)
     const base    = act + exp
-    return { total: tot, attivi: act, inTrial: tri, trialScaduti: triExp, scaduti: exp, mrr: revenue, convRate: base > 0 ? Math.round((act / base) * 100) : null }
+    return { total: tot, attivi: act, inTrial: tri, trialScaduti: triExp, scaduti: exp, omaggio: gift, mrr: revenue, convRate: base > 0 ? Math.round((act / base) * 100) : null }
   }, [businesses])
 
   if (denied) return (
@@ -548,13 +558,14 @@ export default function Admin() {
 
         {section === 'clienti' ? (
           <>
-            {/* Stats — 7 card */}
-            <div className="adm-stats adm-stats--7">
+            {/* Stats — 8 card */}
+            <div className="adm-stats adm-stats--8">
               <StatCard label="Clienti totali"      value={total}                        icon={<IconUsers />}  color="accent"  />
               <StatCard label="Attivi"              value={attivi}                       icon={<IconCheck />}  color="green"   />
               <StatCard label="In trial"            value={inTrial}                      icon={<IconClock />}  color="yellow"  />
               <StatCard label="Trial scaduti"       value={trialScaduti}                 icon={<IconPause />}  color="orange"  />
               <StatCard label="Disdetti"            value={scaduti}                      icon={<IconPause />}  color="gray"    />
+              <StatCard label="Omaggio"             value={omaggio}                      icon={<IconGift />}   color="pink"    />
               <StatCard label="MRR"                 value={`€${mrr.toFixed(0)}`}         icon={<IconEuro />}   color="purple"  />
               <StatCard label="Conversione trial"   value={convRate !== null ? `${convRate}%` : '—'} icon={<IconTrend />}  color="blue"    />
             </div>
@@ -902,6 +913,7 @@ export default function Admin() {
         trialDateSaved={trialDateSaved}
         onCopyLink={copyLink}
         onToggleAiUnlimited={toggleAiUnlimited}
+        onToggleFree={toggleFree}
         copied={copied}
         actionError={bizActionError}
         msgText={msgText}
@@ -940,7 +952,7 @@ export default function Admin() {
 }
 
 /* ── BusinessDrawer ── */
-function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, affiliate, trialDate, onTrialDateChange, onSaveTrialDate, trialDateSaving, trialDateSaved, copied, actionError, msgText, onMsgTextChange, msgUrl, onMsgUrlChange, msgLabel, onMsgLabelChange, msgSending, msgSent, onSendMessage }) {
+function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, onToggleFree, affiliate, trialDate, onTrialDateChange, onSaveTrialDate, trialDateSaving, trialDateSaved, copied, actionError, msgText, onMsgTextChange, msgUrl, onMsgUrlChange, msgLabel, onMsgLabelChange, msgSending, msgSent, onSendMessage }) {
   const status = getStatus(biz)
   const days   = trialDaysLeft(biz)
 
@@ -1064,6 +1076,22 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
                 </div>
               </>
             ) : null}
+          </div>
+
+          {/* Account omaggio — mai bloccato, mai conteggiato come pagante, mai
+              passa da Stripe (businessGate.js: isBusinessBlocked/getBusinessRealStatus). */}
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-title">Account</div>
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Account omaggio</span>
+              <button
+                className={`adm-ai-toggle ${biz.is_free ? 'adm-ai-toggle--on' : ''}`}
+                onClick={() => onToggleFree(biz)}
+                title={biz.is_free ? 'Disattiva account omaggio' : 'Attiva account omaggio'}
+              >
+                {biz.is_free ? 'ON' : 'OFF'}
+              </button>
+            </div>
           </div>
 
           {/* Utilizzo AI */}
@@ -1379,6 +1407,7 @@ function StatusBadge({ status }) {
     trial_expired: { label: 'Trial scaduto', cls: 'adm-badge--orange' },
     expired:       { label: 'Disdetto',      cls: 'adm-badge--red'    },
     suspended:     { label: 'Sospeso',       cls: 'adm-badge--gray'   },
+    gift:          { label: 'Omaggio',       cls: 'adm-badge--blue'   },
   }
   const { label, cls } = map[status] ?? { label: status, cls: 'adm-badge--gray' }
   return <span className={`adm-badge ${cls}`}>{label}</span>
@@ -1418,6 +1447,7 @@ function IconLock()         { return <svg width="32" height="32" viewBox="0 0 24
 function IconExternalLink() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> }
 function IconCopy()         { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> }
 function IconEuro()         { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10h12M4 14h12M19 6a7 7 0 1 0 0 12"/></svg> }
+function IconGift()         { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg> }
 function IconAlert()        { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> }
 function IconTrend()        { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> }
 function IconRefresh({ spin }) {

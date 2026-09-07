@@ -4781,6 +4781,11 @@ code {
   @media (max-width: 900px) { grid-template-columns: repeat(2, 1fr); }
   @media (max-width: 380px) { grid-template-columns: 1fr; }
 }
+.adm-stats.adm-stats--8 {
+  grid-template-columns: repeat(4, 1fr);
+  @media (max-width: 900px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 380px) { grid-template-columns: 1fr; }
+}
 
 .adm-stat {
   display: flex;
@@ -5134,6 +5139,7 @@ code {
 .adm-badge--orange { background: rgba(249,115,22,0.1);  color: #ea580c; border: 1px solid rgba(249,115,22,0.3); }
 .adm-badge--red    { background: rgba(239,68,68,0.1);   color: #dc2626; border: 1px solid rgba(239,68,68,0.25); }
 .adm-badge--gray   { background: var(--code-bg);        color: var(--text); border: 1px solid var(--border);   }
+.adm-badge--blue   { background: rgba(59,130,246,0.1);   color: #2563eb; border: 1px solid rgba(59,130,246,0.3); }
 
 /* Row actions */
 .adm-row-actions {
@@ -5339,6 +5345,7 @@ code {
 /* New stat colors */
 .adm-stat--purple .adm-stat-icon { background: rgba(168,85,247,0.12); color: #9333ea; }
 .adm-stat--blue   .adm-stat-icon { background: rgba(59,130,246,0.12); color: #2563eb; }
+.adm-stat--pink   .adm-stat-icon { background: rgba(236,72,153,0.12); color: #db2777; }
 
 /* Clickable biz cell */
 .adm-biz-cell--btn {
@@ -9152,6 +9159,7 @@ code {
 .af-status-dot--expired  { background: #ffedd5; color: #ea580c; }
 .af-status-dot--lost     { background: #fee2e2; color: #dc2626; }
 .af-status-dot--inactive { background: #f1f5f9; color: #64748b; }
+.af-status-dot--gift     { background: #dbeafe; color: #2563eb; }
 .af-client-commission { font-size: 12px; font-weight: 700; color: var(--text-h); white-space: nowrap; }
 
 /* Spinner */

@@ -15,8 +15,14 @@ export function isTrialExpiredUnpaid(business) {
 // Stato "reale" del business, unica fonte di verità per badge/filtri/contatori
 // ovunque venga mostrato lo stato (Admin, dashboard affiliato, ...): distingue
 // il trial scaduto MAI pagato ('trial_expired') dallo status DB grezzo 'expired'
-// (subscription Stripe cancellata — era cliente pagante, ha disdetto).
+// (subscription Stripe cancellata — era cliente pagante, ha disdetto), e un
+// account gratuito legittimo ('gift': amico, demo affiliato, omaggio — mai
+// stato cliente pagante, mai passato da Stripe) da un cliente vero 'active'.
+// Chiave 'gift' e non 'free' apposta: businesses.plan usa già 'free' con un
+// significato opposto (ex-cliente pagante che ha disdetto, degradato al piano
+// gratuito) — stessa stringa per due concetti opposti sarebbe fuorviante.
 export function getBusinessRealStatus(business) {
+  if (business?.is_free) return 'gift'
   if (isTrialExpiredUnpaid(business)) return 'trial_expired'
   return business?.status ?? 'trial'
 }
@@ -25,6 +31,7 @@ export function getBusinessRealStatus(business) {
 // Usata da ogni route autenticata che espone funzioni del business (Dashboard,
 // Settings, eventuali future) — cambiarla qui la cambia ovunque.
 export function isBusinessBlocked(business) {
+  if (business?.is_free) return false
   return business?.status === 'suspended'
     || business?.status === 'expired'
     || isTrialExpiredUnpaid(business)

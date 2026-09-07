@@ -13,6 +13,7 @@ const REAL_STATUS_META = {
   trial_expired: { label: 'Scaduto',  cls: 'af-status-dot--expired'  },
   expired:       { label: 'Perso',    cls: 'af-status-dot--lost'     },
   suspended:     { label: 'Sospeso',  cls: 'af-status-dot--inactive' },
+  gift:          { label: 'Omaggio',  cls: 'af-status-dot--gift'     },
 }
 
 export default function Affiliates() {
@@ -73,7 +74,7 @@ export default function Affiliates() {
         // commerciali, invece di affidarsi alla disciplina di questa select.
         supabase
           .from('businesses')
-          .select('id, name, city, status, trial_ends_at, stripe_subscription_id, affiliate_code, created_at')
+          .select('id, name, city, status, trial_ends_at, stripe_subscription_id, is_free, affiliate_code, created_at')
           .in('affiliate_code', [aff.code, `${aff.code}-on`])
           .order('created_at', { ascending: false }),
         supabase

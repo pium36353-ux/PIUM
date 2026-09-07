@@ -6,14 +6,18 @@ import { requestPermission, testNotification } from '../lib/notifications'
 import { subscribePush, unsubscribePush, isPushSubscribed } from '../lib/pushSubscription'
 import { translateError } from '../lib/errors'
 import { useStripeCheckout } from '../lib/useStripeCheckout'
-import { isBusinessBlocked } from '../lib/businessGate'
+import { isBusinessBlocked, getBusinessRealStatus } from '../lib/businessGate'
 import SubscriptionGate from '../components/SubscriptionGate'
 
 // Stati che possono raggiungere questa pagina: isBusinessBlocked intercetta
 // suspended/expired/trial_expired prima del render (vedi sotto), qui restano solo trial/active.
+// 'gift' (account omaggio, is_free=true) non passa mai dal gate ma va comunque
+// etichettato qui, altrimenti STATUS_LABEL[business.status] userebbe lo status
+// grezzo sottostante invece di segnalare che è un account gratuito.
 const STATUS_LABEL = {
   trial:  { label: 'Prova gratuita', cls: 'sett-badge--off' },
   active: { label: 'Attivo',         cls: 'sett-badge--on'  },
+  gift:   { label: 'Omaggio',        cls: 'sett-badge--off' },
 }
 
 const NOTIF_KEY = 'pium_notification_settings'
@@ -56,7 +60,7 @@ export default function Settings() {
       setUser(data.user)
       supabase
         .from('businesses')
-        .select('status, trial_ends_at, stripe_subscription_id')
+        .select('status, trial_ends_at, stripe_subscription_id, is_free')
         .eq('user_id', data.user.id)
         .maybeSingle()
         .then(({ data: biz }) => { if (alive && biz) setBusiness(biz) })
@@ -195,28 +199,39 @@ export default function Settings() {
           <div className="sett-section-header">
             <span className="sett-section-icon"><IconCard /></span>
             <h2 className="sett-section-title">Abbonamento</h2>
-            {business?.status && (
-              <span className={`sett-badge ${STATUS_LABEL[business.status]?.cls ?? 'sett-badge--off'}`}>
-                {STATUS_LABEL[business.status]?.label ?? business.status}
-              </span>
-            )}
+            {business && (() => {
+              const realStatus = getBusinessRealStatus(business)
+              return (
+                <span className={`sett-badge ${STATUS_LABEL[realStatus]?.cls ?? 'sett-badge--off'}`}>
+                  {STATUS_LABEL[realStatus]?.label ?? realStatus}
+                </span>
+              )
+            })()}
           </div>
 
-          <p className="sett-notif-hint">
-            {business?.status === 'active'
-              ? "Il tuo piano è attivo. Puoi comunque gestire l'abbonamento da qui in qualsiasi momento."
-              : 'Attiva o rinnova il piano PIUM per continuare a usare tutte le funzioni.'}
-          </p>
+          {business?.is_free ? (
+            <p className="sett-notif-hint">
+              Questo è un account omaggio: usi PIUM gratuitamente, nessun pagamento richiesto.
+            </p>
+          ) : (
+            <>
+              <p className="sett-notif-hint">
+                {business?.status === 'active'
+                  ? "Il tuo piano è attivo. Puoi comunque gestire l'abbonamento da qui in qualsiasi momento."
+                  : 'Attiva o rinnova il piano PIUM per continuare a usare tutte le funzioni.'}
+              </p>
 
-          <button
-            className="sett-btn-primary sett-btn-primary--full"
-            onClick={handleCheckout}
-            disabled={checkoutLoading}
-          >
-            <IconCard /> {checkoutLoading ? 'Caricamento…' : 'Attiva / Rinnova abbonamento'}
-          </button>
+              <button
+                className="sett-btn-primary sett-btn-primary--full"
+                onClick={handleCheckout}
+                disabled={checkoutLoading}
+              >
+                <IconCard /> {checkoutLoading ? 'Caricamento…' : 'Attiva / Rinnova abbonamento'}
+              </button>
 
-          {checkoutError && <p className="sett-error"><IconAlert /> {checkoutError}</p>}
+              {checkoutError && <p className="sett-error"><IconAlert /> {checkoutError}</p>}
+            </>
+          )}
         </section>
 
         {/* ── Notifiche ── */}
