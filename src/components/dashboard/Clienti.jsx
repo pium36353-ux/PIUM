@@ -26,22 +26,59 @@ function fmtCurrency(v) {
   return `€${Number(v).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
-// Parsa il testo di un file .vcf e restituisce array { name, phone }
+// Compone un nome leggibile dal campo N strutturato (RFC 6350:
+// Cognome;Nome;SecondoNome;Prefisso;Suffisso) quando FN manca — comune negli
+// export Google/Android/SIM, che spesso valorizzano solo N e lasciano FN vuota.
+function composeNameFromN(raw) {
+  if (!raw) return null
+  const [family, given] = raw.split(';').map(s => s.trim())
+  const name = [given, family].filter(Boolean).join(' ').trim()
+  return name || null
+}
+
+// Parsa il testo di un file .vcf e restituisce { contacts, skipped }.
+// Ogni vCard è isolata nel proprio try/catch: prima un'unica entry malformata
+// in mezzo al file (es. senza END:VCARD) faceva fallire VCard.parse() sull'
+// intero batch e l'unico try/catch globale azzerava TUTTI i contatti già
+// letti — con un file da centinaia di contatti, un solo errore in mezzo dava
+// import vuoto senza un motivo visibile. Isolando per singola vCard, una
+// entry rotta viene solo saltata (contata in `skipped`) e le altre restano.
 function parseVcfText(text) {
-  try {
-    // La libreria vcf richiede CRLF; normalizza LF → CRLF prima di parsare
-    const normalized = text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n')
-    const cards = VCard.parse(normalized)
-    return cards.map(card => {
-      const fnProp  = card.get('fn')
+  // La libreria vcf richiede CRLF; normalizza LF → CRLF prima di parsare
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n')
+  const chunks = normalized.split(/(?=BEGIN\:VCARD)/gi).filter(c => c.trim())
+
+  const contacts = []
+  let skipped = 0
+
+  for (const chunk of chunks) {
+    try {
+      const card = new VCard().parse(chunk)
+
+      const fnProp = card.get('fn')
+      const fn = (Array.isArray(fnProp) ? fnProp[0] : fnProp)?.valueOf()?.trim() || null
+
+      // Fallback su N solo se FN manca o è vuota — è la causa principale dei
+      // contatti persi: molti export hanno solo N, mai FN.
+      let name = fn
+      if (!name) {
+        const nProp = card.get('n')
+        const nRaw  = (Array.isArray(nProp) ? nProp[0] : nProp)?.valueOf()
+        name = composeNameFromN(nRaw)
+      }
+
+      if (!name) { skipped++; continue }   // né FN né N utilizzabili: scarta
+
       const telProp = card.get('tel')
-      const name = (Array.isArray(fnProp) ? fnProp[0] : fnProp)?.valueOf()?.trim() || null
-      const tel  = (Array.isArray(telProp) ? telProp[0] : telProp)?.valueOf()?.trim() || null
-      return { name: name || '—', phone: tel }
-    }).filter(c => c.name && c.name !== '—')
-  } catch {
-    return []
+      const tel = (Array.isArray(telProp) ? telProp[0] : telProp)?.valueOf()?.trim() || null
+
+      contacts.push({ name, phone: tel })
+    } catch {
+      skipped++   // vCard malformata: salta SOLO questa, non l'intero import
+    }
   }
+
+  return { contacts, skipped }
 }
 
 // Merge contatti importati + appuntamenti in un'unica lista deduplicata.
@@ -141,6 +178,7 @@ export default function Clienti({ business }) {
   const [showImport,     setShowImport]     = useState(false)
   const [importStep,     setImportStep]     = useState('choose') // 'choose' | 'preview' | 'done'
   const [previewList,    setPreviewList]    = useState([])       // { name, phone }[]
+  const [previewSkipped, setPreviewSkipped] = useState(0)        // vCard scartate (senza nome utilizzabile o malformate)
   const [previewSource,  setPreviewSource]  = useState('')
   const [importing,      setImporting]      = useState(false)
   const [importResult,   setImportResult]   = useState(null)     // { imported, skipped }
@@ -191,6 +229,7 @@ export default function Clienti({ business }) {
   const openImport = () => {
     setImportStep('choose')
     setPreviewList([])
+    setPreviewSkipped(0)
     setImportResult(null)
     setShowImport(true)
   }
@@ -259,6 +298,7 @@ export default function Clienti({ business }) {
         }))
         .filter(c => c.name && c.name !== '—')
       setPreviewList(parsed)
+      setPreviewSkipped(0)
       setPreviewSource('android_picker')
       setImportStep('preview')
     } catch {
@@ -272,8 +312,9 @@ export default function Clienti({ business }) {
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      const parsed = parseVcfText(ev.target.result)
-      setPreviewList(parsed)
+      const { contacts, skipped } = parseVcfText(ev.target.result)
+      setPreviewList(contacts)
+      setPreviewSkipped(skipped)
       setPreviewSource('vcf_import')
       setImportStep('preview')
     }
@@ -434,6 +475,11 @@ export default function Clienti({ business }) {
                     Trovati <strong>{previewList.length}</strong> {previewList.length === 1 ? 'contatto' : 'contatti'}
                     {previewList.length === 0 && ' — nessun contatto valido nel file.'}
                   </p>
+                  {previewSkipped > 0 && (
+                    <p className="cl-import-preview-skipped">
+                      {previewSkipped} {previewSkipped === 1 ? 'contatto scartato' : 'contatti scartati'} (senza nome utilizzabile o vCard non valida).
+                    </p>
+                  )}
                   {previewList.length > 0 && (
                     <div className="cl-import-preview-list">
                       {previewList.map((c, i) => (
