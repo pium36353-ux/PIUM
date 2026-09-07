@@ -335,12 +335,14 @@ export default function Agenda({ business, initialView = 'day' }) {
               .select('name, phone')
               .eq('business_id', business.id)
               .ilike('name', `%${val.trim()}%`)
-              .limit(5),
+              .order('name')
+              .limit(8),
             supabase.from('appointments')
               .select('client_name, client_phone')
               .eq('business_id', business.id)
               .ilike('client_name', `%${val.trim()}%`)
-              .limit(5),
+              .order('client_name')
+              .limit(8),
           ])
           const seen = new Map()
           for (const ct of (cts ?? [])) {
@@ -351,7 +353,9 @@ export default function Agenda({ business, initialView = 'day' }) {
             const key = apt.client_phone?.replace(/\s+/g, '') || '__' + apt.client_name.trim().toLowerCase()
             if (!seen.has(key)) seen.set(key, { name: apt.client_name, phone: apt.client_phone ?? null })
           }
-          const results = Array.from(seen.values()).slice(0, 3)
+          const results = Array.from(seen.values())
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .slice(0, 8)
           setSuggestions(results)
           setDropdownVisible(results.length > 0)
         } catch { /* silently fail */ }

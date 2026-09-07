@@ -10494,7 +10494,9 @@ code {
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   z-index: 200;
-  overflow: hidden;
+  max-height: 280px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .ag-suggest-item {
   display: flex;
