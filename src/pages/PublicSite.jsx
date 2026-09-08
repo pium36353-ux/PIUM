@@ -46,7 +46,7 @@ export default function PublicSite() {
       if (error || !biz) { setStatus('notfound'); return }
 
       const svcs = (biz.services ?? [])
-        .filter(s => s.is_available)
+        .filter(s => s.is_available && s.visible_on_public_site)
         .sort((a, b) => a.sort_order - b.sort_order)
 
       const rvs = (biz.reviews ?? [])

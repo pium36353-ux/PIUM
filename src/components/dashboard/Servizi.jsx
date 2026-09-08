@@ -9,6 +9,7 @@ const EMPTY_FORM = {
   price_label:  '',
   duration_min: '',
   is_available: true,
+  visible_on_public_site: true,
 }
 
 const PRICE_LABELS = ['', 'a partire da', 'fisso', 'per ora', 'a seduta', 'al mese', 'a persona']
@@ -70,6 +71,7 @@ export default function Servizi({ business }) {
       price_label:  s.price_label ?? '',
       duration_min: s.duration_min != null ? String(s.duration_min) : '',
       is_available: s.is_available,
+      visible_on_public_site: s.visible_on_public_site,
     })
     setErrors({})
     setEditingId(s.id)
@@ -107,6 +109,7 @@ export default function Servizi({ business }) {
       price_label:  form.price_label || null,
       duration_min: form.duration_min !== '' ? Number(form.duration_min) : null,
       is_available: form.is_available,
+      visible_on_public_site: form.visible_on_public_site,
     }
 
     if (modal === 'add') {
@@ -347,7 +350,7 @@ export default function Servizi({ business }) {
               <label className="sv-toggle-row">
                 <div className="sv-toggle-text">
                   <span className="sv-toggle-label">Servizio attivo</span>
-                  <span className="sv-toggle-hint">Visibile sulla pagina pubblica</span>
+                  <span className="sv-toggle-hint">Selezionabile in agenda e sul sito pubblico</span>
                 </div>
                 <button
                   type="button"
@@ -355,6 +358,24 @@ export default function Servizi({ business }) {
                   aria-checked={form.is_available}
                   className={`sv-toggle ${form.is_available ? 'sv-toggle--on' : ''}`}
                   onClick={() => setForm((f) => ({ ...f, is_available: !f.is_available }))}
+                >
+                  <span className="sv-toggle-thumb" />
+                </button>
+              </label>
+
+              {/* Toggle visibilità pubblica — indipendente da "Servizio attivo": permette
+                  di tenere un servizio usabile in agenda senza pubblicarlo sul sito. */}
+              <label className="sv-toggle-row">
+                <div className="sv-toggle-text">
+                  <span className="sv-toggle-label">Mostra sul sito pubblico</span>
+                  <span className="sv-toggle-hint">Se spento, resta selezionabile solo in agenda</span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.visible_on_public_site}
+                  className={`sv-toggle ${form.visible_on_public_site ? 'sv-toggle--on' : ''}`}
+                  onClick={() => setForm((f) => ({ ...f, visible_on_public_site: !f.visible_on_public_site }))}
                 >
                   <span className="sv-toggle-thumb" />
                 </button>
