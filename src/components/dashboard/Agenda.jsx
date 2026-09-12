@@ -1562,24 +1562,39 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                   }}
                 >
                   <div className="ag-apt-inner">
-                    {/* Ora + nome: SEMPRE su questa riga, in tutti i tier — è l'unico elemento
-                        mai negoziabile. Nome troncato solo in larghezza (ellissi), mai in altezza
-                        (vedi .ag-apt-client { flex-shrink: 0 } in index.css). Righe secondarie
-                        (servizio, dipendente, durata·prezzo) si aggiungono solo se lo spazio
-                        verticale residuo le contiene senza intaccare questa riga; altrimenti si
-                        nascondono del tutto — mai una riga tagliata a metà. Priorità: nome >
-                        servizio > dipendente > durata·prezzo (quest'ultima è la prima a sparire
-                        sui blocchi corti). */}
-                    <div className="ag-apt-compact-line">
-                      <span className={`ag-apt-time ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
-                      <span className="ag-apt-client">{apt.client_name}</span>
-                    </div>
+                    {/* Ora + nome: SEMPRE presenti, in tutti i tier — è l'unico elemento mai
+                        negoziabile. Su blocchi affiancati (isNarrow) l'orario e il nome NON
+                        condividono più la riga: l'orario resta una riga propria sottile, il nome
+                        prende tutta la larghezza del blocco e può andare su 2 righe (clamp) invece
+                        di troncare a una — condividere la riga con l'orario è ciò che sui blocchi
+                        stretti (2-3 affiancati, poca larghezza) riduceva il nome a 3-4 caratteri
+                        visibili. Sui blocchi larghi (non affiancati) resta la riga unica di sempre,
+                        che lì ha già margine a sufficienza. Nome troncato solo in larghezza/clamp,
+                        mai schiacciato in altezza (flex-shrink:0 su entrambe le varianti in
+                        index.css). Righe secondarie (servizio, dipendente, durata·prezzo) si
+                        aggiungono solo se lo spazio verticale residuo le contiene senza intaccare
+                        orario+nome; altrimenti si nascondono del tutto — mai una riga tagliata a
+                        metà. Priorità: orario > nome > servizio > dipendente > durata·prezzo
+                        (quest'ultima è la prima a sparire sui blocchi corti). */}
+                    {isNarrow ? (
+                      <>
+                        <span className={`ag-apt-time ag-apt-time--stacked ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
+                        <span className="ag-apt-client ag-apt-client--wrap">{apt.client_name}</span>
+                      </>
+                    ) : (
+                      <div className="ag-apt-compact-line">
+                        <span className={`ag-apt-time ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
+                        <span className="ag-apt-client">{apt.client_name}</span>
+                      </div>
+                    )}
                     {tier !== 'compact' && (() => {
                       // Stima conservativa dell'altezza (px) di ciascuna riga, inner padding
                       // incluso nella prima voce: se cambia il layout in index.css vanno
                       // ritoccate insieme. Meglio nascondere una riga in più che rischiare
-                      // di schiacciarne una in meno.
-                      const NAME_ROW_PX    = 22
+                      // di schiacciarne una in meno. Sui blocchi affiancati la prima voce riserva
+                      // sia la riga orario sia fino a 2 righe di nome (orario+nome non condividono
+                      // più la riga, quindi il budget iniziale è più alto).
+                      const NAME_ROW_PX    = isNarrow ? 42 : 22
                       const SERVICE_ROW_PX = 15
                       const EMP_ROW_PX     = 15
                       const DETAIL_ROW_PX  = 15
