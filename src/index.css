@@ -7027,7 +7027,7 @@ code {
 .ag-apt-btns {
   position: absolute;
   top: 2px;
-  right: 2px;
+  right: 24px;   /* lascia lo spazio alla striscia di conferma (.ag-apt-check-strip) a destra */
   z-index: 2;
   display: flex;
   gap: 2px;
@@ -7037,47 +7037,66 @@ code {
 
 .ag-apt:hover .ag-apt-btns { opacity: 1; }
 
-.ag-apt-btn-check {
-  width: 16px;
-  height: 16px;
-  border: 1.5px solid currentColor;
-  border-radius: 3px;
-  background: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text);
-  padding: 0;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
-
-  &:hover { border-color: #22c55e; color: #22c55e; }
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
-}
-
-.ag-apt-btn-check--on {
-  background: #22c55e;
-  border-color: #22c55e;
-  color: #fff;
-}
-
 @media (pointer: coarse) {
   .ag-apt-btns {
     opacity: 1;
-  }
-
-  .ag-apt-btn-check {
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    right: 34px;
   }
 
   .ag-apt-btn-del {
     width: 44px;
     height: 44px;
+  }
+}
+
+/* ── Spunta completamento: striscia stretta lungo tutto il bordo destro del
+   blocco, non più un pulsante fluttuante sopra il testo — libera larghezza
+   orizzontale per nome/servizio, specialmente sui blocchi affiancati
+   (.ag-apt--narrow). Stesso pattern show/hide di .ag-apt-btns: su desktop
+   compare solo in hover (nessun ingombro permanente quando non serve), su
+   touch è sempre visibile (non esiste hover). ── */
+.ag-apt-check-strip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  border: none;
+  border-left: 1px solid rgba(0,0,0,0.08);
+  background: rgba(0,0,0,0.02);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.1s, color 0.1s;
+}
+
+.ag-apt:hover .ag-apt-check-strip { opacity: 1; }
+
+.ag-apt-check-strip:hover     { background: rgba(34,197,94,0.15); color: #22c55e; }
+.ag-apt-check-strip:disabled  { opacity: 0.5; cursor: not-allowed; }
+
+.ag-apt-check-strip--on {
+  background: #22c55e;
+  border-left-color: #22c55e;
+  color: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ag-apt-check-strip {
+    border-left-color: rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+  }
+}
+
+@media (pointer: coarse) {
+  .ag-apt-check-strip {
+    width: 30px;
+    opacity: 1;
   }
 }
 
@@ -7132,6 +7151,14 @@ code {
   flex-shrink: 0;
 }
 
+.ag-apt-service {
+  font-size: 10px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .ag-apt-employee {
   font-size: 10px;
   font-weight: 600;
@@ -7171,12 +7198,14 @@ code {
    verticale se in futuro le si aggiungesse un overflow:hidden proprio. */
 .ag-apt-inner > .ag-apt-compact-line { flex-shrink: 0; }
 
-/* Su touch i bottoni (44px) sono sempre visibili e posizionati in absolute:
-   riserva un gutter a destra così ora/nome non finiscono mai sotto i bottoni.
-   Sui blocchi stretti c'è un solo bottone, quindi serve meno spazio. */
+/* Su touch la striscia di conferma (e, se non stretto, il bottone elimina)
+   sono sempre visibili e posizionati in absolute: riserva un gutter a destra
+   così ora/nome/servizio non finiscono mai sotto di loro. Sui blocchi stretti
+   c'è solo la striscia (il bottone elimina è nascosto), quindi serve molto
+   meno spazio — è il caso che beneficia di più della spunta spostata di lato. */
 @media (pointer: coarse) {
-  .ag-apt-inner                 { padding-right: 96px; }
-  .ag-apt--narrow .ag-apt-inner { padding-right: 50px; }
+  .ag-apt-inner                 { padding-right: 80px; }
+  .ag-apt--narrow .ag-apt-inner { padding-right: 36px; }
 }
 
 /* ── Smart Time ── */

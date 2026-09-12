@@ -1518,8 +1518,16 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
               // tier, così il layout a livelli non cambia.
               const isRunning = smartTimeEnabled && !!apt.actual_start_at && !apt.actual_end_at
               const timeLabel = isRunning ? `⏱ ${formatElapsed(apt.actual_start_at, now)}` : apt.start_time?.slice(0, 5)
+              // Servizio/i dell'appuntamento: fonte canonica è appointment_services (join già
+              // presente in loadAppointments, nessuna query aggiuntiva) — copre sia gli
+              // appuntamenti creati/modificati a mano in Agenda sia quelli confermati da una
+              // prenotazione (owner_confirm_booking popola sempre anche questa tabella).
+              // Fallback su bookings.services (singolo) solo per eventuali appuntamenti
+              // storici, antecedenti al multi-servizio, privi di righe in appointment_services.
+              const serviceNames = (apt.appointment_services ?? []).map(s => s.services?.name).filter(Boolean)
+              const serviceLabel = serviceNames.length > 0 ? serviceNames.join(', ') : (apt.bookings?.services?.name ?? null)
               const waReminderLink = apt.bookings?.customer_phone
-                ? buildWaLink(apt.bookings.customer_phone, `Ciao ${apt.client_name}, ti ricordiamo l'appuntamento di domani alle ${apt.start_time?.slice(0, 5)} per ${apt.bookings?.services?.name ?? 'il tuo appuntamento'}. A presto! — ${businessName}`)
+                ? buildWaLink(apt.bookings.customer_phone, `Ciao ${apt.client_name}, ti ricordiamo l'appuntamento di domani alle ${apt.start_time?.slice(0, 5)} per ${serviceLabel ?? 'il tuo appuntamento'}. A presto! — ${businessName}`)
                 : null
               return (
                 <div
@@ -1557,10 +1565,11 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                     {/* Ora + nome: SEMPRE su questa riga, in tutti i tier — è l'unico elemento
                         mai negoziabile. Nome troncato solo in larghezza (ellissi), mai in altezza
                         (vedi .ag-apt-client { flex-shrink: 0 } in index.css). Righe secondarie
-                        (dipendente, durata·prezzo) si aggiungono solo se lo spazio verticale
-                        residuo le contiene senza intaccare questa riga; altrimenti si nascondono
-                        del tutto — mai una riga tagliata a metà. Priorità: nome > dipendente >
-                        durata·prezzo (quest'ultima è la prima a sparire sui blocchi corti). */}
+                        (servizio, dipendente, durata·prezzo) si aggiungono solo se lo spazio
+                        verticale residuo le contiene senza intaccare questa riga; altrimenti si
+                        nascondono del tutto — mai una riga tagliata a metà. Priorità: nome >
+                        servizio > dipendente > durata·prezzo (quest'ultima è la prima a sparire
+                        sui blocchi corti). */}
                     <div className="ag-apt-compact-line">
                       <span className={`ag-apt-time ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
                       <span className="ag-apt-client">{apt.client_name}</span>
@@ -1570,15 +1579,19 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                       // incluso nella prima voce: se cambia il layout in index.css vanno
                       // ritoccate insieme. Meglio nascondere una riga in più che rischiare
                       // di schiacciarne una in meno.
-                      const NAME_ROW_PX   = 22
-                      const EMP_ROW_PX    = 15
-                      const DETAIL_ROW_PX = 15
+                      const NAME_ROW_PX    = 22
+                      const SERVICE_ROW_PX = 15
+                      const EMP_ROW_PX     = 15
+                      const DETAIL_ROW_PX  = 15
                       let remaining = height - NAME_ROW_PX
+                      const showService = !!serviceLabel && remaining >= SERVICE_ROW_PX
+                      if (showService) remaining -= SERVICE_ROW_PX
                       const showEmployee = !!apt.employees && remaining >= EMP_ROW_PX
                       if (showEmployee) remaining -= EMP_ROW_PX
                       const showDetail = (apt.price != null || apt.duration_minutes) && remaining >= DETAIL_ROW_PX
                       return (
                         <>
+                          {showService && <span className="ag-apt-service">{serviceLabel}</span>}
                           {showEmployee && (
                             <span className="ag-apt-employee" style={{ color: isDone ? '#22c55e' : color }}>
                               {apt.employees.name}
@@ -1603,25 +1616,30 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                       )
                     })()}
                   </div>
-                  {/* Bottoni in absolute (angolo alto-destra): non occupano spazio verticale,
-                      così ora+nome non vengono mai spinti fuori. Su blocchi stretti solo l'azione
-                      principale (completa); l'eliminazione resta accessibile aprendo il dettaglio. */}
-                  <div className="ag-apt-btns" onClick={e => e.stopPropagation()}>
-                    <button
-                      className={`ag-apt-btn-check ${isDone ? 'ag-apt-btn-check--on' : ''}`}
-                      onClick={e => { e.stopPropagation(); toggleCompleted(apt) }}
-                      disabled={togglingId === apt.id}
-                      title={isDone ? 'Annulla completamento' : 'Segna completato'}
-                    ><IconCheck /></button>
-                    {!isNarrow && (confirmDelId === apt.id ? (
-                      <>
-                        <button className="ag-apt-btn-del ag-apt-btn-del--confirm" onClick={e => { e.stopPropagation(); deleteAppointment(apt.id) }} title="Conferma"><IconCheck /></button>
-                        <button className="ag-apt-btn" onClick={e => { e.stopPropagation(); setConfirmDelId(null) }}><IconX /></button>
-                      </>
-                    ) : (
-                      <button className="ag-apt-btn-del" onClick={e => { e.stopPropagation(); setConfirmDelId(apt.id) }} title="Elimina"><IconTrash /></button>
-                    ))}
-                  </div>
+                  {/* Spunta completamento: striscia stretta lungo tutto il bordo destro del
+                      blocco (non più un bottone sopra il testo) — libera larghezza per
+                      nome/servizio, specialmente sui blocchi affiancati (isNarrow). Stessa
+                      funzione di sempre (toggleCompleted), solo posizione/forma cambiate. */}
+                  <button
+                    className={`ag-apt-check-strip ${isDone ? 'ag-apt-check-strip--on' : ''}`}
+                    onClick={e => { e.stopPropagation(); toggleCompleted(apt) }}
+                    disabled={togglingId === apt.id}
+                    title={isDone ? 'Annulla completamento' : 'Segna completato'}
+                  ><IconCheck /></button>
+                  {/* Eliminazione: resta un'azione secondaria in overlay in alto a destra,
+                      spostata a sinistra della striscia di conferma per non sovrapporsi. */}
+                  {!isNarrow && (
+                    <div className="ag-apt-btns" onClick={e => e.stopPropagation()}>
+                      {confirmDelId === apt.id ? (
+                        <>
+                          <button className="ag-apt-btn-del ag-apt-btn-del--confirm" onClick={e => { e.stopPropagation(); deleteAppointment(apt.id) }} title="Conferma"><IconCheck /></button>
+                          <button className="ag-apt-btn" onClick={e => { e.stopPropagation(); setConfirmDelId(null) }}><IconX /></button>
+                        </>
+                      ) : (
+                        <button className="ag-apt-btn-del" onClick={e => { e.stopPropagation(); setConfirmDelId(apt.id) }} title="Elimina"><IconTrash /></button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}
