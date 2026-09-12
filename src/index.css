@@ -7017,13 +7017,6 @@ code {
   box-sizing: border-box;
 }
 
-.ag-apt-top-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1px;
-}
-
 .ag-apt-time {
   font-size: 10px;
   font-weight: 600;
@@ -7131,6 +7124,12 @@ code {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* flex-shrink:0 annulla la "automatic minimum size: 0" che overflow:hidden
+     introduce nei figli di un flex column — senza, questa riga può essere
+     schiacciata in ALTEZZA quando il blocco è basso, mentre .ag-apt-detail
+     (che non ha overflow:hidden) resterebbe intatta. Il nome non deve mai
+     accorciarsi in altezza: solo in larghezza, con l'ellissi qui sopra. */
+  flex-shrink: 0;
 }
 
 .ag-apt-employee {
@@ -7165,6 +7164,12 @@ code {
 }
 .ag-apt-compact-line .ag-apt-time   { flex: 0 0 auto; }
 .ag-apt-compact-line .ag-apt-client { flex: 1 1 auto; min-width: 0; }
+
+/* La riga ora+nome (.ag-apt-compact-line) è ora usata in TUTTI i tier, non solo
+   in "compact": deve restare protetta anche nel flex column esterno
+   (.ag-apt-inner), altrimenti sarebbe lei stessa soggetta allo schiacciamento
+   verticale se in futuro le si aggiungesse un overflow:hidden proprio. */
+.ag-apt-inner > .ag-apt-compact-line { flex-shrink: 0; }
 
 /* Su touch i bottoni (44px) sono sempre visibili e posizionati in absolute:
    riserva un gutter a destra così ora/nome non finiscono mai sotto i bottoni.

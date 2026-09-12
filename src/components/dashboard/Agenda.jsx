@@ -1554,40 +1554,54 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                   }}
                 >
                   <div className="ag-apt-inner">
-                    {tier === 'compact' ? (
-                      // Compact: ora + nome su una riga. L'ora resta intera; il nome tronca con "…".
-                      <div className="ag-apt-compact-line">
-                        <span className={`ag-apt-time ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
-                        <span className="ag-apt-client">{apt.client_name}</span>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="ag-apt-top-row">
-                          <span className={`ag-apt-time ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
-                        </div>
-                        <span className="ag-apt-client">{apt.client_name}</span>
-                        {apt.employees && (
-                          <span className="ag-apt-employee" style={{ color: isDone ? '#22c55e' : color }}>
-                            {apt.employees.name}
-                          </span>
-                        )}
-                        {(apt.price != null || apt.duration_minutes) && (
-                          <span className="ag-apt-detail">
-                            {fmtDuration(apt.duration_minutes)}{apt.price != null ? ` · ${fmtCurrency(apt.price)}` : ''}
-                          </span>
-                        )}
-                        {tier === 'full' && apt.notes && <span className="ag-apt-notes">{apt.notes}</span>}
-                        {tier === 'full' && waReminderLink && (
-                          <a
-                            className="ag-apt-wa"
-                            href={waReminderLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                          >Promemoria</a>
-                        )}
-                      </>
-                    )}
+                    {/* Ora + nome: SEMPRE su questa riga, in tutti i tier — è l'unico elemento
+                        mai negoziabile. Nome troncato solo in larghezza (ellissi), mai in altezza
+                        (vedi .ag-apt-client { flex-shrink: 0 } in index.css). Righe secondarie
+                        (dipendente, durata·prezzo) si aggiungono solo se lo spazio verticale
+                        residuo le contiene senza intaccare questa riga; altrimenti si nascondono
+                        del tutto — mai una riga tagliata a metà. Priorità: nome > dipendente >
+                        durata·prezzo (quest'ultima è la prima a sparire sui blocchi corti). */}
+                    <div className="ag-apt-compact-line">
+                      <span className={`ag-apt-time ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
+                      <span className="ag-apt-client">{apt.client_name}</span>
+                    </div>
+                    {tier !== 'compact' && (() => {
+                      // Stima conservativa dell'altezza (px) di ciascuna riga, inner padding
+                      // incluso nella prima voce: se cambia il layout in index.css vanno
+                      // ritoccate insieme. Meglio nascondere una riga in più che rischiare
+                      // di schiacciarne una in meno.
+                      const NAME_ROW_PX   = 22
+                      const EMP_ROW_PX    = 15
+                      const DETAIL_ROW_PX = 15
+                      let remaining = height - NAME_ROW_PX
+                      const showEmployee = !!apt.employees && remaining >= EMP_ROW_PX
+                      if (showEmployee) remaining -= EMP_ROW_PX
+                      const showDetail = (apt.price != null || apt.duration_minutes) && remaining >= DETAIL_ROW_PX
+                      return (
+                        <>
+                          {showEmployee && (
+                            <span className="ag-apt-employee" style={{ color: isDone ? '#22c55e' : color }}>
+                              {apt.employees.name}
+                            </span>
+                          )}
+                          {showDetail && (
+                            <span className="ag-apt-detail">
+                              {fmtDuration(apt.duration_minutes)}{apt.price != null ? ` · ${fmtCurrency(apt.price)}` : ''}
+                            </span>
+                          )}
+                          {tier === 'full' && apt.notes && <span className="ag-apt-notes">{apt.notes}</span>}
+                          {tier === 'full' && waReminderLink && (
+                            <a
+                              className="ag-apt-wa"
+                              href={waReminderLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                            >Promemoria</a>
+                          )}
+                        </>
+                      )
+                    })()}
                   </div>
                   {/* Bottoni in absolute (angolo alto-destra): non occupano spazio verticale,
                       così ora+nome non vengono mai spinti fuori. Su blocchi stretti solo l'azione
