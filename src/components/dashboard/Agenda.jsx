@@ -1563,22 +1563,31 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                 >
                   <div className="ag-apt-inner">
                     {/* Ora + nome: SEMPRE presenti, in tutti i tier — è l'unico elemento mai
-                        negoziabile. Su blocchi affiancati (isNarrow) l'orario e il nome NON
-                        condividono più la riga: l'orario resta una riga propria sottile, il nome
-                        prende tutta la larghezza del blocco e può andare su 2 righe (clamp) invece
-                        di troncare a una — condividere la riga con l'orario è ciò che sui blocchi
-                        stretti (2-3 affiancati, poca larghezza) riduceva il nome a 3-4 caratteri
-                        visibili. Sui blocchi larghi (non affiancati) resta la riga unica di sempre,
-                        che lì ha già margine a sufficienza. Nome troncato solo in larghezza/clamp,
-                        mai schiacciato in altezza (flex-shrink:0 su entrambe le varianti in
-                        index.css). Righe secondarie (servizio, dipendente, durata·prezzo) si
-                        aggiungono solo se lo spazio verticale residuo le contiene senza intaccare
-                        orario+nome; altrimenti si nascondono del tutto — mai una riga tagliata a
-                        metà. Priorità: orario > nome > servizio > dipendente > durata·prezzo
-                        (quest'ultima è la prima a sparire sui blocchi corti). */}
+                        negoziabile. Su blocchi affiancati (isNarrow) la gerarchia è a 4 livelli:
+                        1) riga orario+dipendente (sempre presente, in alto, piccola): l'orario non
+                           si sacrifica mai, il dipendente sì (ellissi in larghezza se manca spazio
+                           — il colore del bordo del blocco comunica comunque di chi è); non pesa
+                           sulla catena di priorità verticale qui sotto perché vive sempre in questa
+                           riga, mai come riga a parte.
+                        2) nome cliente, mai sacrificato, fino a 2 righe (clamp) invece di troncare
+                           a una — condividere la riga con l'orario (come prima di questo fix) è ciò
+                           che sui blocchi stretti riduceva il nome a 3-4 caratteri visibili.
+                        3) servizio, mostrato se c'è spazio dopo 1+2.
+                        4) durata·prezzo, la prima a sparire se manca altezza.
+                        Sui blocchi larghi (non affiancati) resta la riga unica ora+nome di sempre,
+                        che lì ha già margine a sufficienza, con dipendente come riga secondaria
+                        propria (comportamento invariato). Nome troncato solo in larghezza/clamp,
+                        mai schiacciato in altezza (flex-shrink:0 in index.css). */}
                     {isNarrow ? (
                       <>
-                        <span className={`ag-apt-time ag-apt-time--stacked ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
+                        <div className="ag-apt-top-line">
+                          <span className={`ag-apt-time ${isRunning ? 'ag-apt-time--running' : ''}`}>{timeLabel}</span>
+                          {apt.employees && (
+                            <span className="ag-apt-employee" style={{ color: isDone ? '#22c55e' : color }}>
+                              {apt.employees.name}
+                            </span>
+                          )}
+                        </div>
                         <span className="ag-apt-client ag-apt-client--wrap">{apt.client_name}</span>
                       </>
                     ) : (
@@ -1592,7 +1601,7 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                       // incluso nella prima voce: se cambia il layout in index.css vanno
                       // ritoccate insieme. Meglio nascondere una riga in più che rischiare
                       // di schiacciarne una in meno. Sui blocchi affiancati la prima voce riserva
-                      // sia la riga orario sia fino a 2 righe di nome (orario+nome non condividono
+                      // sia la riga orario+dipendente sia fino a 2 righe di nome (non condividono
                       // più la riga, quindi il budget iniziale è più alto).
                       const NAME_ROW_PX    = isNarrow ? 42 : 22
                       const SERVICE_ROW_PX = 15
@@ -1601,7 +1610,10 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                       let remaining = height - NAME_ROW_PX
                       const showService = !!serviceLabel && remaining >= SERVICE_ROW_PX
                       if (showService) remaining -= SERVICE_ROW_PX
-                      const showEmployee = !!apt.employees && remaining >= EMP_ROW_PX
+                      // Sui blocchi affiancati il dipendente vive già nella riga 1 (sempre
+                      // presente, troncato in larghezza se serve): qui non ha bisogno di
+                      // budget verticale, esce dalla catena e non consuma spazio residuo.
+                      const showEmployee = !isNarrow && !!apt.employees && remaining >= EMP_ROW_PX
                       if (showEmployee) remaining -= EMP_ROW_PX
                       const showDetail = (apt.price != null || apt.duration_minutes) && remaining >= DETAIL_ROW_PX
                       return (

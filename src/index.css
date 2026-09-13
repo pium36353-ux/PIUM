@@ -7151,8 +7151,8 @@ code {
   flex-shrink: 0;
 }
 
-/* Variante per i blocchi affiancati (isNarrow): l'orario ha già la sua riga
-   propria (.ag-apt-time--stacked), quindi qui il nome non condivide più la
+/* Variante per i blocchi affiancati (isNarrow): il nome ha la sua riga
+   propria (sotto .ag-apt-top-line), quindi qui non condivide più la
    larghezza con nessuno — invece di troncare a una riga, va a capo su un
    massimo di 2 righe (line-clamp) e tronca solo se non basta neanche così.
    overflow:hidden è necessario per il clamp e reintroduce lo stesso rischio
@@ -7167,11 +7167,21 @@ code {
   line-height: 1.25;
 }
 
-/* Orario "impilato" sopra il nome sui blocchi affiancati, invece che in riga
-   con lui — è la riga che libera tutta la larghezza per il nome sotto. */
-.ag-apt-time--stacked {
+/* Riga 1 dei blocchi affiancati: orario + dipendente fianco a fianco, sopra
+   al nome. L'orario non si accorcia mai (flex 0 0 auto); il dipendente è
+   sacrificabile e tronca con ellissi se manca spazio — il colore del bordo
+   del blocco identifica comunque il dipendente anche col nome troncato.
+   flex-shrink:0 sulla riga intera la protegge dallo schiacciamento verticale
+   (stesso principio di .ag-apt-inner > .ag-apt-compact-line). */
+.ag-apt-top-line {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
   flex-shrink: 0;
 }
+.ag-apt-top-line .ag-apt-time     { flex: 0 0 auto; }
+.ag-apt-top-line .ag-apt-employee { flex: 1 1 auto; min-width: 0; }
 
 .ag-apt-service {
   font-size: 10px;
