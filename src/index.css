@@ -7183,12 +7183,24 @@ code {
 .ag-apt-top-line .ag-apt-time     { flex: 0 0 auto; }
 .ag-apt-top-line .ag-apt-employee { flex: 1 1 auto; min-width: 0; }
 
+/* overflow:hidden (per l'ellissi) azzera la "dimensione minima automatica" di
+   un figlio di flex-column — senza flex-shrink:0 il motore flex può
+   schiacciarlo fino a farlo sparire quando il contenuto totale eccede di poco
+   il blocco, MENTRE un fratello senza overflow:hidden (es. .ag-apt-detail)
+   resta intatto perché non può scendere sotto la sua dimensione naturale.
+   Risultato osservato: durata·prezzo "vince" sempre su servizio anche quando
+   la catena di priorità in JS dice showService=true — non è una questione di
+   ordine/posizione, è che solo il servizio poteva essere compresso. Stessa
+   identica protezione già usata per .ag-apt-client va data a ogni riga
+   secondaria con overflow:hidden, altrimenti bypassano silenziosamente la
+   priorità decisa in JS. */
 .ag-apt-service {
   font-size: 10px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .ag-apt-employee {
@@ -7197,11 +7209,19 @@ code {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .ag-apt-detail {
   font-size: 10px;
   color: var(--text);
+  /* Nessun overflow:hidden qui (testo breve, non serve ellissi) — di suo è già
+     "protetta" per lo stesso motivo per cui va protetto chi ha overflow:hidden
+     (min-size automatica = natural size, non zero). flex-shrink:0 esplicito
+     comunque, per non lasciare la sua sicurezza implicita in un dettaglio
+     della spec: se in futuro le si aggiungesse un overflow:hidden, non
+     tornerebbe a "rubare" spazio al servizio in silenzio. */
+  flex-shrink: 0;
 }
 
 .ag-apt-notes {
@@ -7211,6 +7231,7 @@ code {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 /* Vista Giorno — riga compatta (blocchi corti): ora + nome su una riga.
