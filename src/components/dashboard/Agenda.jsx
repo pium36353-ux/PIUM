@@ -1606,7 +1606,11 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                       const NAME_ROW_PX    = isNarrow ? 42 : 22
                       const SERVICE_ROW_PX = 15
                       const EMP_ROW_PX     = 15
-                      const DETAIL_ROW_PX  = 15
+                      // Sugli affiancati durata·prezzo è l'informazione meno preziosa (la durata
+                      // si intuisce dall'altezza del blocco, il prezzo lo sa già il commerciante):
+                      // richiede più margine libero del servizio, non solo la stessa soglia, così
+                      // nei casi limite (spazio per una sola riga extra) vince sempre il servizio.
+                      const DETAIL_ROW_PX  = isNarrow ? 24 : 15
                       let remaining = height - NAME_ROW_PX
                       const showService = !!serviceLabel && remaining >= SERVICE_ROW_PX
                       if (showService) remaining -= SERVICE_ROW_PX
