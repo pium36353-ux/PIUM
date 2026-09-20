@@ -152,7 +152,7 @@ export default function PublicSite() {
     return () => {
       alive = false
       document.title = 'PIUM'
-      const staticDesc = 'PIUM — Sito web, prenotazioni online e AI per attività locali italiane. 99,99€/mese, 14 giorni gratis.'
+      const staticDesc = 'PIUM — Sito web, prenotazioni online e AI per attività locali italiane. 49,99€/mese, 30 giorni gratis.'
       const descEl = document.head.querySelector('meta[name="description"]')
       if (descEl) descEl.setAttribute('content', staticDesc)
       ;['og:title', 'og:description', 'og:image', 'og:url', 'og:type'].forEach(k => {

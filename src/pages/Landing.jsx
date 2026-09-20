@@ -139,7 +139,7 @@ const FAQS = [
   },
   {
     q: 'Quanto costa?',
-    a: 'Piano unico 99,99 €/mese, tutto incluso, senza commissioni sulle prenotazioni. Prova 14 giorni. Promo founder per i primi clienti.',
+    a: 'Piano unico 49,99 €/mese, tutto incluso, senza commissioni sulle prenotazioni. Prova 30 giorni. Promo founder per i primi clienti.',
   },
 ]
 
@@ -198,7 +198,7 @@ export default function Landing() {
             </div>
 
             <div className="ln-hero-proof">
-              <span><IconCheck /> Prova 14 giorni</span>
+              <span><IconCheck /> Prova 30 giorni</span>
               <span className="ln-proof-sep" aria-hidden="true">·</span>
               <span><IconCheck /> Si usa anche come app dal telefono</span>
             </div>
@@ -315,7 +315,7 @@ export default function Landing() {
             <p className="ln-section-eyebrow">Prezzo</p>
             <h2 className="ln-section-title">Un piano, tutto incluso</h2>
             <p className="ln-section-sub">
-              Senza commissioni, senza sorprese. La prova la fai con calma per 14 giorni.
+              Senza commissioni, senza sorprese. La prova la fai con calma per 30 giorni.
             </p>
           </div>
 
@@ -325,12 +325,12 @@ export default function Landing() {
                 <div>
                   <div className="ln-price-amount-row">
                     <span className="ln-price-currency">€</span>
-                    <span className="ln-price-amount">99,99</span>
+                    <span className="ln-price-amount">49,99</span>
                     <span className="ln-price-period">/mese</span>
                   </div>
                 </div>
                 <div className="ln-price-badge">
-                  <IconClock /> 14 giorni di prova
+                  <IconClock /> 30 giorni di prova
                 </div>
               </div>
 

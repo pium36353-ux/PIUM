@@ -235,7 +235,7 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats, commByBusine
               {copied === 'direct' ? '✓ Copiato' : 'Copia link'}
             </button>
           </div>
-          <p className="af-link-hint">Il cliente paga 99,99€/mese · Tu guadagni 29,99€/mese*</p>
+          <p className="af-link-hint">Il cliente paga 49,99€/mese · Tu guadagni il 30% (circa 15€/mese)*</p>
         </div>
 
         <div className="af-link-block">
@@ -246,7 +246,7 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats, commByBusine
               {copied === 'online' ? '✓ Copiato' : 'Copia link'}
             </button>
           </div>
-          <p className="af-link-hint">Il cliente paga 69,99€/mese · Tu guadagni 19,99€/mese*</p>
+          <p className="af-link-hint">Il cliente paga 29,99€/mese · Tu guadagni il 30% (circa 9€/mese)*</p>
         </div>
 
         <p className="af-link-hint">
@@ -254,8 +254,8 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats, commByBusine
           Chi si registra tramite questi link viene associato al tuo account.
         </p>
         <p className="af-link-note">
-          *Commissione piena per i primi 12 mesi; dal 13° mese 15€/mese finché il cliente
-          resta abbonato (assistenza continuativa).
+          *Commissione pari al 30% del canone del cliente per i primi 12 mesi; dal 13° mese
+          15% finché il cliente resta abbonato (assistenza continuativa).
         </p>
       </div>
 
@@ -275,7 +275,7 @@ function Dashboard({ affiliate, clients, copied, onCopy, commStats, commByBusine
                   </div>
                   <div className="af-client-badges">
                     <ChannelBadge affiliateCode={c.affiliate_code} />
-                    <RealStatusBadge status={getBusinessRealStatus(c)} />
+                    <RealStatusBadge business={c} />
                   </div>
                   <div className="af-client-footer">
                     <span className="af-client-commission">
@@ -305,12 +305,37 @@ function ChannelBadge({ affiliateCode }) {
       className="af-plan-badge"
       style={isOn ? { background: '#dbeafe', color: '#1e40af' } : { background: '#ede9fe', color: '#5b21b6' }}
     >
-      {isOn ? 'Scontato · 69,99€' : 'Pieno · 99,99€'}
+      {isOn ? 'Scontato · 29,99€' : 'Pieno · 49,99€'}
     </span>
   )
 }
 
-function RealStatusBadge({ status }) {
+// Giorno corrente del trial (1-based, mai oltre la durata totale) a partire
+// da created_at — non hardcoded a 30: se un domani la durata standard cambia,
+// o un admin allunga/accorcia trial_ends_at per un singolo business (già
+// possibile da Admin.jsx), il denominatore si adatta da solo.
+function trialProgress(business) {
+  const start = business?.created_at ? new Date(business.created_at) : null
+  const end   = business?.trial_ends_at ? new Date(business.trial_ends_at) : null
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null
+  const totalDays = Math.max(1, Math.round((end - start) / 86400000))
+  const dayNow     = Math.min(totalDays, Math.max(1, Math.floor((Date.now() - start) / 86400000) + 1))
+  return { dayNow, totalDays }
+}
+
+function RealStatusBadge({ business }) {
+  const status = getBusinessRealStatus(business)
+
+  if (status === 'trial') {
+    const progress = trialProgress(business)
+    const label = progress ? `In prova (giorno ${progress.dayNow}/${progress.totalDays})` : REAL_STATUS_META.trial.label
+    return <span className={`af-status-dot ${REAL_STATUS_META.trial.cls}`}>{label}</span>
+  }
+
+  if (status === 'active') {
+    return <span className={`af-status-dot ${REAL_STATUS_META.active.cls}`}>Convertito</span>
+  }
+
   const meta = REAL_STATUS_META[status] ?? REAL_STATUS_META.trial
   return <span className={`af-status-dot ${meta.cls}`}>{meta.label}</span>
 }

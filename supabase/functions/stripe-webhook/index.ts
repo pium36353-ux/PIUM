@@ -1,16 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // ── Commissioni affiliato — UNICO punto di configurazione (facile da modificare) ──
-const COMMISSION_TIER_MONTHS = 12      // mesi 1..12 tariffa piena; oltre, tariffa ridotta (nessun cap)
-const COMMISSION_FULL  = 29.99         // canale FULL (cliente paga 99,99€), mesi 1..12
-const COMMISSION_ON    = 19.99         // canale ON  (cliente paga 69,99€), mesi 1..12
-const COMMISSION_LATE  = 15.00         // qualsiasi canale, mesi > 12 (commissione a vita)
+const COMMISSION_TIER_MONTHS = 12      // mesi 1..12 percentuale piena; oltre, percentuale ridotta (nessun cap)
+const COMMISSION_RATE_FULL   = 0.30    // 30% dell'importo REALMENTE fatturato (invoice.amount_paid), mesi 1..12
+const COMMISSION_RATE_LATE   = 0.15    // 15% dell'importo fatturato, mesi > 12 (commissione a vita)
 
-// Tier deciso dal suffisso "-on" del codice (robusto, a prova di IVA/proration),
-// non da amount_paid. Oltre i 12 mesi vale la tariffa ridotta per entrambi i canali.
-function commissionFor(hadOnSuffix: boolean, monthNumber: number): number {
-  if (monthNumber > COMMISSION_TIER_MONTHS) return COMMISSION_LATE
-  return hadOnSuffix ? COMMISSION_ON : COMMISSION_FULL
+// Commissione come percentuale dell'importo davvero fatturato su questa invoice
+// (amountPaidCents = invoice.amount_paid, in centesimi) — non più un importo fisso
+// per canale: canale FULL/ON pagano prezzi diversi, quindi la commissione differisce
+// già di conseguenza, senza bisogno di una tariffa separata per canale.
+function commissionFor(amountPaidCents: number, monthNumber: number): number {
+  const rate = monthNumber > COMMISSION_TIER_MONTHS ? COMMISSION_RATE_LATE : COMMISSION_RATE_FULL
+  return Math.round((amountPaidCents / 100) * rate * 100) / 100
 }
 
 // Verify Stripe webhook signature using Web Crypto (no SDK needed)
@@ -217,7 +218,7 @@ Deno.serve(async (req) => {
       const customerId     = invoice['customer']     as string | null
       const invoiceId      = invoice['id']           as string | null
       const subscriptionId = invoice['subscription'] as string | null
-      const amountPaid     = (invoice['amount_paid'] as number | null) ?? null   // centesimi, solo per cross-check nei log
+      const amountPaid     = (invoice['amount_paid'] as number | null) ?? null   // centesimi — base di calcolo della commissione (non più solo un log di cross-check)
 
       if (!customerId || !invoiceId) {
         console.log('invoice.paid: missing customer or invoice id, skipping')
@@ -291,6 +292,13 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ received: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
 
+      // Senza un importo reale non c'è base di calcolo: meglio non registrare una
+      // commissione a zero (silenziosamente sbagliata) che inserirla comunque.
+      if (amountPaid == null || amountPaid <= 0) {
+        console.log(`invoice.paid: amount_paid mancante o zero per invoice ${invoiceId}, skipping commission`)
+        return new Response(JSON.stringify({ received: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+
       const { count, error: countErr } = await supabase
         .from('affiliate_commissions')
         .select('*', { count: 'exact', head: true })
@@ -301,10 +309,10 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ received: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
 
-      // Nessun cap: la commissione continua finché il cliente paga (mesi >12 → tariffa ridotta).
+      // Nessun cap: la commissione continua finché il cliente paga (mesi >12 → percentuale ridotta).
       const existingCount = count ?? 0
       const monthNumber   = existingCount + 1
-      const commission    = commissionFor(hadOnSuffix, monthNumber)
+      const commission    = commissionFor(amountPaid, monthNumber)
 
       const { error: insertErr } = await supabase
         .from('affiliate_commissions')
@@ -324,8 +332,8 @@ Deno.serve(async (req) => {
           console.error('invoice.paid: insert error (non-blocking):', insertErr)
         }
       } else {
-        // amountPaid è un cross-check: canale=ON atteso ~6999, FULL atteso ~9999 (al netto di IVA/proration).
-        console.log(`invoice.paid: commission €${commission} (month ${monthNumber}, ${hadOnSuffix ? 'ON' : 'FULL'}, amount_paid=${amountPaid}) recorded for business ${biz.id}, affiliate ${aff.id}`)
+        const ratePct = monthNumber > COMMISSION_TIER_MONTHS ? COMMISSION_RATE_LATE * 100 : COMMISSION_RATE_FULL * 100
+        console.log(`invoice.paid: commission €${commission} (${ratePct}% of amount_paid=${amountPaid} cents, month ${monthNumber}, canale ${hadOnSuffix ? 'ON' : 'FULL'}) recorded for business ${biz.id}, affiliate ${aff.id}`)
       }
     }
 

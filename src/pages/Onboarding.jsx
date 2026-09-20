@@ -166,7 +166,7 @@ export default function Onboarding() {
           city:                form.city.trim(),
           affiliate_code:      affiliateCode,
           status:              'trial',
-          trial_ends_at:       new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+          trial_ends_at:       new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         })
         .select('id')
         .single()

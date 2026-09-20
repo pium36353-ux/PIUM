@@ -409,7 +409,7 @@ export default function Dashboard() {
                     ? <>Il tuo periodo gratuito scade il <strong>{formatTrialEnd(business.trial_ends_at)}</strong> —</>
                     : <>Stai usando PIUM in prova gratuita —</>
                   }
-                  {' '}Attiva il piano a <strong>99€/mese</strong>
+                  {' '}Attiva il piano a <strong>49,99€/mese</strong>
                 </span>
               </div>
               <button
