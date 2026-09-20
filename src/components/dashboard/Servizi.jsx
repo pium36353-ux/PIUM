@@ -10,9 +10,14 @@ const EMPTY_FORM = {
   duration_min: '',
   is_available: true,
   visible_on_public_site: true,
+  color:        null,
 }
 
 const PRICE_LABELS = ['', 'a partire da', 'fisso', 'per ora', 'a seduta', 'al mese', 'a persona']
+
+// Stessa palette già usata in Agenda.jsx per il colore dei dipendenti (.ag-swatch) —
+// duplicata qui perché non esiste ancora una costante condivisa tra i due file.
+const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f43f5e','#84cc16','#a78bfa']
 
 function formatDuration(min) {
   if (!min) return null
@@ -72,6 +77,7 @@ export default function Servizi({ business }) {
       duration_min: s.duration_min != null ? String(s.duration_min) : '',
       is_available: s.is_available,
       visible_on_public_site: s.visible_on_public_site,
+      color:        s.color ?? null,
     })
     setErrors({})
     setEditingId(s.id)
@@ -110,6 +116,7 @@ export default function Servizi({ business }) {
       duration_min: form.duration_min !== '' ? Number(form.duration_min) : null,
       is_available: form.is_available,
       visible_on_public_site: form.visible_on_public_site,
+      color:        form.color || null,
     }
 
     if (modal === 'add') {
@@ -194,6 +201,7 @@ export default function Servizi({ business }) {
             <div key={s.id} className={`sv-row ${!s.is_available ? 'sv-row--inactive' : ''}`}>
               <div className="sv-row-main">
                 <div className="sv-row-top">
+                  {s.color && <span className="sv-color-dot" style={{ background: s.color }} />}
                   <span className="sv-name">{s.name}</span>
                   <div className="sv-row-badges">
                     {s.price != null && (
@@ -344,6 +352,29 @@ export default function Servizi({ business }) {
                   </span>
                 </div>
                 {errors.duration_min && <p className="sv-field-error">{errors.duration_min}</p>}
+              </div>
+
+              {/* Colore — puramente identificativo (es. mostrato in agenda accanto al
+                  servizio); facoltativo, nessun comportamento cambia se non impostato. */}
+              <div className="sv-field">
+                <label className="sv-label">Colore <span className="sv-optional">(facoltativo)</span></label>
+                <div className="ag-palette">
+                  <button
+                    type="button"
+                    className={`sv-color-none ${!form.color ? 'sv-color-none--active' : ''}`}
+                    onClick={() => setForm(f => ({ ...f, color: null }))}
+                    title="Nessun colore"
+                  >✕</button>
+                  {COLORS.map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`ag-swatch ${form.color === c ? 'ag-swatch--active' : ''}`}
+                      style={{ background: c }}
+                      onClick={() => setForm(f => ({ ...f, color: c }))}
+                    />
+                  ))}
+                </div>
               </div>
 
               {/* Toggle attivo */}

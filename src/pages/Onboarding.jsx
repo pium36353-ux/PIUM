@@ -17,6 +17,7 @@ const CATEGORIES = [
   { value: 'Professionista',   emoji: '💼' },
   { value: 'Medico / Dentista',emoji: '🏥' },
   { value: 'Albergo / B&B',    emoji: '🏨' },
+  { value: 'Toelettatura',     emoji: '🐾' },
   { value: 'Altro',            emoji: '📌' },
 ]
 

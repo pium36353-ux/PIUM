@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
-import { buildWaLink } from '../../lib/phone'
+import { buildWaLink, normalizePhone } from '../../lib/phone'
 
 /* ── Helpers ── */
 function todayStr() {
@@ -31,21 +31,40 @@ function formatDateForLabel(dateStr) {
 export default function PromemoriaClienti({ business }) {
   const [date,         setDate]         = useState(todayStr())
   const [appointments, setAppointments] = useState([])
+  const [contacts,     setContacts]     = useState([])
   const [loading,      setLoading]      = useState(true)
 
   const load = useCallback(async (signal = null) => {
     if (!business) return
     setLoading(true)
-    const { data } = await supabase
-      .from('appointments')
-      .select('id, client_name, client_phone, start_time, appointment_services(services(name))')
-      .eq('business_id', business.id)
-      .eq('date', date)
-      .order('start_time', { ascending: true })
+    const [{ data }, { data: cts }] = await Promise.all([
+      supabase
+        .from('appointments')
+        .select('id, client_name, client_phone, start_time, appointment_services(services(name))')
+        .eq('business_id', business.id)
+        .eq('date', date)
+        .order('start_time', { ascending: true }),
+      // Solo per il nome visualizzato nei messaggi (Task 3d) — mai per l'agenda interna.
+      supabase
+        .from('contacts')
+        .select('phone, display_name')
+        .eq('business_id', business.id)
+        .not('display_name', 'is', null),
+    ])
     if (signal?.cancelled) return
     setAppointments(data ?? [])
+    setContacts(cts ?? [])
     setLoading(false)
   }, [business, date])
+
+  const displayNameByPhone = useMemo(() => {
+    const map = new Map()
+    for (const c of contacts) {
+      const key = normalizePhone(c.phone)
+      if (key && c.display_name?.trim()) map.set(key, c.display_name.trim())
+    }
+    return map
+  }, [contacts])
 
   useEffect(() => {
     const signal = { cancelled: false }
@@ -95,9 +114,12 @@ export default function PromemoriaClienti({ business }) {
         <div className="pmc-list">
           {appointments.map(apt => {
             const serviceName = apt.appointment_services?.[0]?.services?.name ?? null
+            // Task 3d: nel messaggio verso il cliente si usa display_name se impostato;
+            // l'etichetta a schermo (per il titolare) resta sempre il nome reale.
+            const displayName = displayNameByPhone.get(normalizePhone(apt.client_phone)) ?? apt.client_name
             const waLink = buildWaLink(
               apt.client_phone,
-              `Ciao ${apt.client_name}, ti ricordo l'appuntamento del ${messageDateLabel} alle ${apt.start_time?.slice(0, 5)} presso ${business.name}.`
+              `Ciao ${displayName}, ti ricordo l'appuntamento del ${messageDateLabel} alle ${apt.start_time?.slice(0, 5)} presso ${business.name}.`
             )
             return (
               <div key={apt.id} className="pmc-row">

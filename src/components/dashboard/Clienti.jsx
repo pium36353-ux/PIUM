@@ -2,6 +2,12 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import VCard from 'vcf'
 import { normalizePhone, buildWaLink } from '../../lib/phone'
+import PetBoneIcon from '../PetBoneIcon'
+
+const EMPTY_PET = { name: '', breed: '', coat: '', gender: 'non_specificato', weight_note: '' }
+const COAT_OPTIONS   = ['corto', 'medio', 'lungo']
+const GENDER_OPTIONS = ['non_specificato', 'maschio', 'femmina']
+const GENDER_PET_LABELS = { non_specificato: 'Non specificato', maschio: 'Maschio', femmina: 'Femmina' }
 
 const MONTHS = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic']
 
@@ -98,6 +104,7 @@ function groupClients(appointments, contacts = []) {
         source:       ct.source ?? 'manual',
         contactId:    ct.id,
         notes:        ct.notes || '',
+        displayName:  ct.display_name || '',
         appointments: [],
         spent:        0,
         firstVisit:   null,
@@ -195,7 +202,7 @@ export default function Clienti({ business }) {
         .order('date', { ascending: false }),
       supabase
         .from('contacts')
-        .select('id, name, phone, email, notes, source')
+        .select('id, name, phone, email, notes, source, display_name')
         .eq('business_id', business.id)
         .order('name'),
     ]).then(([{ data: apts }, { data: cts }]) => {
@@ -241,7 +248,7 @@ export default function Clienti({ business }) {
   const reloadContacts = async () => {
     const { data: cts } = await supabase
       .from('contacts')
-      .select('id, name, phone, email, notes, source')
+      .select('id, name, phone, email, notes, source, display_name')
       .eq('business_id', business.id)
       .order('name')
     setContacts(cts ?? [])
@@ -279,7 +286,7 @@ export default function Clienti({ business }) {
     // Ricarica contacts
     const { data: updated } = await supabase
       .from('contacts')
-      .select('id, name, phone, email, notes, source')
+      .select('id, name, phone, email, notes, source, display_name')
       .eq('business_id', business.id)
       .order('name')
     setContacts(updated ?? [])
@@ -553,15 +560,58 @@ function ClientDrawer({ client, business, onClose, onReload }) {
   const waLink = buildWaLink(client.phone)
   const freq   = avgFrequency(client)
 
-  const [editName,  setEditName]  = useState(client.name  || '')
-  const [editPhone, setEditPhone] = useState(client.phone || '')
-  const [editNotes, setEditNotes] = useState(client.notes || '')
+  const [editName,        setEditName]        = useState(client.name  || '')
+  const [editPhone,       setEditPhone]       = useState(client.phone || '')
+  const [editNotes,       setEditNotes]       = useState(client.notes || '')
+  const [editDisplayName, setEditDisplayName] = useState(client.displayName || '')
   const [saving,    setSaving]    = useState(false)
   const [saveError, setSaveError] = useState(null)
 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting,      setDeleting]      = useState(false)
   const [deleteError,   setDeleteError]   = useState(null)
+
+  // Task 3b: animali agganciati a questo cliente per telefono (stesso
+  // identificativo di contacts/appointments, nessun nuovo sistema di ID).
+  const [pets,        setPets]        = useState([])
+  const [petsLoading, setPetsLoading] = useState(true)
+  const [newPet,      setNewPet]      = useState(EMPTY_PET)
+  const [showPetForm, setShowPetForm] = useState(false)
+  const [savingPet,   setSavingPet]   = useState(false)
+
+  const loadPets = async () => {
+    if (!client.phone) { setPets([]); setPetsLoading(false); return }
+    setPetsLoading(true)
+    const { data, error } = await supabase
+      .from('pets')
+      .select('id, name, breed, coat, gender, weight_note')
+      .eq('business_id', business.id)
+      .eq('client_phone', client.phone)
+    setPetsLoading(false)
+    if (error) { console.error('[loadPets]', error); return }
+    setPets(data ?? [])
+  }
+
+  useEffect(() => { loadPets() }, [client.phone]) // eslint-disable-line
+
+  const savePet = async () => {
+    if (!client.phone || !newPet.name.trim()) return
+    setSavingPet(true)
+    const { error } = await supabase.from('pets').insert({
+      business_id:  business.id,
+      client_phone: client.phone,
+      name:         newPet.name.trim(),
+      breed:        newPet.breed.trim() || null,
+      coat:         newPet.coat || null,
+      gender:       newPet.gender,
+      weight_note:  newPet.weight_note.trim() || null,
+    })
+    setSavingPet(false)
+    if (error) { console.error('[savePet]', error); return }
+    setNewPet(EMPTY_PET)
+    setShowPetForm(false)
+    loadPets()
+  }
 
   const apts = [...client.appointments]
     .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : b.start_time > a.start_time ? 1 : -1))
@@ -571,9 +621,10 @@ function ClientDrawer({ client, business, onClose, onReload }) {
     setSaveError(null)
     try {
       const payload = {
-        name:  editName.trim() || client.name,
-        phone: normalizePhone(editPhone) || null,
-        notes: editNotes.trim() || null,
+        name:         editName.trim() || client.name,
+        phone:        normalizePhone(editPhone) || null,
+        notes:        editNotes.trim() || null,
+        display_name: editDisplayName.trim() || null,
       }
       const { error } = client.contactId
         ? await supabase.from('contacts').update(payload).eq('id', client.contactId)
@@ -698,6 +749,17 @@ function ClientDrawer({ client, business, onClose, onReload }) {
                   placeholder="Preferenze, allergie, informazioni utili…"
                 />
               </div>
+              <div className="cl-edit-field">
+                <label className="cl-edit-label">Nome visualizzato <span className="sv-optional">(facoltativo)</span></label>
+                <input
+                  className="sv-input"
+                  type="text"
+                  value={editDisplayName}
+                  onChange={e => setEditDisplayName(e.target.value)}
+                  placeholder="es. soprannome — usato al posto del nome nei messaggi al cliente"
+                />
+                <p className="sv-field-hint">Se impostato, sostituisce il nome reale solo nei promemoria/messaggi WhatsApp inviati al cliente — qui in agenda resta sempre il nome vero.</p>
+              </div>
               {!editPhone.trim() && (
                 <p className="sv-field-hint">Aggiungi un numero di telefono per evitare duplicati tra omonimi.</p>
               )}
@@ -707,6 +769,78 @@ function ClientDrawer({ client, business, onClose, onReload }) {
               </button>
             </div>
           </div>
+
+          {/* Animali (Task 3b) — solo se il cliente ha un telefono salvato, che è
+              l'unico modo in cui un pet è agganciato a un cliente. Quelli già
+              registrati compaiono subito, mai da re-inserire da zero. */}
+          {client.phone && (
+            <div className="adm-drawer-section">
+              <div className="adm-drawer-section-title">Animali</div>
+              {petsLoading ? (
+                <p className="cl-apt-empty">Caricamento…</p>
+              ) : (
+                <>
+                  {pets.length > 0 && (
+                    <div className="ag-pet-chips">
+                      {pets.map(p => <PetBoneIcon key={p.id} name={p.name} gender={p.gender} />)}
+                    </div>
+                  )}
+                  {!showPetForm ? (
+                    <button type="button" className="ag-pet-add-btn" onClick={() => setShowPetForm(true)}>
+                      + Nuovo animale
+                    </button>
+                  ) : (
+                    <div className="ag-pet-form">
+                      <input
+                        className="sv-input"
+                        type="text"
+                        placeholder="Nome animale *"
+                        value={newPet.name}
+                        onChange={e => setNewPet(p => ({ ...p, name: e.target.value }))}
+                      />
+                      <input
+                        className="sv-input"
+                        type="text"
+                        placeholder="Razza (facoltativo)"
+                        value={newPet.breed}
+                        onChange={e => setNewPet(p => ({ ...p, breed: e.target.value }))}
+                      />
+                      <div className="sv-fields-row">
+                        <select
+                          className="sv-input sv-select"
+                          value={newPet.coat}
+                          onChange={e => setNewPet(p => ({ ...p, coat: e.target.value }))}
+                        >
+                          <option value="">Pelo — non specificato</option>
+                          {COAT_OPTIONS.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                        </select>
+                        <select
+                          className="sv-input sv-select"
+                          value={newPet.gender}
+                          onChange={e => setNewPet(p => ({ ...p, gender: e.target.value }))}
+                        >
+                          {GENDER_OPTIONS.map(g => <option key={g} value={g}>{GENDER_PET_LABELS[g]}</option>)}
+                        </select>
+                      </div>
+                      <input
+                        className="sv-input"
+                        type="text"
+                        placeholder="Peso/note (facoltativo)"
+                        value={newPet.weight_note}
+                        onChange={e => setNewPet(p => ({ ...p, weight_note: e.target.value }))}
+                      />
+                      <div className="ag-pet-form-actions">
+                        <button type="button" className="sv-btn-cancel" onClick={() => { setShowPetForm(false); setNewPet(EMPTY_PET) }}>Annulla</button>
+                        <button type="button" className="sv-btn-save" onClick={savePet} disabled={savingPet || !newPet.name.trim()}>
+                          {savingPet ? 'Salvataggio…' : 'Salva animale'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Storico appuntamenti */}
           <div className="adm-drawer-section">

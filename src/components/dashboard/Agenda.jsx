@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { notifyNextAppointment, scheduleAllTodayNotifications } from '../../lib/notifications'
 import { normalizePhone, buildWaLink } from '../../lib/phone'
+import PetBoneIcon from '../PetBoneIcon'
 
 const COLORS    = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f43f5e','#84cc16','#a78bfa']
 const DURATIONS = [15, 30, 45, 60, 90, 120]
@@ -28,6 +29,10 @@ const DAY_LETTER  = ['L','M','M','G','V','S','D']
 
 const EMPTY_FORM = { date: '', client_name: '', client_phone: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '', selected_services: [] }
 const EMPTY_EMP  = { name: '', color: COLORS[0] }
+const EMPTY_PET  = { name: '', breed: '', coat: '', gender: 'non_specificato', weight_note: '' }
+const COAT_OPTIONS   = ['corto', 'medio', 'lungo']
+const GENDER_OPTIONS = ['non_specificato', 'maschio', 'femmina']
+const GENDER_PET_LABELS = { non_specificato: 'Non specificato', maschio: 'Maschio', femmina: 'Femmina' }
 
 // Smart Time: oltre questa soglia un timer rimasto aperto non è più attendibile —
 // il recupero non propone più "conferma tempo trascorso", solo correzione manuale o scarto.
@@ -123,6 +128,15 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [suggestions,     setSuggestions]     = useState([])
   const [dropdownVisible, setDropdownVisible] = useState(false)
 
+  // Animali del cliente (Task 3b) e mappa telefono→nome visualizzato (Task 3d).
+  // Caricati una volta per business: dataset piccolo, evita un round-trip di
+  // rete a ogni cambio del campo telefono nel modulo appuntamento.
+  const [pets,          setPets]          = useState([])
+  const [contacts,      setContacts]      = useState([])
+  const [newPet,        setNewPet]        = useState(EMPTY_PET)
+  const [showPetForm,   setShowPetForm]   = useState(false)
+  const [savingPet,     setSavingPet]     = useState(false)
+
   const [showDatePicker,        setShowDatePicker]        = useState(false)
 
   const [pendingBookings,       setPendingBookings]       = useState([])
@@ -173,6 +187,34 @@ export default function Agenda({ business, initialView = 'day' }) {
     setEmployees(data ?? [])
   }, [business])
 
+  // Tutti i pet del business (non filtrati per telefono): il filtro per
+  // cliente avviene lato client, sincrono, quando si apre il modulo
+  // appuntamento — evita una query aggiuntiva ad ogni digitazione del telefono.
+  const loadPets = useCallback(async (signal = null) => {
+    if (!business) return
+    const { data, error } = await supabase
+      .from('pets')
+      .select('id, client_phone, name, breed, coat, gender, weight_note')
+      .eq('business_id', business.id)
+    if (signal?.cancelled) return
+    if (error) { console.error('[loadPets]', error); return }
+    setPets(data ?? [])
+  }, [business])
+
+  // Solo per il nome visualizzato (Task 3d) nei promemoria verso il cliente —
+  // mai usato per l'agenda interna, dove resta sempre il nome reale.
+  const loadContacts = useCallback(async (signal = null) => {
+    if (!business) return
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('phone, display_name')
+      .eq('business_id', business.id)
+      .not('display_name', 'is', null)
+    if (signal?.cancelled) return
+    if (error) { console.error('[loadContacts]', error); return }
+    setContacts(data ?? [])
+  }, [business])
+
   const loadServices = useCallback(async () => {
     if (!business) return
     setServicesLoading(true)
@@ -191,7 +233,7 @@ export default function Agenda({ business, initialView = 'day' }) {
     if (!business) return
     setLoading(true)
     let q = supabase.from('appointments')
-      .select('*, employees(name, color), bookings(customer_phone, services(name)), appointment_services(service_id, price_snapshot, duration_snapshot, services(name))')
+      .select('*, employees(name, color), bookings(customer_phone, services(name)), appointment_services(service_id, price_snapshot, duration_snapshot, services(name, color))')
       .eq('business_id', business.id)
     if (view === 'month') {
       const lastOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0)
@@ -243,6 +285,16 @@ export default function Agenda({ business, initialView = 'day' }) {
   }, [loadEmployees])
   useEffect(() => {
     const signal = { cancelled: false }
+    loadPets(signal)
+    return () => { signal.cancelled = true }
+  }, [loadPets])
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadContacts(signal)
+    return () => { signal.cancelled = true }
+  }, [loadContacts])
+  useEffect(() => {
+    const signal = { cancelled: false }
     loadAppointments(signal)
     return () => { signal.cancelled = true }
   }, [loadAppointments])
@@ -260,6 +312,17 @@ export default function Agenda({ business, initialView = 'day' }) {
   // Smart Time — UN SOLO interval globale per il cronometro che scorre, attivo solo
   // se c'è almeno un timer in corso NELLA VISTA CORRENTE e la modalità è attiva.
   // Pulito automaticamente (clearInterval) quando non serve più o al cambio pagina.
+  // Task 3d: nome alternativo per le comunicazioni verso il cliente (mai per
+  // l'agenda interna, dove il titolare deve sempre vedere il nome reale).
+  const displayNameByPhone = useMemo(() => {
+    const map = new Map()
+    for (const c of contacts) {
+      const key = normalizePhone(c.phone)
+      if (key && c.display_name?.trim()) map.set(key, c.display_name.trim())
+    }
+    return map
+  }, [contacts])
+
   const hasRunningTimer = useMemo(
     () => !!business?.smart_time_enabled && appointments.some(a => a.actual_start_at && !a.actual_end_at),
     [appointments, business?.smart_time_enabled]
@@ -279,6 +342,8 @@ export default function Agenda({ business, initialView = 'day' }) {
     setErrors({})
     setSuggestions([])
     setDropdownVisible(false)
+    setNewPet(EMPTY_PET)
+    setShowPetForm(false)
     setShowModal(true)
   }
   const openEditModal = async (apt, tappedTime = null) => {
@@ -304,6 +369,8 @@ export default function Agenda({ business, initialView = 'day' }) {
     setEditingId(apt.id)
     setAddAnotherTime(tappedTime ?? apt.start_time?.slice(0, 5) ?? '09:00')
     setErrors({})
+    setNewPet(EMPTY_PET)
+    setShowPetForm(false)
     setShowModal(true)
   }
   const closeModal = () => {
@@ -314,6 +381,8 @@ export default function Agenda({ business, initialView = 'day' }) {
     setEditingId(null)
     setAddAnotherTime(null)
     setShowDeleteConfirm(false)
+    setNewPet(EMPTY_PET)
+    setShowPetForm(false)
   }
   const setField = (f) => (e) => { setForm(p => ({ ...p, [f]: e.target.value })); setErrors(p => ({ ...p, [f]: null })) }
 
@@ -370,6 +439,29 @@ export default function Agenda({ business, initialView = 'day' }) {
       setSuggestions([])
       setDropdownVisible(false)
     } catch { /* silently fail */ }
+  }
+
+  // Task 3b: crea un nuovo animale agganciato al telefono già inserito nel
+  // modulo — nessun nuovo sistema di identificazione cliente, stesso
+  // client_phone normalizzato usato da contacts/appointments.
+  const savePet = async () => {
+    const phone = normalizePhone(form.client_phone)
+    if (!phone || !newPet.name.trim()) return
+    setSavingPet(true)
+    const { error } = await supabase.from('pets').insert({
+      business_id:  business.id,
+      client_phone: phone,
+      name:         newPet.name.trim(),
+      breed:        newPet.breed.trim() || null,
+      coat:         newPet.coat || null,
+      gender:       newPet.gender,
+      weight_note:  newPet.weight_note.trim() || null,
+    })
+    setSavingPet(false)
+    if (error) { console.error('[savePet]', error); return }
+    setNewPet(EMPTY_PET)
+    setShowPetForm(false)
+    loadPets()
   }
 
   const toggleService = (svc) => {
@@ -890,6 +982,7 @@ export default function Agenda({ business, initialView = 'day' }) {
             selectedDay={selectedDay}
             openingHours={business?.opening_hours}
             businessName={business?.name ?? ''}
+            displayNameByPhone={displayNameByPhone}
             scrollToTimeRef={scrollToTimeRef}
             now={now}
             smartTimeEnabled={!!business?.smart_time_enabled}
@@ -1110,6 +1203,80 @@ export default function Agenda({ business, initialView = 'day' }) {
                   )}
                 </div>
               </div>
+
+              {/* Animali del cliente (Task 3b) — visibili solo se è stato inserito un
+                  telefono, che è l'unico modo in cui un pet è agganciato a un cliente.
+                  Quelli già registrati compaiono subito (mai da re-inserire); "+ Nuovo
+                  animale" apre un mini-form solo per aggiungerne uno diverso. */}
+              {(() => {
+                const phoneKey = normalizePhone(form.client_phone)
+                if (!phoneKey) return null
+                const clientPets = pets.filter(p => p.client_phone === phoneKey)
+                return (
+                  <div className="sv-field">
+                    <label className="sv-label">Animali <span className="sv-optional">(facoltativo)</span></label>
+                    {clientPets.length > 0 && (
+                      <div className="ag-pet-chips">
+                        {clientPets.map(p => (
+                          <PetBoneIcon key={p.id} name={p.name} gender={p.gender} />
+                        ))}
+                      </div>
+                    )}
+                    {!showPetForm ? (
+                      <button type="button" className="ag-pet-add-btn" onClick={() => setShowPetForm(true)}>
+                        + Nuovo animale
+                      </button>
+                    ) : (
+                      <div className="ag-pet-form">
+                        <input
+                          className="sv-input"
+                          type="text"
+                          placeholder="Nome animale *"
+                          value={newPet.name}
+                          onChange={e => setNewPet(p => ({ ...p, name: e.target.value }))}
+                        />
+                        <input
+                          className="sv-input"
+                          type="text"
+                          placeholder="Razza (facoltativo)"
+                          value={newPet.breed}
+                          onChange={e => setNewPet(p => ({ ...p, breed: e.target.value }))}
+                        />
+                        <div className="sv-fields-row">
+                          <select
+                            className="sv-input sv-select"
+                            value={newPet.coat}
+                            onChange={e => setNewPet(p => ({ ...p, coat: e.target.value }))}
+                          >
+                            <option value="">Pelo — non specificato</option>
+                            {COAT_OPTIONS.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                          </select>
+                          <select
+                            className="sv-input sv-select"
+                            value={newPet.gender}
+                            onChange={e => setNewPet(p => ({ ...p, gender: e.target.value }))}
+                          >
+                            {GENDER_OPTIONS.map(g => <option key={g} value={g}>{GENDER_PET_LABELS[g]}</option>)}
+                          </select>
+                        </div>
+                        <input
+                          className="sv-input"
+                          type="text"
+                          placeholder="Peso/note (facoltativo)"
+                          value={newPet.weight_note}
+                          onChange={e => setNewPet(p => ({ ...p, weight_note: e.target.value }))}
+                        />
+                        <div className="ag-pet-form-actions">
+                          <button type="button" className="sv-btn-cancel" onClick={() => { setShowPetForm(false); setNewPet(EMPTY_PET) }}>Annulla</button>
+                          <button type="button" className="sv-btn-save" onClick={savePet} disabled={savingPet || !newPet.name.trim()}>
+                            {savingPet ? 'Salvataggio…' : 'Salva animale'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Services */}
               {(services.length > 0 || servicesLoading) && (
@@ -1405,7 +1572,7 @@ function buildClosedOverlays(openRanges) {
   return closed
 }
 
-function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName, scrollToTimeRef, now, smartTimeEnabled }) {
+function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName, displayNameByPhone, scrollToTimeRef, now, smartTimeEnabled }) {
   const wrapRef      = useRef(null)
   const touchStartY  = useRef(null)
 
@@ -1526,8 +1693,14 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
               // storici, antecedenti al multi-servizio, privi di righe in appointment_services.
               const serviceNames = (apt.appointment_services ?? []).map(s => s.services?.name).filter(Boolean)
               const serviceLabel = serviceNames.length > 0 ? serviceNames.join(', ') : (apt.bookings?.services?.name ?? null)
+              // Rappresentativo: se più servizi hanno colori diversi si mostra solo il
+              // primo impostato, per non affollare il blocco con più pallini.
+              const serviceColor = (apt.appointment_services ?? []).map(s => s.services?.color).find(Boolean) ?? null
+              // Task 3d: nel messaggio verso il cliente si usa display_name se il
+              // contatto ne ha uno impostato; in agenda (sopra) resta sempre il nome reale.
+              const reminderDisplayName = displayNameByPhone.get(normalizePhone(apt.bookings?.customer_phone)) ?? apt.client_name
               const waReminderLink = apt.bookings?.customer_phone
-                ? buildWaLink(apt.bookings.customer_phone, `Ciao ${apt.client_name}, ti ricordiamo l'appuntamento di domani alle ${apt.start_time?.slice(0, 5)} per ${serviceLabel ?? 'il tuo appuntamento'}. A presto! — ${businessName}`)
+                ? buildWaLink(apt.bookings.customer_phone, `Ciao ${reminderDisplayName}, ti ricordiamo l'appuntamento di domani alle ${apt.start_time?.slice(0, 5)} per ${serviceLabel ?? 'il tuo appuntamento'}. A presto! — ${businessName}`)
                 : null
               return (
                 <div
@@ -1622,7 +1795,12 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                       const showDetail = (apt.price != null || apt.duration_minutes) && remaining >= DETAIL_ROW_PX
                       return (
                         <>
-                          {showService && <span className="ag-apt-service">{serviceLabel}</span>}
+                          {showService && (
+                            <span className="ag-apt-service">
+                              {serviceColor && <span className="ag-apt-service-dot" style={{ background: serviceColor }} />}
+                              {serviceLabel}
+                            </span>
+                          )}
                           {showEmployee && (
                             <span className="ag-apt-employee" style={{ color: isDone ? '#22c55e' : color }}>
                               {apt.employees.name}

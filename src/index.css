@@ -7203,6 +7203,15 @@ code {
   flex-shrink: 0;
 }
 
+.ag-apt-service-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 3px;
+  flex-shrink: 0;
+}
+
 .ag-apt-employee {
   font-size: 10px;
   font-weight: 600;
@@ -7563,6 +7572,83 @@ code {
   border-color: var(--text-h);
   transform: scale(1.1);
 }
+
+/* Pallino "nessun colore" nel picker servizi — stesse dimensioni di .ag-swatch
+   per allinearsi visivamente nella stessa riga della palette. */
+.sv-color-none {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px dashed var(--border);
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: transform 0.1s, border-color 0.15s;
+
+  &:hover { transform: scale(1.15); }
+}
+.sv-color-none--active {
+  border-color: var(--text-h);
+  border-style: solid;
+  transform: scale(1.1);
+}
+
+/* Pallino colore accanto al nome servizio, in Servizi.jsx */
+.sv-color-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ag-pet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.ag-pet-add-btn {
+  background: none;
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  align-self: flex-start;
+}
+.ag-pet-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--code-bg);
+}
+.ag-pet-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Chip "osso" per gli animali del cliente (Clienti.jsx, Agenda.jsx) */
+.pet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pet-chip-name { color: var(--text-h); }
 
 .ag-emp-add-btn { align-self: flex-start; }
 
