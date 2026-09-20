@@ -5,6 +5,7 @@ import { logActivity } from '../../lib/activityLog'
 import { notifyNextAppointment, scheduleAllTodayNotifications } from '../../lib/notifications'
 import { normalizePhone, buildWaLink } from '../../lib/phone'
 import PetBoneIcon from '../PetBoneIcon'
+import { CoatBars, SizeBadge } from '../PetIndicators'
 
 const COLORS    = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f43f5e','#84cc16','#a78bfa']
 const DURATIONS = [15, 30, 45, 60, 90, 120]
@@ -27,10 +28,11 @@ const MONTHS      = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott'
 const DAY_FULL    = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato']
 const DAY_LETTER  = ['L','M','M','G','V','S','D']
 
-const EMPTY_FORM = { date: '', client_name: '', client_phone: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '', selected_services: [] }
+const EMPTY_FORM = { date: '', client_name: '', client_phone: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '', selected_services: [], pet_id: null }
 const EMPTY_EMP  = { name: '', color: COLORS[0] }
-const EMPTY_PET  = { name: '', breed: '', coat: '', gender: 'non_specificato', weight_note: '' }
+const EMPTY_PET  = { name: '', breed: '', coat: '', gender: 'non_specificato', weight_note: '', size: '' }
 const COAT_OPTIONS   = ['corto', 'medio', 'lungo']
+const SIZE_OPTIONS   = ['xs', 's', 'm', 'l', 'xl']
 const GENDER_OPTIONS = ['non_specificato', 'maschio', 'femmina']
 const GENDER_PET_LABELS = { non_specificato: 'Non specificato', maschio: 'Maschio', femmina: 'Femmina' }
 
@@ -128,11 +130,18 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [suggestions,     setSuggestions]     = useState([])
   const [dropdownVisible, setDropdownVisible] = useState(false)
 
-  // Animali del cliente (Task 3b) e mappa telefono→nome visualizzato (Task 3d).
-  // Caricati una volta per business: dataset piccolo, evita un round-trip di
-  // rete a ogni cambio del campo telefono nel modulo appuntamento.
-  const [pets,          setPets]          = useState([])
+  // Mappa telefono→nome visualizzato (Task 3d), caricata una volta per business.
   const [contacts,      setContacts]      = useState([])
+
+  // Ricerca pet cross-cliente (estensione Task 3b) + creazione nuovo pet.
+  // La ricerca è live (stesso pattern fuzzy di handleNameChange, non un
+  // filtro su un array precaricato): dataset potenzialmente grande a
+  // regime, non ha senso tenerlo tutto in memoria.
+  const [petSearch,          setPetSearch]          = useState('')
+  const [petResults,         setPetResults]         = useState([])
+  const [petDropdownVisible, setPetDropdownVisible] = useState(false)
+  const [selectedPet,        setSelectedPet]        = useState(null) // { id, name, gender } — solo per il chip di conferma
+  const petSearchTimerRef = useRef(null)
   const [newPet,        setNewPet]        = useState(EMPTY_PET)
   const [showPetForm,   setShowPetForm]   = useState(false)
   const [savingPet,     setSavingPet]     = useState(false)
@@ -187,24 +196,6 @@ export default function Agenda({ business, initialView = 'day' }) {
     setEmployees(data ?? [])
   }, [business])
 
-  // Tutti i pet del business (non filtrati per telefono): il filtro per
-  // cliente avviene lato client, sincrono, quando si apre il modulo
-  // appuntamento — evita una query aggiuntiva ad ogni digitazione del telefono.
-  // CORREZIONE: la sezione "Animali" è una funzione specifica del verticale
-  // toelettatura, non universale come inizialmente implementato — per
-  // qualunque altro business (incluso vertical mancante/non riconosciuto) non
-  // si interroga nemmeno la tabella pets, non solo non si mostra la UI.
-  const loadPets = useCallback(async (signal = null) => {
-    if (!business || business.vertical !== 'toelettatura') { setPets([]); return }
-    const { data, error } = await supabase
-      .from('pets')
-      .select('id, client_phone, name, breed, coat, gender, weight_note')
-      .eq('business_id', business.id)
-    if (signal?.cancelled) return
-    if (error) { console.error('[loadPets]', error); return }
-    setPets(data ?? [])
-  }, [business])
-
   // Solo per il nome visualizzato (Task 3d) nei promemoria verso il cliente —
   // mai usato per l'agenda interna, dove resta sempre il nome reale.
   const loadContacts = useCallback(async (signal = null) => {
@@ -237,7 +228,7 @@ export default function Agenda({ business, initialView = 'day' }) {
     if (!business) return
     setLoading(true)
     let q = supabase.from('appointments')
-      .select('*, employees(name, color), bookings(customer_phone, services(name)), appointment_services(service_id, price_snapshot, duration_snapshot, services(name, color))')
+      .select('*, employees(name, color), bookings(customer_phone, services(name)), appointment_services(service_id, price_snapshot, duration_snapshot, services(name, color)), pets(name, gender, coat, size)')
       .eq('business_id', business.id)
     if (view === 'month') {
       const lastOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0)
@@ -287,11 +278,6 @@ export default function Agenda({ business, initialView = 'day' }) {
     loadEmployees(signal)
     return () => { signal.cancelled = true }
   }, [loadEmployees])
-  useEffect(() => {
-    const signal = { cancelled: false }
-    loadPets(signal)
-    return () => { signal.cancelled = true }
-  }, [loadPets])
   useEffect(() => {
     const signal = { cancelled: false }
     loadContacts(signal)
@@ -348,6 +334,10 @@ export default function Agenda({ business, initialView = 'day' }) {
     setDropdownVisible(false)
     setNewPet(EMPTY_PET)
     setShowPetForm(false)
+    setPetSearch('')
+    setPetResults([])
+    setPetDropdownVisible(false)
+    setSelectedPet(null)
     setShowModal(true)
   }
   const openEditModal = async (apt, tappedTime = null) => {
@@ -355,10 +345,18 @@ export default function Agenda({ business, initialView = 'day' }) {
     await loadServices()
     setSuggestions([])
     setDropdownVisible(false)
-    const { data: aptSvcs } = await supabase
-      .from('appointment_services')
-      .select('service_id')
-      .eq('appointment_id', apt.id)
+    const [{ data: aptSvcs }, { data: linkedPet }] = await Promise.all([
+      supabase
+        .from('appointment_services')
+        .select('service_id')
+        .eq('appointment_id', apt.id),
+      // Se l'appuntamento ha già un pet collegato, recupera solo i suoi dati
+      // essenziali per precompilare ricerca + chip di conferma — nessun
+      // fetch di tutti i pet del business, la ricerca resta live e su richiesta.
+      apt.pet_id
+        ? supabase.from('pets').select('id, name, gender').eq('id', apt.pet_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
     setForm({
       date:             apt.date,
       client_name:      apt.client_name,
@@ -369,16 +367,22 @@ export default function Agenda({ business, initialView = 'day' }) {
       price:            apt.price != null ? String(apt.price) : '',
       notes:            apt.notes ?? '',
       selected_services: aptSvcs?.map(s => s.service_id) ?? [],
+      pet_id:           apt.pet_id ?? null,
     })
     setEditingId(apt.id)
     setAddAnotherTime(tappedTime ?? apt.start_time?.slice(0, 5) ?? '09:00')
     setErrors({})
     setNewPet(EMPTY_PET)
     setShowPetForm(false)
+    setPetSearch(linkedPet?.name ?? '')
+    setPetResults([])
+    setPetDropdownVisible(false)
+    setSelectedPet(linkedPet ?? null)
     setShowModal(true)
   }
   const closeModal = () => {
     clearTimeout(suggestTimerRef.current)
+    clearTimeout(petSearchTimerRef.current)
     setSuggestions([])
     setDropdownVisible(false)
     setShowModal(false)
@@ -387,6 +391,10 @@ export default function Agenda({ business, initialView = 'day' }) {
     setShowDeleteConfirm(false)
     setNewPet(EMPTY_PET)
     setShowPetForm(false)
+    setPetSearch('')
+    setPetResults([])
+    setPetDropdownVisible(false)
+    setSelectedPet(null)
   }
   const setField = (f) => (e) => { setForm(p => ({ ...p, [f]: e.target.value })); setErrors(p => ({ ...p, [f]: null })) }
 
@@ -452,7 +460,7 @@ export default function Agenda({ business, initialView = 'day' }) {
     const phone = normalizePhone(form.client_phone)
     if (!phone || !newPet.name.trim()) return
     setSavingPet(true)
-    const { error } = await supabase.from('pets').insert({
+    const { data: created, error } = await supabase.from('pets').insert({
       business_id:  business.id,
       client_phone: phone,
       name:         newPet.name.trim(),
@@ -460,12 +468,97 @@ export default function Agenda({ business, initialView = 'day' }) {
       coat:         newPet.coat || null,
       gender:       newPet.gender,
       weight_note:  newPet.weight_note.trim() || null,
-    })
+      size:         newPet.size || null,
+    }).select('id, name, gender').single()
     setSavingPet(false)
     if (error) { console.error('[savePet]', error); return }
     setNewPet(EMPTY_PET)
     setShowPetForm(false)
-    loadPets()
+    // Il pet appena creato diventa subito quello collegato a questo
+    // appuntamento — non ha senso crearlo e lasciarlo non selezionato.
+    setForm(p => ({ ...p, pet_id: created.id }))
+    setPetSearch(created.name)
+    setPetResults([])
+    setPetDropdownVisible(false)
+    setSelectedPet(created)
+  }
+
+  // Ricerca pet cross-cliente per nome (estensione Task 3b), stesso pattern
+  // fuzzy debounced già usato in handleNameChange per contacts/appointments —
+  // qui su pets.name (indice trigram idx_pets_name_trgm). Se l'utente digita
+  // più di una parola, la prima filtra il nome del pet, il resto — se
+  // presente — restringe lato client per nome proprietario, per disambiguare
+  // pet omonimi senza introdurre una seconda tabella/UI di ricerca.
+  const handlePetSearchChange = (e) => {
+    const val = e.target.value
+    setPetSearch(val)
+    setForm(p => ({ ...p, pet_id: null })) // digitare di nuovo invalida la selezione precedente
+    setSelectedPet(null)
+    clearTimeout(petSearchTimerRef.current)
+    const trimmed = val.trim()
+    if (trimmed.length < 2) {
+      setPetResults([])
+      setPetDropdownVisible(false)
+      return
+    }
+    petSearchTimerRef.current = setTimeout(async () => {
+      try {
+        const [petTerm, ...ownerTerms] = trimmed.split(/\s+/)
+        const ownerFilter = ownerTerms.join(' ').toLowerCase()
+
+        const { data: matchedPets, error } = await supabase
+          .from('pets')
+          .select('id, name, client_phone, gender, coat, size')
+          .eq('business_id', business.id)
+          .ilike('name', `%${petTerm}%`)
+          .order('name')
+          .limit(20)
+        if (error || !matchedPets?.length) {
+          setPetResults([])
+          setPetDropdownVisible(false)
+          return
+        }
+
+        // Nessuna FK pets→contacts (agganciato solo per telefono, come
+        // appointments): il nome del proprietario si risolve con lo stesso
+        // merge contacts+appointments già usato per l'autocomplete del nome
+        // cliente — contacts vince se presente, altrimenti l'ultimo
+        // appuntamento noto per quel telefono.
+        const phones = [...new Set(matchedPets.map(p => p.client_phone).filter(Boolean))]
+        const [{ data: cts }, { data: apts }] = await Promise.all([
+          supabase.from('contacts').select('name, phone').eq('business_id', business.id).in('phone', phones),
+          supabase.from('appointments').select('client_name, client_phone').eq('business_id', business.id).in('client_phone', phones),
+        ])
+        const ownerByPhone = new Map()
+        for (const apt of (apts ?? [])) {
+          if (apt.client_phone && !ownerByPhone.has(apt.client_phone)) ownerByPhone.set(apt.client_phone, apt.client_name)
+        }
+        for (const ct of (cts ?? [])) {
+          if (ct.phone) ownerByPhone.set(ct.phone, ct.name)
+        }
+
+        let results = matchedPets.map(p => ({ ...p, ownerName: ownerByPhone.get(p.client_phone) ?? null }))
+        if (ownerFilter) {
+          results = results.filter(r => r.ownerName?.toLowerCase().includes(ownerFilter))
+        }
+        results = results.slice(0, 8)
+        setPetResults(results)
+        setPetDropdownVisible(results.length > 0)
+      } catch { /* silently fail, stessa politica di handleNameChange */ }
+    }, 200)
+  }
+
+  const selectPetResult = (pet) => {
+    setForm(p => ({
+      ...p,
+      pet_id:       pet.id,
+      client_name:  pet.ownerName || p.client_name,
+      client_phone: pet.client_phone || p.client_phone,
+    }))
+    setPetSearch(pet.name)
+    setPetResults([])
+    setPetDropdownVisible(false)
+    setSelectedPet({ id: pet.id, name: pet.name, gender: pet.gender })
   }
 
   const toggleService = (svc) => {
@@ -529,6 +622,7 @@ export default function Agenda({ business, initialView = 'day' }) {
         duration_minutes: Number(form.duration_minutes),
         price:            form.price !== '' ? Number(form.price) : null,
         notes:            form.notes.trim() || null,
+        pet_id:           form.pet_id || null,
       }
 
       let appointmentId = editingId
@@ -987,6 +1081,7 @@ export default function Agenda({ business, initialView = 'day' }) {
             openingHours={business?.opening_hours}
             businessName={business?.name ?? ''}
             displayNameByPhone={displayNameByPhone}
+            isGroomingVertical={business?.vertical === 'toelettatura'}
             scrollToTimeRef={scrollToTimeRef}
             now={now}
             smartTimeEnabled={!!business?.smart_time_enabled}
@@ -1208,29 +1303,50 @@ export default function Agenda({ business, initialView = 'day' }) {
                 </div>
               </div>
 
-              {/* Animali del cliente (Task 3b) — visibili solo se è stato inserito un
-                  telefono, che è l'unico modo in cui un pet è agganciato a un cliente.
-                  Quelli già registrati compaiono subito (mai da re-inserire); "+ Nuovo
-                  animale" apre un mini-form solo per aggiungerne uno diverso. */}
+              {/* Ricerca pet (estensione Task 3b) — cerca tra TUTTI i pet del business
+                  (non solo del cliente corrente), per nome, con disambiguazione per
+                  proprietario/telefono quando più pet condividono lo stesso nome.
+                  Selezionandone uno si precompilano nome/telefono cliente e si collega
+                  pet_id all'appuntamento. Resta possibile creare un pet nuovo da zero. */}
               {(() => {
-                // CORREZIONE: funzione specifica del verticale toelettatura — per
-                // qualunque altro valore di business.vertical (incluso 'generico',
-                // vuoto o non riconosciuto) questo blocco non deve montare alcun nodo
-                // nel DOM, non solo restare nascosto via CSS. Il return null qui sotto
-                // interrompe la funzione PRIMA che PetBoneIcon o qualunque elemento
-                // "pet" venga anche solo valutato da React.
+                // Funzione specifica del verticale toelettatura — per qualunque altro
+                // valore di business.vertical (incluso 'generico', vuoto o non
+                // riconosciuto) questo blocco non deve montare alcun nodo nel DOM, non
+                // solo restare nascosto via CSS. Il return null qui sotto interrompe la
+                // funzione PRIMA che PetBoneIcon o qualunque elemento "pet" venga anche
+                // solo valutato da React.
                 if (business?.vertical !== 'toelettatura') return null
-                const phoneKey = normalizePhone(form.client_phone)
-                if (!phoneKey) return null
-                const clientPets = pets.filter(p => p.client_phone === phoneKey)
                 return (
-                  <div className="sv-field">
-                    <label className="sv-label">Animali <span className="sv-optional">(facoltativo)</span></label>
-                    {clientPets.length > 0 && (
-                      <div className="ag-pet-chips">
-                        {clientPets.map(p => (
-                          <PetBoneIcon key={p.id} name={p.name} gender={p.gender} />
+                  <div className="sv-field" style={{ position: 'relative' }}>
+                    <label className="sv-label">Animale <span className="sv-optional">(facoltativo)</span></label>
+                    <input
+                      className="sv-input"
+                      type="text"
+                      value={petSearch}
+                      onChange={handlePetSearchChange}
+                      onBlur={() => setTimeout(() => setPetDropdownVisible(false), 150)}
+                      placeholder="Cerca per nome animale (es. Fido)…"
+                      autoComplete="off"
+                    />
+                    {petDropdownVisible && petResults.length > 0 && (
+                      <div className="ag-suggest-dropdown">
+                        {petResults.map(p => (
+                          <div
+                            key={p.id}
+                            className="ag-suggest-item"
+                            onMouseDown={() => selectPetResult(p)}
+                          >
+                            <span className="ag-suggest-name">
+                              {p.name}{p.ownerName ? ` — ${p.ownerName}` : ''}
+                            </span>
+                            {p.client_phone && <span className="ag-suggest-phone">{p.client_phone}</span>}
+                          </div>
                         ))}
+                      </div>
+                    )}
+                    {selectedPet && (
+                      <div className="ag-pet-chips" style={{ marginTop: 8 }}>
+                        <PetBoneIcon name={selectedPet.name} gender={selectedPet.gender} />
                       </div>
                     )}
                     {!showPetForm ? (
@@ -1270,6 +1386,14 @@ export default function Agenda({ business, initialView = 'day' }) {
                             {GENDER_OPTIONS.map(g => <option key={g} value={g}>{GENDER_PET_LABELS[g]}</option>)}
                           </select>
                         </div>
+                        <select
+                          className="sv-input sv-select"
+                          value={newPet.size}
+                          onChange={e => setNewPet(p => ({ ...p, size: e.target.value }))}
+                        >
+                          <option value="">Taglia — non specificata</option>
+                          {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+                        </select>
                         <input
                           className="sv-input"
                           type="text"
@@ -1583,7 +1707,7 @@ function buildClosedOverlays(openRanges) {
   return closed
 }
 
-function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName, displayNameByPhone, scrollToTimeRef, now, smartTimeEnabled }) {
+function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, openEditModal, toggleCompleted, deleteAppointment, setConfirmDelId, selectedDay, openingHours, businessName, displayNameByPhone, isGroomingVertical, scrollToTimeRef, now, smartTimeEnabled }) {
   const wrapRef      = useRef(null)
   const touchStartY  = useRef(null)
 
@@ -1707,6 +1831,11 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
               // Rappresentativo: se più servizi hanno colori diversi si mostra solo il
               // primo impostato, per non affollare il blocco con più pallini.
               const serviceColor = (apt.appointment_services ?? []).map(s => s.services?.color).find(Boolean) ?? null
+              // Estensione Task 3: pet collegato all'appuntamento, solo per business
+              // toelettatura — per qualunque altro valore di isGroomingVertical (incluso
+              // un pet_id impostato su un business non-toelettatura, caso limite) resta
+              // sempre null e nessun elemento "pet" viene costruito più sotto.
+              const pet = isGroomingVertical ? apt.pets : null
               // Task 3d: nel messaggio verso il cliente si usa display_name se il
               // contatto ne ha uno impostato; in agenda (sopra) resta sempre il nome reale.
               const reminderDisplayName = displayNameByPhone.get(normalizePhone(apt.bookings?.customer_phone)) ?? apt.client_name
@@ -1790,6 +1919,7 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                       const NAME_ROW_PX    = isNarrow ? 42 : 22
                       const SERVICE_ROW_PX = 15
                       const EMP_ROW_PX     = 15
+                      const PET_ROW_PX     = 15
                       // Sugli affiancati durata·prezzo è l'informazione meno preziosa (la durata
                       // si intuisce dall'altezza del blocco, il prezzo lo sa già il commerciante):
                       // richiede più margine libero del servizio, non solo la stessa soglia, così
@@ -1803,6 +1933,11 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                       // budget verticale, esce dalla catena e non consuma spazio residuo.
                       const showEmployee = !isNarrow && !!apt.employees && remaining >= EMP_ROW_PX
                       if (showEmployee) remaining -= EMP_ROW_PX
+                      // Stessa priorità del servizio: informazione di contesto
+                      // dell'appuntamento, non l'identità del cliente — si nasconde se
+                      // manca spazio, ma prima di durata·prezzo (la meno importante).
+                      const showPet = !!pet && remaining >= PET_ROW_PX
+                      if (showPet) remaining -= PET_ROW_PX
                       const showDetail = (apt.price != null || apt.duration_minutes) && remaining >= DETAIL_ROW_PX
                       return (
                         <>
@@ -1811,6 +1946,13 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                               {serviceColor && <span className="ag-apt-service-dot" style={{ background: serviceColor }} />}
                               {serviceLabel}
                             </span>
+                          )}
+                          {showPet && (
+                            <div className="ag-apt-pet-row">
+                              <PetBoneIcon name={pet.name} gender={pet.gender} />
+                              <CoatBars coat={pet.coat} />
+                              <SizeBadge size={pet.size} />
+                            </div>
                           )}
                           {showEmployee && (
                             <span className="ag-apt-employee" style={{ color: isDone ? '#22c55e' : color }}>

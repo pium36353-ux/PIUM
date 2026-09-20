@@ -7650,6 +7650,27 @@ code {
 }
 .pet-chip-name { color: var(--text-h); }
 
+.pet-size-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Riga indicatori toelettatura sul blocco appuntamento (Agenda.jsx, vista
+   giorno): pet + pelo + taglia insieme, stessa priorità del servizio nella
+   catena "si nasconde se manca spazio". */
+.ag-apt-pet-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .ag-emp-add-btn { align-self: flex-start; }
 
 .ag-phone-row {
