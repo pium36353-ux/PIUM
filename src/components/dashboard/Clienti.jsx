@@ -579,6 +579,9 @@ function ClientDrawer({ client, business, onClose, onReload }) {
   const [newPet,      setNewPet]      = useState(EMPTY_PET)
   const [showPetForm, setShowPetForm] = useState(false)
   const [savingPet,   setSavingPet]   = useState(false)
+  const [editingPetId,     setEditingPetId]     = useState(null)   // null = form di creazione, altrimenti id del pet in modifica
+  const [confirmDeletePetId, setConfirmDeletePetId] = useState(null)
+  const [deletingPetId,      setDeletingPetId]      = useState(null)
 
   // CORREZIONE: funzione specifica del verticale toelettatura — per qualunque
   // altro business (incluso vertical mancante/non riconosciuto) non si
@@ -601,20 +604,56 @@ function ClientDrawer({ client, business, onClose, onReload }) {
   const savePet = async () => {
     if (!client.phone || !newPet.name.trim()) return
     setSavingPet(true)
-    const { error } = await supabase.from('pets').insert({
-      business_id:  business.id,
-      client_phone: client.phone,
-      name:         newPet.name.trim(),
-      breed:        newPet.breed.trim() || null,
-      coat:         newPet.coat || null,
-      gender:       newPet.gender,
-      weight_note:  newPet.weight_note.trim() || null,
-      size:         newPet.size || null,
-    })
+    const payload = {
+      name:        newPet.name.trim(),
+      breed:       newPet.breed.trim() || null,
+      coat:        newPet.coat || null,
+      gender:      newPet.gender,
+      weight_note: newPet.weight_note.trim() || null,
+      size:        newPet.size || null,
+    }
+    // client_phone/business_id non cambiano mai in modifica — un pet non si
+    // "sposta" a un altro cliente da qui, si crea/elimina; solo in insert.
+    const { error } = editingPetId
+      ? await supabase.from('pets').update(payload).eq('id', editingPetId)
+      : await supabase.from('pets').insert({ ...payload, business_id: business.id, client_phone: client.phone })
     setSavingPet(false)
     if (error) { console.error('[savePet]', error); return }
+    cancelPetForm()
+    loadPets()
+  }
+
+  const openEditPet = (pet) => {
+    setNewPet({
+      name:        pet.name ?? '',
+      breed:       pet.breed ?? '',
+      coat:        pet.coat ?? '',
+      gender:      pet.gender ?? 'non_specificato',
+      weight_note: pet.weight_note ?? '',
+      size:        pet.size ?? '',
+    })
+    setEditingPetId(pet.id)
+    setShowPetForm(true)
+  }
+
+  const cancelPetForm = () => {
     setNewPet(EMPTY_PET)
+    setEditingPetId(null)
     setShowPetForm(false)
+  }
+
+  // Nessuna pulizia manuale da fare sugli appuntamenti collegati:
+  // appointments.pet_id è ON DELETE SET NULL, il DB azzera da solo il
+  // riferimento — l'UI dell'agenda già mostra gli indicatori pelo/taglia
+  // solo se pet_id (e quindi apt.pets) non è null, quindi non c'è nulla da
+  // gestire qui oltre a ricaricare la lista.
+  const handleDeletePet = async (id) => {
+    setDeletingPetId(id)
+    const { error } = await supabase.from('pets').delete().eq('id', id)
+    setDeletingPetId(null)
+    if (error) { console.error('[handleDeletePet]', error); return }
+    setConfirmDeletePetId(null)
+    if (editingPetId === id) cancelPetForm()
     loadPets()
   }
 
@@ -789,8 +828,42 @@ function ClientDrawer({ client, business, onClose, onReload }) {
               ) : (
                 <>
                   {pets.length > 0 && (
-                    <div className="ag-pet-chips">
-                      {pets.map(p => <PetBoneIcon key={p.id} name={p.name} gender={p.gender} />)}
+                    <div className="sv-list" style={{ marginBottom: 10 }}>
+                      {pets.map(p => (
+                        <div key={p.id} className="sv-row">
+                          <div className="sv-row-main">
+                            <PetBoneIcon name={p.name} gender={p.gender} />
+                          </div>
+                          <div className="sv-row-actions">
+                            <button className="sv-action-btn" title="Modifica" onClick={() => openEditPet(p)}>
+                              <IconEdit />
+                            </button>
+                            {confirmDeletePetId === p.id ? (
+                              <div className="sv-confirm-row">
+                                <span className="sv-confirm-label">Eliminare?</span>
+                                <button
+                                  className="sv-action-btn sv-action-btn--danger"
+                                  disabled={deletingPetId === p.id}
+                                  onClick={() => handleDeletePet(p.id)}
+                                >
+                                  {deletingPetId === p.id ? '…' : <IconCheck />}
+                                </button>
+                                <button className="sv-action-btn" onClick={() => setConfirmDeletePetId(null)}>
+                                  <IconX />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                className="sv-action-btn sv-action-btn--danger"
+                                title="Elimina"
+                                onClick={() => setConfirmDeletePetId(p.id)}
+                              >
+                                <IconTrash />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                   {!showPetForm ? (
@@ -799,6 +872,9 @@ function ClientDrawer({ client, business, onClose, onReload }) {
                     </button>
                   ) : (
                     <div className="ag-pet-form">
+                      <p className="sv-field-hint" style={{ marginTop: 0 }}>
+                        {editingPetId ? 'Modifica animale' : 'Nuovo animale'}
+                      </p>
                       <input
                         className="sv-input"
                         type="text"
@@ -846,9 +922,9 @@ function ClientDrawer({ client, business, onClose, onReload }) {
                         onChange={e => setNewPet(p => ({ ...p, weight_note: e.target.value }))}
                       />
                       <div className="ag-pet-form-actions">
-                        <button type="button" className="sv-btn-cancel" onClick={() => { setShowPetForm(false); setNewPet(EMPTY_PET) }}>Annulla</button>
+                        <button type="button" className="sv-btn-cancel" onClick={cancelPetForm}>Annulla</button>
                         <button type="button" className="sv-btn-save" onClick={savePet} disabled={savingPet || !newPet.name.trim()}>
-                          {savingPet ? 'Salvataggio…' : 'Salva animale'}
+                          {savingPet ? 'Salvataggio…' : editingPetId ? 'Salva modifiche' : 'Salva animale'}
                         </button>
                       </div>
                     </div>
@@ -953,4 +1029,16 @@ function ClientDrawer({ client, business, onClose, onReload }) {
 
 function IconX() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+}
+
+// Stessi path di Servizi.jsx (IconEdit/IconTrash/IconCheck), per coerenza
+// visiva tra le due liste modificabili/eliminabili con conferma inline.
+function IconEdit() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+}
+function IconTrash() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+}
+function IconCheck() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
 }
