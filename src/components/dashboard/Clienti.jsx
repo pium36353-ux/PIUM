@@ -579,8 +579,11 @@ function ClientDrawer({ client, business, onClose, onReload }) {
   const [showPetForm, setShowPetForm] = useState(false)
   const [savingPet,   setSavingPet]   = useState(false)
 
+  // CORREZIONE: funzione specifica del verticale toelettatura — per qualunque
+  // altro business (incluso vertical mancante/non riconosciuto) non si
+  // interroga nemmeno la tabella pets.
   const loadPets = async () => {
-    if (!client.phone) { setPets([]); setPetsLoading(false); return }
+    if (!client.phone || business?.vertical !== 'toelettatura') { setPets([]); setPetsLoading(false); return }
     setPetsLoading(true)
     const { data, error } = await supabase
       .from('pets')
@@ -773,7 +776,10 @@ function ClientDrawer({ client, business, onClose, onReload }) {
           {/* Animali (Task 3b) — solo se il cliente ha un telefono salvato, che è
               l'unico modo in cui un pet è agganciato a un cliente. Quelli già
               registrati compaiono subito, mai da re-inserire da zero. */}
-          {client.phone && (
+          {/* CORREZIONE: montata SOLO per il verticale toelettatura — per qualunque
+              altro business questo blocco (incluso PetBoneIcon) non deve esistere
+              nel DOM, non solo restare nascosto. */}
+          {business?.vertical === 'toelettatura' && client.phone && (
             <div className="adm-drawer-section">
               <div className="adm-drawer-section-title">Animali</div>
               {petsLoading ? (

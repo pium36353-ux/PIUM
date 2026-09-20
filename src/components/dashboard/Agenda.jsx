@@ -190,8 +190,12 @@ export default function Agenda({ business, initialView = 'day' }) {
   // Tutti i pet del business (non filtrati per telefono): il filtro per
   // cliente avviene lato client, sincrono, quando si apre il modulo
   // appuntamento — evita una query aggiuntiva ad ogni digitazione del telefono.
+  // CORREZIONE: la sezione "Animali" è una funzione specifica del verticale
+  // toelettatura, non universale come inizialmente implementato — per
+  // qualunque altro business (incluso vertical mancante/non riconosciuto) non
+  // si interroga nemmeno la tabella pets, non solo non si mostra la UI.
   const loadPets = useCallback(async (signal = null) => {
-    if (!business) return
+    if (!business || business.vertical !== 'toelettatura') { setPets([]); return }
     const { data, error } = await supabase
       .from('pets')
       .select('id, client_phone, name, breed, coat, gender, weight_note')
@@ -1209,6 +1213,13 @@ export default function Agenda({ business, initialView = 'day' }) {
                   Quelli già registrati compaiono subito (mai da re-inserire); "+ Nuovo
                   animale" apre un mini-form solo per aggiungerne uno diverso. */}
               {(() => {
+                // CORREZIONE: funzione specifica del verticale toelettatura — per
+                // qualunque altro valore di business.vertical (incluso 'generico',
+                // vuoto o non riconosciuto) questo blocco non deve montare alcun nodo
+                // nel DOM, non solo restare nascosto via CSS. Il return null qui sotto
+                // interrompe la funzione PRIMA che PetBoneIcon o qualunque elemento
+                // "pet" venga anche solo valutato da React.
+                if (business?.vertical !== 'toelettatura') return null
                 const phoneKey = normalizePhone(form.client_phone)
                 if (!phoneKey) return null
                 const clientPets = pets.filter(p => p.client_phone === phoneKey)
