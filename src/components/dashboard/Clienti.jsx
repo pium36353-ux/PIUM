@@ -4,8 +4,9 @@ import VCard from 'vcf'
 import { normalizePhone, buildWaLink } from '../../lib/phone'
 import PetBoneIcon from '../PetBoneIcon'
 
-const EMPTY_PET = { name: '', breed: '', coat: '', gender: 'non_specificato', weight_note: '' }
+const EMPTY_PET = { name: '', breed: '', coat: '', gender: 'non_specificato', weight_note: '', size: '' }
 const COAT_OPTIONS   = ['corto', 'medio', 'lungo']
+const SIZE_OPTIONS   = ['xs', 's', 'm', 'l', 'xl']
 const GENDER_OPTIONS = ['non_specificato', 'maschio', 'femmina']
 const GENDER_PET_LABELS = { non_specificato: 'Non specificato', maschio: 'Maschio', femmina: 'Femmina' }
 
@@ -587,7 +588,7 @@ function ClientDrawer({ client, business, onClose, onReload }) {
     setPetsLoading(true)
     const { data, error } = await supabase
       .from('pets')
-      .select('id, name, breed, coat, gender, weight_note')
+      .select('id, name, breed, coat, gender, weight_note, size')
       .eq('business_id', business.id)
       .eq('client_phone', client.phone)
     setPetsLoading(false)
@@ -608,6 +609,7 @@ function ClientDrawer({ client, business, onClose, onReload }) {
       coat:         newPet.coat || null,
       gender:       newPet.gender,
       weight_note:  newPet.weight_note.trim() || null,
+      size:         newPet.size || null,
     })
     setSavingPet(false)
     if (error) { console.error('[savePet]', error); return }
@@ -828,6 +830,14 @@ function ClientDrawer({ client, business, onClose, onReload }) {
                           {GENDER_OPTIONS.map(g => <option key={g} value={g}>{GENDER_PET_LABELS[g]}</option>)}
                         </select>
                       </div>
+                      <select
+                        className="sv-input sv-select"
+                        value={newPet.size}
+                        onChange={e => setNewPet(p => ({ ...p, size: e.target.value }))}
+                      >
+                        <option value="">Taglia — non specificata</option>
+                        {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+                      </select>
                       <input
                         className="sv-input"
                         type="text"
