@@ -7650,6 +7650,21 @@ code {
 }
 .pet-chip-name { color: var(--text-h); }
 
+/* Sfondo fisso (non theme-aware): garantisce contrasto con le barre sempre
+   scure di CoatBars a prescindere dal colore del blocco appuntamento
+   sottostante e dal tema chiaro/scuro dell'app — vedi commento in
+   PetIndicators.jsx sul perché il colore delle barre è fisso di conseguenza. */
+.pet-coat-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  border-radius: 6px;
+  background: #FAEEDA;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
 .pet-size-badge {
   display: inline-flex;
   align-items: center;
