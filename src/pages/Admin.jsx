@@ -133,7 +133,7 @@ export default function Admin() {
     setLoading(true)
     const { data, error } = await supabase
       .from('businesses')
-      .select('id, name, email, owner_email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, stripe_subscription_id, is_free, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
+      .select('id, name, email, owner_email, city, category, slug, plan, plan_price, cover_url, admin_notes, is_active, status, trial_ends_at, stripe_subscription_id, is_free, vertical, created_at, ai_calls_month, ai_calls_total, ai_calls_month_display, ai_tokens_month, ai_unlimited, affiliate_code')
       .order('created_at', { ascending: false })
     if (signal?.cancelled) return
     if (error) {
@@ -310,6 +310,21 @@ export default function Admin() {
     setBizActionError(null)
     setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, is_free: next } : b))
     setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, is_free: next } : prev)
+  }, [])
+
+  // Nessuna whitelist di valori qui di proposito: la colonna è pronta per
+  // verticali futuri ('ristorante', 'bnb', ...) che non sono ancora
+  // implementati lato dashboard — impostare un valore diverso da 'generico'
+  // da qui serve solo a verificare che il resto dell'app lo tratti come
+  // 'generico' (fail-safe), non attiva alcuna funzione.
+  const setVertical = useCallback(async (biz, nextValue) => {
+    const value = nextValue.trim() || 'generico'
+    if (value === (biz.vertical ?? 'generico')) return
+    const { error } = await supabase.from('businesses').update({ vertical: value }).eq('id', biz.id)
+    if (error) { setBizActionError('Modifica vertical non riuscita. Riprova.'); return }
+    setBizActionError(null)
+    setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, vertical: value } : b))
+    setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, vertical: value } : prev)
   }, [])
 
   const copyLink = useCallback((biz) => {
@@ -914,6 +929,7 @@ export default function Admin() {
         onCopyLink={copyLink}
         onToggleAiUnlimited={toggleAiUnlimited}
         onToggleFree={toggleFree}
+        onSetVertical={setVertical}
         copied={copied}
         actionError={bizActionError}
         msgText={msgText}
@@ -952,7 +968,7 @@ export default function Admin() {
 }
 
 /* ── BusinessDrawer ── */
-function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, onToggleFree, affiliate, trialDate, onTrialDateChange, onSaveTrialDate, trialDateSaving, trialDateSaved, copied, actionError, msgText, onMsgTextChange, msgUrl, onMsgUrlChange, msgLabel, onMsgLabelChange, msgSending, msgSent, onSendMessage }) {
+function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSaveNotes, notesSaving, notesSaved, onClose, onCopyLink, onToggleAiUnlimited, onToggleFree, onSetVertical, affiliate, trialDate, onTrialDateChange, onSaveTrialDate, trialDateSaving, trialDateSaved, copied, actionError, msgText, onMsgTextChange, msgUrl, onMsgUrlChange, msgLabel, onMsgLabelChange, msgSending, msgSent, onSendMessage }) {
   const status = getStatus(biz)
   const days   = trialDaysLeft(biz)
 
@@ -1091,6 +1107,23 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
               >
                 {biz.is_free ? 'ON' : 'OFF'}
               </button>
+            </div>
+            {/* Vertical: colonna pronta per dashboard differenziate future (es. ristorante,
+                bnb), nessuna delle quali è ancora implementata — impostare qui un valore
+                diverso da 'generico' non attiva nulla, serve solo a verificare che il resto
+                dell'app continui a comportarsi in modo identico (fail-safe). Campo libero,
+                non un menu con opzioni predefinite, apposta per non dover "annunciare" nel
+                codice nomi di verticali non ancora costruiti. */}
+            <div className="adm-drawer-row">
+              <span className="adm-drawer-label">Vertical</span>
+              <input
+                className="adm-price-input"
+                type="text"
+                defaultValue={biz.vertical ?? 'generico'}
+                onBlur={e => onSetVertical(biz, e.target.value)}
+                placeholder="generico"
+                title="Valore libero — nessun verticale specifico è ancora attivo lato dashboard"
+              />
             </div>
           </div>
 
