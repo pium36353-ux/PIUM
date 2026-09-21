@@ -1108,12 +1108,13 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
                 {biz.is_free ? 'ON' : 'OFF'}
               </button>
             </div>
-            {/* Vertical: colonna pronta per dashboard differenziate future (es. ristorante,
-                bnb), nessuna delle quali è ancora implementata — impostare qui un valore
-                diverso da 'generico' non attiva nulla, serve solo a verificare che il resto
-                dell'app continui a comportarsi in modo identico (fail-safe). Campo libero,
-                non un menu con opzioni predefinite, apposta per non dover "annunciare" nel
-                codice nomi di verticali non ancora costruiti. */}
+            {/* Vertical: campo libero, non un menu con opzioni predefinite — valori
+                riconosciuti dal codice devono essere scritti esattamente (case-sensitive):
+                'toelettatura' attiva la UI animali in Agenda/Clienti, 'ristorante_bar'
+                attiva la sezione Tavoli (copre sia ristoranti sia bar, stesso identico
+                componente). Qualunque altro valore (incluso 'generico', vuoto o refuso di
+                battitura) si comporta come 'generico' — fail-safe per costruzione, non da
+                un controllo esplicito da bypassare. */}
             <div className="adm-drawer-row">
               <span className="adm-drawer-label">Vertical</span>
               <input
@@ -1122,7 +1123,7 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
                 defaultValue={biz.vertical ?? 'generico'}
                 onBlur={e => onSetVertical(biz, e.target.value)}
                 placeholder="generico"
-                title="Valore libero — nessun verticale specifico è ancora attivo lato dashboard"
+                title="Valori riconosciuti: 'toelettatura', 'ristorante_bar'. Qualunque altro valore equivale a 'generico'."
               />
             </div>
           </div>
