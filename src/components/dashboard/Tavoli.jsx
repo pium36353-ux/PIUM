@@ -16,12 +16,6 @@ export default function Tavoli({ business }) {
   const [confirmDeactivateId, setConfirmDeactivateId] = useState(null)
   const [busyId, setBusyId]       = useState(null)
 
-  // Stato libero/occupato: toggle manuale, non ancora collegato a
-  // prenotazioni reali (Task 4) — di proposito solo in memoria, si
-  // azzera al reload finché non viene davvero agganciato alle
-  // prenotazioni. Nessuna colonna dedicata nello schema per lo stesso motivo.
-  const [occupiedIds, setOccupiedIds] = useState(() => new Set())
-
   const load = useCallback(async (signal = null) => {
     if (!business) return
     setLoading(true)
@@ -114,13 +108,16 @@ export default function Tavoli({ business }) {
     setTables((prev) => prev.map((x) => x.id === t.id ? { ...x, capacity: nextCapacity } : x))
   }
 
-  /* ── Toggle libero/occupato (solo locale, vedi nota sopra) ── */
-  const toggleOccupied = (id) => {
-    setOccupiedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
+  /* ── Toggle libero/occupato — persistito su Supabase (tables.status),
+     stesso pattern di handleQuickCapacity: update diretto sulla riga.
+     Sopravvive al reload e resta coerente tra dispositivi/schede diverse
+     aperte sullo stesso business (nessuna sottoscrizione realtime qui:
+     ogni scheda vede lo stato aggiornato al prossimo load/refresh). ── */
+  const toggleStatus = async (t) => {
+    const nextStatus = t.status === 'occupato' ? 'libero' : 'occupato'
+    const { error } = await supabase.from('tables').update({ status: nextStatus }).eq('id', t.id)
+    if (error) { console.error('[toggleStatus]', error); return }
+    setTables((prev) => prev.map((x) => x.id === t.id ? { ...x, status: nextStatus } : x))
   }
 
   /* ── Disattiva (mai DELETE reale) ── */
@@ -129,7 +126,6 @@ export default function Tavoli({ business }) {
     const { error } = await supabase.from('tables').update({ is_active: false }).eq('id', t.id)
     if (error) { console.error('[handleDeactivate]', error); setBusyId(null); return }
     setTables((prev) => prev.map((x) => x.id === t.id ? { ...x, is_active: false } : x))
-    setOccupiedIds((prev) => { const next = new Set(prev); next.delete(t.id); return next })
     logActivity(business.id, business.user_id, 'table_deactivated', `Tavolo disattivato: ${t.name}`)
     setBusyId(null)
     setConfirmDeactivateId(null)
@@ -176,7 +172,7 @@ export default function Tavoli({ business }) {
       ) : (
         <div className="tv-grid">
           {tables.map((t) => {
-            const occupied = occupiedIds.has(t.id)
+            const occupied = t.status === 'occupato'
             if (!t.is_active) {
               return (
                 <div key={t.id} className="tv-card tv-card--inactive">
@@ -219,7 +215,7 @@ export default function Tavoli({ business }) {
                 <button
                   type="button"
                   className={`tv-status-toggle ${occupied ? 'tv-status-toggle--occupied' : 'tv-status-toggle--free'}`}
-                  onClick={() => toggleOccupied(t.id)}
+                  onClick={() => toggleStatus(t)}
                 >
                   {occupied ? 'Occupato' : 'Libero'}
                 </button>
