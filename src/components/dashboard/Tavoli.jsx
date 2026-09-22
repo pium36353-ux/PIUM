@@ -47,6 +47,18 @@ export default function Tavoli({ business }) {
   const [confirmDeactivateId, setConfirmDeactivateId] = useState(null)
   const [busyId, setBusyId]       = useState(null)
 
+  // Aggiunta in blocco (Task 4 Blocco B punto 7) — nomi automatici
+  // "Tavolo N" in sequenza a partire dal numero di tavoli già esistenti
+  // (mai da 1, per non creare doppioni di nome), capienza di default
+  // uguale per tutti, che il titolare poi modifica singolarmente come già
+  // fa per un tavolo aggiunto uno alla volta.
+  const [bulkModalOpen, setBulkModalOpen] = useState(false)
+  const [bulkCount,     setBulkCount]     = useState('')
+  const [bulkSaving,    setBulkSaving]    = useState(false)
+  const [bulkError,     setBulkError]     = useState(null)
+  const BULK_DEFAULT_CAPACITY = 4
+  const BULK_MAX = 50
+
   // Data in vista — di proposito non solo "oggi": il titolare deve poter
   // navigare avanti (es. per prendere una prenotazione al 15 del mese).
   const [selectedDate, setSelectedDate] = useState(() => new Date())
@@ -228,6 +240,35 @@ export default function Tavoli({ business }) {
 
     setSaving(false)
     closeModal()
+    load()
+  }
+
+  /* ── Aggiunta in blocco ── */
+  const openBulkAdd = () => {
+    setBulkCount('')
+    setBulkError(null)
+    setBulkModalOpen(true)
+  }
+
+  const handleBulkAdd = async () => {
+    const n = Number(bulkCount)
+    if (!Number.isInteger(n) || n <= 0 || n > BULK_MAX) {
+      setBulkError(`Inserisci un numero intero tra 1 e ${BULK_MAX}.`)
+      return
+    }
+    setBulkError(null)
+    setBulkSaving(true)
+    const startIndex = tables.length + 1
+    const rows = Array.from({ length: n }, (_, i) => ({
+      business_id: business.id,
+      name:        `Tavolo ${startIndex + i}`,
+      capacity:    BULK_DEFAULT_CAPACITY,
+    }))
+    const { error } = await supabase.from('tables').insert(rows)
+    setBulkSaving(false)
+    if (error) { console.error('[handleBulkAdd]', error); setBulkError('Errore durante la creazione. Riprova.'); return }
+    logActivity(business.id, business.user_id, 'table_added', `${n} tavoli aggiunti in blocco`)
+    setBulkModalOpen(false)
     load()
   }
 
@@ -454,7 +495,10 @@ export default function Tavoli({ business }) {
             ? `${tables.length} tavol${tables.length !== 1 ? 'i' : 'o'} — libero/occupato calcolato dalle prenotazioni per data e turno.`
             : 'Aggiungi i tavoli della tua sala.'}
         </p>
-        <button className="db-btn-primary" onClick={openAddTable}>+ Aggiungi tavolo</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="sv-btn-cancel" onClick={openBulkAdd}>+ Aggiungi N tavoli</button>
+          <button className="db-btn-primary" onClick={openAddTable}>+ Aggiungi tavolo</button>
+        </div>
       </div>
 
       {/* Navigazione data */}
@@ -656,6 +700,48 @@ export default function Tavoli({ business }) {
               <button className="sv-btn-save" onClick={handleSave} disabled={saving}>
                 {saving ? <TvSpinner small /> : null}
                 {saving ? 'Salvataggio…' : modal === 'add' ? 'Aggiungi' : 'Salva modifiche'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal aggiunta in blocco */}
+      {bulkModalOpen && (
+        <div className="sv-modal-overlay" onClick={(e) => e.target === e.currentTarget && setBulkModalOpen(false)}>
+          <div className="sv-modal">
+            <div className="sv-modal-header">
+              <h2 className="sv-modal-title">Aggiungi più tavoli</h2>
+              <button className="sv-modal-close" onClick={() => setBulkModalOpen(false)} aria-label="Chiudi"><IconX /></button>
+            </div>
+
+            <div className="sv-modal-body">
+              <div className="sv-field">
+                <label className="sv-label" htmlFor="tv-bulk-count">Quanti tavoli?</label>
+                <input
+                  id="tv-bulk-count"
+                  className={`sv-input ${bulkError ? 'sv-input--error' : ''}`}
+                  type="number"
+                  min="1"
+                  max={BULK_MAX}
+                  step="1"
+                  value={bulkCount}
+                  onChange={(e) => { setBulkCount(e.target.value); setBulkError(null) }}
+                  placeholder="es. 10"
+                  autoFocus
+                />
+                {bulkError && <p className="sv-field-error">{bulkError}</p>}
+                <p className="sv-field-hint">
+                  Crea "Tavolo {tables.length + 1}", "Tavolo {tables.length + 2}"… con capienza {BULK_DEFAULT_CAPACITY} di default — modificabile singolarmente dopo.
+                </p>
+              </div>
+            </div>
+
+            <div className="sv-modal-footer">
+              <button className="sv-btn-cancel" onClick={() => setBulkModalOpen(false)}>Annulla</button>
+              <button className="sv-btn-save" onClick={handleBulkAdd} disabled={bulkSaving}>
+                {bulkSaving ? <TvSpinner small /> : null}
+                {bulkSaving ? 'Creazione…' : 'Crea tavoli'}
               </button>
             </div>
           </div>

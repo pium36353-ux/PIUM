@@ -2307,6 +2307,82 @@ body {
    ============================================================ */
 
 /* ============================================================
+   Menu component (verticale ristorante_bar) — catalogo piatti/categorie.
+   Riusa ampiamente le classi sv-* di Servizi.jsx (stesso livello di CRUD
+   richiesto), solo poche classi proprie per ciò che è davvero specifico.
+   ============================================================ */
+
+.mn-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mn-group-title {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--text-h) !important;
+  margin: 0 0 8px !important;
+}
+
+.mn-empty-hint {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.6;
+  margin: 0 !important;
+}
+
+.mn-flag-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+
+  &:hover:not(:disabled) { opacity: 0.85; }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.mn-btn-reactivate {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover:not(:disabled) { opacity: 0.85; }
+  &:disabled { opacity: 0.55; cursor: not-allowed; }
+}
+
+.mn-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mn-confirm-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #dc2626;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   End Menu component
+   ============================================================ */
+
+/* ============================================================
    Social component
    ============================================================ */
 
