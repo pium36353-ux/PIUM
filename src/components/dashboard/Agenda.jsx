@@ -37,7 +37,7 @@ const MONTHS      = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott'
 const DAY_FULL    = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato']
 const DAY_LETTER  = ['L','M','M','G','V','S','D']
 
-const EMPTY_FORM = { date: '', client_name: '', client_phone: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '', selected_services: [], pet_id: null, table_id: null }
+const EMPTY_FORM = { date: '', client_name: '', client_phone: '', employee_id: '', start_time: '09:00', duration_minutes: 60, price: '', notes: '', selected_services: [], pet_id: null }
 const EMPTY_EMP  = { name: '', color: COLORS[0] }
 const EMPTY_PET  = { name: '', breed: '', coat: '', gender: 'non_specificato', weight_note: '', size: '' }
 const COAT_OPTIONS   = ['corto', 'medio', 'lungo']
@@ -132,11 +132,6 @@ export default function Agenda({ business, initialView = 'day' }) {
   const [confirmDelId,  setConfirmDelId]  = useState(null)
   const [services,      setServices]      = useState([])
   const [servicesLoading, setServicesLoading] = useState(false)
-
-  // Tavoli attivi — verticale 'ristorante_bar' (Task 4 Blocco A). Lista
-  // breve, caricata a ogni apertura del modulo (stesso pattern di
-  // employees/services), non una ricerca live come per i pet.
-  const [tables, setTables] = useState([])
   const [editingId,     setEditingId]     = useState(null)
   const [addAnotherTime, setAddAnotherTime] = useState(null)
   const [taxRate,       setTaxRate]       = useState(22)
@@ -236,22 +231,6 @@ export default function Agenda({ business, initialView = 'day' }) {
     setServicesLoading(false)
     if (error) { console.error('[loadServices]', error); return }
     setServices(data ?? [])
-  }, [business])
-
-  // Funzione specifica del verticale 'ristorante_bar' — per qualunque altro
-  // valore di business.vertical (incluso 'generico', vuoto o non
-  // riconosciuto) non interroga nemmeno la tabella tables, stesso pattern
-  // già usato per il gate su 'toelettatura'.
-  const loadTables = useCallback(async () => {
-    if (!business || business.vertical !== 'ristorante_bar') { setTables([]); return }
-    const { data, error } = await supabase
-      .from('tables')
-      .select('id, name, capacity')
-      .eq('business_id', business.id)
-      .eq('is_active', true)
-      .order('name')
-    if (error) { console.error('[loadTables]', error); return }
-    setTables(data ?? [])
   }, [business])
 
   const loadAppointments = useCallback(async (signal = null) => {
@@ -357,7 +336,6 @@ export default function Agenda({ business, initialView = 'day' }) {
   const openModal = (date = formatDate(selectedDay), time = '09:00') => {
     loadEmployees()
     loadServices()
-    loadTables()
     setForm({ ...EMPTY_FORM, date, start_time: time })
     setEditingId(null)
     setErrors({})
@@ -374,7 +352,6 @@ export default function Agenda({ business, initialView = 'day' }) {
   const openEditModal = async (apt, tappedTime = null) => {
     loadEmployees()
     await loadServices()
-    loadTables()
     setSuggestions([])
     setDropdownVisible(false)
     const [{ data: aptSvcs }, { data: linkedPet }] = await Promise.all([
@@ -400,7 +377,6 @@ export default function Agenda({ business, initialView = 'day' }) {
       notes:            apt.notes ?? '',
       selected_services: aptSvcs?.map(s => s.service_id) ?? [],
       pet_id:           apt.pet_id ?? null,
-      table_id:         apt.table_id ?? null,
     })
     setEditingId(apt.id)
     setAddAnotherTime(tappedTime ?? apt.start_time?.slice(0, 5) ?? '09:00')
@@ -656,7 +632,6 @@ export default function Agenda({ business, initialView = 'day' }) {
         price:            form.price !== '' ? Number(form.price) : null,
         notes:            form.notes.trim() || null,
         pet_id:           form.pet_id || null,
-        table_id:         form.table_id || null,
       }
 
       let appointmentId = editingId
@@ -1445,30 +1420,6 @@ export default function Agenda({ business, initialView = 'day' }) {
                         </div>
                       </div>
                     )}
-                  </div>
-                )
-              })()}
-
-              {/* Selezione tavolo (Task 4 Blocco A) — funzione specifica del verticale
-                  'ristorante_bar' — per qualunque altro valore di business.vertical
-                  (incluso 'generico', vuoto o non riconosciuto) questo blocco non deve
-                  montare alcun nodo nel DOM: il return null qui sotto interrompe la
-                  funzione prima che la select venga anche solo costruita. Nessun
-                  controllo di doppia prenotazione sullo stesso tavolo/orario in questo
-                  primo giro — versione semplice funzionante, come deciso. */}
-              {(() => {
-                if (business?.vertical !== 'ristorante_bar') return null
-                return (
-                  <div className="sv-field">
-                    <label className="sv-label">Tavolo <span className="sv-optional">(facoltativo)</span></label>
-                    <select className="sv-input sv-select" value={form.table_id ?? ''} onChange={setField('table_id')}>
-                      <option value="">— Nessuno —</option>
-                      {tables.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}{t.capacity != null ? ` (${t.capacity} persone)` : ''}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 )
               })()}

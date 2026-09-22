@@ -1983,16 +1983,6 @@ body {
 .tv-status-toggle--free     { background: rgba(34,197,94,0.12);  color: #16a34a; }
 .tv-status-toggle--occupied { background: rgba(239,68,68,0.1);   color: #dc2626; }
 
-/* Occupato da un appuntamento reale collegato — non interattivo, il nome del
-   cliente sostituisce l'etichetta generica "Occupato" e ha priorità sul
-   toggle manuale (vedi Tavoli.jsx). */
-.tv-status-toggle--linked {
-  cursor: default;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .tv-badge {
   display: inline-flex;
   align-items: center;
@@ -2048,6 +2038,167 @@ body {
   font-weight: 500;
   color: #dc2626;
   white-space: nowrap;
+}
+
+/* Navigazione data (prenotazioni) */
+.tv-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tv-date-nav-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--code-bg); color: var(--text-h); }
+}
+
+.tv-date-input {
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+
+  &:focus { border-color: var(--accent); }
+}
+
+.tv-date-today-btn {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover { opacity: 0.85; }
+}
+
+.tv-date-label {
+  font-size: 13px;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+/* Card cliccabile per prenotare */
+.tv-card--clickable {
+  cursor: pointer;
+}
+
+/* Prenotazioni mostrate sulla card */
+.tv-reservations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tv-reservation-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: var(--sans);
+  text-align: left;
+  color: var(--text-h);
+  background: var(--code-bg);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: var(--accent-bg); }
+}
+
+.tv-reservation-turn {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 99px;
+}
+
+.tv-reservation-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.tv-reservation-size {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.tv-no-reservation {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.6;
+  margin: 0 !important;
+}
+
+/* Selettore multi-tavolo nel modale prenotazione */
+.tv-table-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tv-table-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+
+  & input { margin: 0; }
+  &:hover { background: var(--code-bg); }
+}
+
+.tv-table-pick--active {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.tv-modal-date {
+  font-weight: 400;
+  color: var(--text);
+  font-size: 14px;
 }
 
 /* ============================================================
