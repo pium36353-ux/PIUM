@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
@@ -16,7 +16,14 @@ import Promemoria  from '../components/dashboard/Promemoria'
 import PromemoriaClienti from '../components/dashboard/PromemoriaClienti'
 import Agenda      from '../components/dashboard/Agenda'
 import Clienti     from '../components/dashboard/Clienti'
-import Tavoli      from '../components/dashboard/Tavoli'
+
+// Componenti specifici di un singolo verticale (business.vertical diverso
+// da 'generico') vanno SEMPRE caricati con import() dinamico, mai importati
+// staticamente qui in cima: così il loro codice scende sul browser solo per
+// i business che hanno davvero quel vertical attivo, non per tutti. Tavoli è
+// il primo caso reale di questo pattern — qualunque componente futuro dello
+// stesso tipo (nuovo verticale) va aggiunto allo stesso modo.
+const Tavoli = lazy(() => import('../components/dashboard/Tavoli'))
 
 // Base sempre visibile, indipendente dal verticale. La voce 'tavoli' viene
 // aggiunta SOLO per business.vertical === 'ristorante_bar' — vedi NAV
@@ -468,7 +475,9 @@ export default function Dashboard() {
           )}
           {Section && (
             <ErrorBoundary key={section}>
-              <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} onBusinessPatch={patchBusiness} />
+              <Suspense fallback={<div className="sv-loading">Caricamento…</div>}>
+                <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} onBusinessPatch={patchBusiness} />
+              </Suspense>
             </ErrorBoundary>
           )}
         </main>

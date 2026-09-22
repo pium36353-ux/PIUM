@@ -4,6 +4,24 @@ import { logActivity } from '../../lib/activityLog'
 
 const EMPTY_FORM = { name: '', capacity: '' }
 
+function formatDate(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+// Un appuntamento è "in corso" se l'ora attuale cade nell'intervallo
+// [start_time, start_time + duration_minutes) — stessa logica usata per
+// gli orari di apertura in Agenda.jsx, qui applicata al singolo appuntamento.
+function isActiveNow(apt, nowMin) {
+  if (!apt.start_time) return false
+  const [h, m] = apt.start_time.split(':').map(Number)
+  const startMin = h * 60 + m
+  const duration = apt.duration_minutes ?? 60
+  return nowMin >= startMin && nowMin < startMin + duration
+}
+
 export default function Tavoli({ business }) {
   const [tables, setTables]       = useState([])
   const [loading, setLoading]     = useState(true)
@@ -15,6 +33,11 @@ export default function Tavoli({ business }) {
 
   const [confirmDeactivateId, setConfirmDeactivateId] = useState(null)
   const [busyId, setBusyId]       = useState(null)
+
+  // Tavolo → nome cliente dell'appuntamento in corso adesso (Task 4 Blocco A).
+  // Popolata da loadActiveAppointments; un tavolo presente qui ha priorità
+  // sul toggle manuale per la visualizzazione (vedi render sotto).
+  const [activeByTable, setActiveByTable] = useState({})
 
   const load = useCallback(async (signal = null) => {
     if (!business) return
@@ -30,11 +53,38 @@ export default function Tavoli({ business }) {
     setTables(data ?? [])
   }, [business])
 
+  // Appuntamenti di oggi collegati a un tavolo (table_id): un tavolo è
+  // "occupato da prenotazione" se l'ora attuale cade nell'intervallo
+  // dell'appuntamento. Nessun controllo di doppia prenotazione qui, solo
+  // lettura per la visualizzazione — coerente col resto del Blocco A
+  // (versione semplice funzionante).
+  const loadActiveAppointments = useCallback(async (signal = null) => {
+    if (!business) return
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('table_id, client_name, start_time, duration_minutes')
+      .eq('business_id', business.id)
+      .eq('date', formatDate(new Date()))
+      .not('table_id', 'is', null)
+    if (signal?.cancelled) return
+    if (error) { console.error('[loadActiveAppointments]', error); return }
+    const nowMin = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes() })()
+    const map = {}
+    for (const apt of data ?? []) {
+      if (isActiveNow(apt, nowMin)) map[apt.table_id] = apt.client_name
+    }
+    setActiveByTable(map)
+  }, [business])
+
   useEffect(() => {
     const signal = { cancelled: false }
     load(signal)
-    return () => { signal.cancelled = true }
-  }, [load])
+    loadActiveAppointments(signal)
+    // Refresh periodico: un appuntamento può iniziare/finire mentre la
+    // pagina resta aperta, senza che nessuna azione dell'utente lo segnali.
+    const interval = setInterval(() => loadActiveAppointments(), 60000)
+    return () => { signal.cancelled = true; clearInterval(interval) }
+  }, [load, loadActiveAppointments])
 
   /* ── Modal helpers ── */
   const openAdd = () => {
@@ -156,7 +206,7 @@ export default function Tavoli({ business }) {
       <div className="db-section-toolbar">
         <p className="db-section-desc">
           {tables.length > 0
-            ? `${tables.length} tavol${tables.length !== 1 ? 'i' : 'o'} — stato libero/occupato manuale, non ancora collegato alle prenotazioni.`
+            ? `${tables.length} tavol${tables.length !== 1 ? 'i' : 'o'} — libero/occupato è manuale, ma un appuntamento in corso collegato a un tavolo mostra il cliente automaticamente.`
             : 'Aggiungi i tavoli della tua sala.'}
         </p>
         <button className="db-btn-primary" onClick={openAdd}>+ Aggiungi tavolo</button>
@@ -172,7 +222,10 @@ export default function Tavoli({ business }) {
       ) : (
         <div className="tv-grid">
           {tables.map((t) => {
-            const occupied = t.status === 'occupato'
+            // Un appuntamento reale collegato ha priorità sulla visualizzazione
+            // rispetto al toggle manuale — vedi loadActiveAppointments sopra.
+            const linkedClient = activeByTable[t.id] ?? null
+            const occupied = linkedClient != null || t.status === 'occupato'
             if (!t.is_active) {
               return (
                 <div key={t.id} className="tv-card tv-card--inactive">
@@ -212,13 +265,22 @@ export default function Tavoli({ business }) {
                   />
                 </label>
 
-                <button
-                  type="button"
-                  className={`tv-status-toggle ${occupied ? 'tv-status-toggle--occupied' : 'tv-status-toggle--free'}`}
-                  onClick={() => toggleStatus(t)}
-                >
-                  {occupied ? 'Occupato' : 'Libero'}
-                </button>
+                {linkedClient ? (
+                  <div
+                    className="tv-status-toggle tv-status-toggle--occupied tv-status-toggle--linked"
+                    title="Collegato a un appuntamento di oggi — il toggle manuale non si applica finché resta in corso"
+                  >
+                    {linkedClient}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className={`tv-status-toggle ${occupied ? 'tv-status-toggle--occupied' : 'tv-status-toggle--free'}`}
+                    onClick={() => toggleStatus(t)}
+                  >
+                    {occupied ? 'Occupato' : 'Libero'}
+                  </button>
+                )}
 
                 {confirmDeactivateId === t.id ? (
                   <div className="tv-confirm-row">

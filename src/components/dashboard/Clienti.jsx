@@ -1,8 +1,13 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { supabase } from '../../lib/supabase'
 import VCard from 'vcf'
 import { normalizePhone, buildWaLink } from '../../lib/phone'
-import PetBoneIcon from '../PetBoneIcon'
+
+// Componente specifico del verticale 'toelettatura' — import() dinamico,
+// stesso principio applicato in Agenda.jsx: il codice scende sul browser
+// solo per business con quel vertical, dove il blocco "Animali" più sotto
+// lo renderizza davvero.
+const PetBoneIcon = lazy(() => import('../PetBoneIcon'))
 
 const EMPTY_PET = { name: '', breed: '', coat: '', gender: 'non_specificato', weight_note: '', size: '' }
 const COAT_OPTIONS   = ['corto', 'medio', 'lungo']
@@ -832,7 +837,9 @@ function ClientDrawer({ client, business, onClose, onReload }) {
                       {pets.map(p => (
                         <div key={p.id} className="sv-row">
                           <div className="sv-row-main">
-                            <PetBoneIcon name={p.name} gender={p.gender} />
+                            <Suspense fallback={null}>
+                              <PetBoneIcon name={p.name} gender={p.gender} />
+                            </Suspense>
                           </div>
                           <div className="sv-row-actions">
                             <button className="sv-action-btn" title="Modifica" onClick={() => openEditPet(p)}>
