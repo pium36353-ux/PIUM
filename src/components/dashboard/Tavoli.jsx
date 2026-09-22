@@ -602,24 +602,25 @@ function ReservationModal({
     setErrors((er) => ({ ...er, [field]: null }))
   }
 
-  // Ricerca cliente esistente digitando nome O telefono (Correzione Blocco A) —
-  // stesso pattern debounced già usato per l'autocomplete del nome cliente in
-  // Agenda.jsx (handleNameChange): merge di contacts + appointments per non
-  // perdere clienti mai salvati in rubrica, deduplicati per telefono. Sostituisce
-  // il vecchio campo "Telefono" libero: digitando qui, se il cliente esiste già
-  // (in questo business) lo si seleziona invece di ridigitarlo da zero.
-  const [phoneResults,         setPhoneResults]         = useState([])
-  const [phoneDropdownVisible, setPhoneDropdownVisible] = useState(false)
-  const phoneSearchTimerRef = useRef(null)
+  // Ricerca cliente esistente digitando nome (come Agenda.jsx/handleNameChange)
+  // O telefono nello stesso campo — sul campo "Cliente", non "Telefono": è lì
+  // che un utente si aspetta l'autocomplete, per analogia col resto dell'app.
+  // Stesso pattern debounced di handleNameChange, con l'aggiunta della ricerca
+  // per telefono (Agenda.jsx cerca solo per nome sul proprio campo): merge di
+  // contacts + appointments per non perdere clienti mai salvati in rubrica,
+  // deduplicati per telefono.
+  const [nameResults,         setNameResults]         = useState([])
+  const [nameDropdownVisible, setNameDropdownVisible] = useState(false)
+  const nameSearchTimerRef = useRef(null)
 
-  const handlePhoneChange = (e) => {
+  const handleNameSearchChange = (e) => {
     const val = e.target.value
-    setForm((f) => ({ ...f, customer_phone: val }))
-    setErrors((er) => ({ ...er, customer_phone: null }))
-    clearTimeout(phoneSearchTimerRef.current)
+    setForm((f) => ({ ...f, customer_name: val }))
+    setErrors((er) => ({ ...er, customer_name: null }))
+    clearTimeout(nameSearchTimerRef.current)
     const term = val.trim()
-    if (term.length < 2) { setPhoneResults([]); setPhoneDropdownVisible(false); return }
-    phoneSearchTimerRef.current = setTimeout(async () => {
+    if (term.length < 2) { setNameResults([]); setNameDropdownVisible(false); return }
+    nameSearchTimerRef.current = setTimeout(async () => {
       try {
         const safeTerm = term.replace(/,/g, '') // "," è il separatore di .or(), non ammesso nel termine
         const [{ data: cts }, { data: apts }] = await Promise.all([
@@ -646,17 +647,17 @@ function ReservationModal({
           if (!seen.has(key)) seen.set(key, { name: apt.client_name, phone: apt.client_phone ?? null })
         }
         const results = Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 8)
-        setPhoneResults(results)
-        setPhoneDropdownVisible(results.length > 0)
+        setNameResults(results)
+        setNameDropdownVisible(results.length > 0)
       } catch { /* silently fail, stessa politica di handleNameChange in Agenda.jsx */ }
     }, 200)
   }
 
-  const selectPhoneSuggestion = (s) => {
+  const selectNameSuggestion = (s) => {
     setForm((f) => ({ ...f, customer_name: s.name, customer_phone: s.phone ?? f.customer_phone }))
     setErrors((er) => ({ ...er, customer_name: null, customer_phone: null }))
-    setPhoneResults([])
-    setPhoneDropdownVisible(false)
+    setNameResults([])
+    setNameDropdownVisible(false)
   }
 
   return (
@@ -671,18 +672,31 @@ function ReservationModal({
         </div>
 
         <div className="sv-modal-body">
-          <div className="sv-field">
+          <div className="sv-field" style={{ position: 'relative' }}>
             <label className="sv-label" htmlFor="tvr-name">Cliente <span className="sv-required">*</span></label>
             <input
               id="tvr-name"
               className={`sv-input ${errors.customer_name ? 'sv-input--error' : ''}`}
               type="text"
               value={form.customer_name}
-              onChange={set('customer_name')}
-              placeholder="es. Mario Rossi"
+              onChange={handleNameSearchChange}
+              onBlur={() => setTimeout(() => setNameDropdownVisible(false), 150)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setNameResults([]); setNameDropdownVisible(false) } }}
+              placeholder="es. Mario Rossi — o cerca per telefono"
+              autoComplete="off"
               autoFocus
             />
             {errors.customer_name && <p className="sv-field-error">{errors.customer_name}</p>}
+            {nameDropdownVisible && nameResults.length > 0 && (
+              <div className="ag-suggest-dropdown">
+                {nameResults.map((s, i) => (
+                  <div key={i} className="ag-suggest-item" onMouseDown={() => selectNameSuggestion(s)}>
+                    <span className="ag-suggest-name">{s.name}</span>
+                    {s.phone && <span className="ag-suggest-phone">{s.phone}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="sv-fields-row">
@@ -713,29 +727,16 @@ function ReservationModal({
             </div>
           </div>
 
-          <div className="sv-field" style={{ position: 'relative' }}>
+          <div className="sv-field">
             <label className="sv-label" htmlFor="tvr-phone">Telefono <span className="sv-optional">(facoltativo)</span></label>
             <input
               id="tvr-phone"
               className="sv-input"
               type="text"
               value={form.customer_phone}
-              onChange={handlePhoneChange}
-              onBlur={() => setTimeout(() => setPhoneDropdownVisible(false), 150)}
-              onKeyDown={(e) => { if (e.key === 'Escape') { setPhoneResults([]); setPhoneDropdownVisible(false) } }}
-              placeholder="Nome o telefono — cerca tra i clienti esistenti"
-              autoComplete="off"
+              onChange={set('customer_phone')}
+              placeholder="es. 333 1234567"
             />
-            {phoneDropdownVisible && phoneResults.length > 0 && (
-              <div className="ag-suggest-dropdown">
-                {phoneResults.map((s, i) => (
-                  <div key={i} className="ag-suggest-item" onMouseDown={() => selectPhoneSuggestion(s)}>
-                    <span className="ag-suggest-name">{s.name}</span>
-                    {s.phone && <span className="ag-suggest-phone">{s.phone}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="sv-field">
