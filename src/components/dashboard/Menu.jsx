@@ -42,13 +42,15 @@ export default function Menu({ business }) {
 
   // menu_item_flags(id) incluso solo per sapere, altrove (sezione Conferme
   // fine turno), quali piatti hanno segnalazioni pendenti — non mostrato
-  // in questa vista, che resta il catalogo normale.
+  // in questa vista, che resta il catalogo normale. menu_categories(name)
+  // incluso per lo stesso motivo: mostrare la categoria come sottotitolo
+  // nella lista delle conferme, senza una seconda query.
   const loadItems = useCallback(async (signal = null) => {
     if (!business) return
     setItemsLoading(true)
     const { data, error } = await supabase
       .from('menu_items')
-      .select('*, menu_item_flags(id)')
+      .select('*, menu_item_flags(id), menu_categories(name)')
       .eq('business_id', business.id)
       .order('name')
     if (signal?.cancelled) return
@@ -91,6 +93,40 @@ export default function Menu({ business }) {
   }, [categories, itemsByCategory])
 
   const uncategorizedItems = useMemo(() => items.filter(i => !i.category_id), [items])
+
+  // Piatti con almeno una segnalazione pendente — una riga per piatto, non
+  // per singola segnalazione, ordinati per numero di segnalazioni
+  // decrescente poi alfabetico. Nessun raggruppamento per categoria, nessun
+  // timestamp mostrato — vista pensata per un controllo veloce a fine
+  // turno, non un log dettagliato.
+  const flaggedItems = useMemo(() => {
+    return items
+      .map(i => ({ ...i, flagCount: i.menu_item_flags?.length ?? 0 }))
+      .filter(i => i.flagCount > 0)
+      .sort((a, b) => b.flagCount - a.flagCount || a.name.localeCompare(b.name))
+  }, [items])
+
+  /* ── Conferme fine turno ── */
+  const [confirmationsModalOpen, setConfirmationsModalOpen] = useState(false)
+  const [resolvingItemId,        setResolvingItemId]        = useState(null)
+
+  const resolveFlags = async (item, markSoldOut) => {
+    setResolvingItemId(item.id)
+    if (markSoldOut) {
+      const { error } = await supabase.from('menu_items').update({ is_available: false }).eq('id', item.id)
+      if (error) { console.error('[resolveFlags availability]', error); setResolvingItemId(null); return }
+    }
+    // DELETE reale, non un resolved_at — vedi nota su menu_item_flags in
+    // migration: sono segnalazioni transitorie senza valore storico da
+    // conservare, a differenza del resto del progetto.
+    const { error: delErr } = await supabase.from('menu_item_flags').delete().eq('menu_item_id', item.id)
+    setResolvingItemId(null)
+    if (delErr) { console.error('[resolveFlags delete]', delErr); return }
+    setItems((prev) => prev.map((x) => x.id === item.id
+      ? { ...x, is_available: markSoldOut ? false : x.is_available, menu_item_flags: [] }
+      : x
+    ))
+  }
 
   /* ── CRUD categorie ── */
   const handleAddCategory = async () => {
@@ -293,6 +329,10 @@ export default function Menu({ business }) {
             : 'Aggiungi i piatti del tuo menu.'}
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="sv-btn-cancel mn-confirmations-btn" onClick={() => setConfirmationsModalOpen(true)}>
+            Conferme fine turno
+            {flaggedItems.length > 0 && <span className="mn-badge-count">{flaggedItems.length}</span>}
+          </button>
           <button className="sv-btn-cancel" onClick={() => setCategoriesModalOpen(true)}>Gestisci categorie</button>
           <button className="db-btn-primary" onClick={openAddItem}>+ Aggiungi piatto</button>
         </div>
@@ -486,6 +526,69 @@ export default function Menu({ business }) {
                 {itemSaving ? <MnSpinner small /> : null}
                 {itemSaving ? 'Salvataggio…' : itemModal === 'add' ? 'Aggiungi' : 'Salva modifiche'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Conferme fine turno — separato dalla vista normale del
+          catalogo, non nel percorso quotidiano di chi si limita a segnalare
+          un piatto. Nessuna restrizione di accesso reale (non esiste un
+          ruolo staff distinto dal titolare in questo progetto): la
+          separazione è solo di collocazione nell'interfaccia. */}
+      {confirmationsModalOpen && (
+        <div className="sv-modal-overlay" onClick={(e) => e.target === e.currentTarget && setConfirmationsModalOpen(false)}>
+          <div className="sv-modal">
+            <div className="sv-modal-header">
+              <h2 className="sv-modal-title">Conferme fine turno</h2>
+              <button className="sv-modal-close" onClick={() => setConfirmationsModalOpen(false)} aria-label="Chiudi"><IconX /></button>
+            </div>
+
+            <div className="sv-modal-body">
+              {flaggedItems.length === 0 ? (
+                <p className="db-card-empty">Nessuna segnalazione al momento.</p>
+              ) : (
+                <div className="sv-list">
+                  {flaggedItems.map(item => (
+                    <div key={item.id} className="sv-row">
+                      <div className="sv-row-main">
+                        <div className="sv-row-top">
+                          <span className="sv-name">{item.name}</span>
+                          <div className="sv-row-badges">
+                            <span className="db-badge db-badge--red">
+                              {item.flagCount} segnalazion{item.flagCount !== 1 ? 'i' : 'e'}
+                            </span>
+                          </div>
+                        </div>
+                        {item.menu_categories?.name && (
+                          <p className="mn-empty-hint" style={{ marginTop: 2 }}>{item.menu_categories.name}</p>
+                        )}
+                      </div>
+                      <div className="sv-row-actions">
+                        <button
+                          className="sv-btn-cancel"
+                          disabled={resolvingItemId === item.id}
+                          onClick={() => resolveFlags(item, false)}
+                        >
+                          Ignora, resta disponibile
+                        </button>
+                        <button
+                          className="mn-btn-sold-out"
+                          disabled={resolvingItemId === item.id}
+                          onClick={() => resolveFlags(item, true)}
+                        >
+                          {resolvingItemId === item.id ? <MnSpinner small /> : null}
+                          Segna esaurito davvero
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="sv-modal-footer">
+              <button className="sv-btn-cancel" onClick={() => setConfirmationsModalOpen(false)}>Chiudi</button>
             </div>
           </div>
         </div>
