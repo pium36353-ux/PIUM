@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
+import { normalizePhone } from '../../lib/phone'
 
 const EMPTY_TABLE_FORM = { name: '', capacity: '' }
 const EMPTY_RESERVATION_FORM = { customer_name: '', customer_phone: '', party_size: '', turn: '', notes: '', table_ids: [] }
@@ -262,18 +263,46 @@ export default function Tavoli({ business }) {
     return e
   }
 
+  // Trova o crea il contatto per il cliente della prenotazione (Correzione
+  // Blocco A, collegamento al sistema clienti) — stesso identificativo già
+  // usato da contacts/appointments/pets (client_phone normalizzato), non un
+  // nuovo sistema di riconoscimento. Best-effort: un errore qui non deve
+  // impedire il salvataggio della prenotazione, che resta l'operazione
+  // primaria — solo loggato, stesso trattamento di logActivity altrove.
+  const ensureContact = async (phone, name) => {
+    if (!phone) return
+    const { data: existing, error: findErr } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('business_id', business.id)
+      .eq('phone', phone)
+      .maybeSingle()
+    if (findErr) { console.error('[ensureContact find]', findErr); return }
+    if (existing) return // già in rubrica, non duplicare
+    const { error: insErr } = await supabase.from('contacts').insert({
+      business_id: business.id,
+      name,
+      phone,
+      source: 'ristorante',
+    })
+    if (insErr) console.error('[ensureContact insert]', insErr)
+  }
+
   const handleSaveReservation = async () => {
     const e = validateReservation(resForm)
     setResErrors(e)
     if (Object.keys(e).length > 0) return
     setResSaving(true)
 
+    const customerName  = resForm.customer_name.trim()
+    const customerPhone = normalizePhone(resForm.customer_phone)
+
     const payload = {
       reservation_date: formatDate(selectedDate),
       turn:             resForm.turn.trim() || null,
       party_size:       resForm.party_size !== '' ? Number(resForm.party_size) : null,
-      customer_name:    resForm.customer_name.trim(),
-      customer_phone:   resForm.customer_phone.trim() || null,
+      customer_name:    customerName,
+      customer_phone:   customerPhone,
       notes:            resForm.notes.trim() || null,
     }
 
@@ -302,6 +331,8 @@ export default function Tavoli({ business }) {
       const { error: insErr } = await supabase.from('table_reservation_tables').insert(rows)
       if (insErr) { console.error('[handleSaveReservation sync insert]', insErr); setResSaving(false); return }
     }
+
+    await ensureContact(customerPhone, customerName)
 
     setResSaving(false)
     closeReservationModal()
@@ -538,6 +569,7 @@ export default function Tavoli({ business }) {
         <ReservationModal
           mode={resModal}
           date={selectedDate}
+          business={business}
           form={resForm}
           setForm={setResForm}
           errors={resErrors}
@@ -561,13 +593,70 @@ export default function Tavoli({ business }) {
 /* ── Modale prenotazione — sotto-componente separato per leggibilità, non
    un file a parte: stesso principio di BusinessDrawer in Admin.jsx. ── */
 function ReservationModal({
-  mode, date, form, setForm, errors, setErrors, tables, onToggleTable,
+  mode, date, business, form, setForm, errors, setErrors, tables, onToggleTable,
   onClose, onSave, saving, confirmCancel, onAskCancel, onCancelCancel, onConfirmCancel, busyCancelling,
 }) {
   const set = (field) => (e) => {
     const val = e.target.value
     setForm((f) => ({ ...f, [field]: val }))
     setErrors((er) => ({ ...er, [field]: null }))
+  }
+
+  // Ricerca cliente esistente digitando nome O telefono (Correzione Blocco A) —
+  // stesso pattern debounced già usato per l'autocomplete del nome cliente in
+  // Agenda.jsx (handleNameChange): merge di contacts + appointments per non
+  // perdere clienti mai salvati in rubrica, deduplicati per telefono. Sostituisce
+  // il vecchio campo "Telefono" libero: digitando qui, se il cliente esiste già
+  // (in questo business) lo si seleziona invece di ridigitarlo da zero.
+  const [phoneResults,         setPhoneResults]         = useState([])
+  const [phoneDropdownVisible, setPhoneDropdownVisible] = useState(false)
+  const phoneSearchTimerRef = useRef(null)
+
+  const handlePhoneChange = (e) => {
+    const val = e.target.value
+    setForm((f) => ({ ...f, customer_phone: val }))
+    setErrors((er) => ({ ...er, customer_phone: null }))
+    clearTimeout(phoneSearchTimerRef.current)
+    const term = val.trim()
+    if (term.length < 2) { setPhoneResults([]); setPhoneDropdownVisible(false); return }
+    phoneSearchTimerRef.current = setTimeout(async () => {
+      try {
+        const safeTerm = term.replace(/,/g, '') // "," è il separatore di .or(), non ammesso nel termine
+        const [{ data: cts }, { data: apts }] = await Promise.all([
+          supabase.from('contacts')
+            .select('name, phone')
+            .eq('business_id', business.id)
+            .or(`name.ilike.%${safeTerm}%,phone.ilike.%${safeTerm}%`)
+            .order('name')
+            .limit(8),
+          supabase.from('appointments')
+            .select('client_name, client_phone')
+            .eq('business_id', business.id)
+            .or(`client_name.ilike.%${safeTerm}%,client_phone.ilike.%${safeTerm}%`)
+            .order('client_name')
+            .limit(8),
+        ])
+        const seen = new Map()
+        for (const ct of (cts ?? [])) {
+          const key = ct.phone?.replace(/\s+/g, '') || '__' + ct.name.trim().toLowerCase()
+          if (!seen.has(key)) seen.set(key, { name: ct.name, phone: ct.phone ?? null })
+        }
+        for (const apt of (apts ?? [])) {
+          const key = apt.client_phone?.replace(/\s+/g, '') || '__' + apt.client_name.trim().toLowerCase()
+          if (!seen.has(key)) seen.set(key, { name: apt.client_name, phone: apt.client_phone ?? null })
+        }
+        const results = Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 8)
+        setPhoneResults(results)
+        setPhoneDropdownVisible(results.length > 0)
+      } catch { /* silently fail, stessa politica di handleNameChange in Agenda.jsx */ }
+    }, 200)
+  }
+
+  const selectPhoneSuggestion = (s) => {
+    setForm((f) => ({ ...f, customer_name: s.name, customer_phone: s.phone ?? f.customer_phone }))
+    setErrors((er) => ({ ...er, customer_name: null, customer_phone: null }))
+    setPhoneResults([])
+    setPhoneDropdownVisible(false)
   }
 
   return (
@@ -624,16 +713,29 @@ function ReservationModal({
             </div>
           </div>
 
-          <div className="sv-field">
+          <div className="sv-field" style={{ position: 'relative' }}>
             <label className="sv-label" htmlFor="tvr-phone">Telefono <span className="sv-optional">(facoltativo)</span></label>
             <input
               id="tvr-phone"
               className="sv-input"
               type="text"
               value={form.customer_phone}
-              onChange={set('customer_phone')}
-              placeholder="es. 333 1234567"
+              onChange={handlePhoneChange}
+              onBlur={() => setTimeout(() => setPhoneDropdownVisible(false), 150)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setPhoneResults([]); setPhoneDropdownVisible(false) } }}
+              placeholder="Nome o telefono — cerca tra i clienti esistenti"
+              autoComplete="off"
             />
+            {phoneDropdownVisible && phoneResults.length > 0 && (
+              <div className="ag-suggest-dropdown">
+                {phoneResults.map((s, i) => (
+                  <div key={i} className="ag-suggest-item" onMouseDown={() => selectPhoneSuggestion(s)}>
+                    <span className="ag-suggest-name">{s.name}</span>
+                    {s.phone && <span className="ag-suggest-phone">{s.phone}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="sv-field">
