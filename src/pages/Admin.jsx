@@ -312,11 +312,10 @@ export default function Admin() {
     setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, is_free: next } : prev)
   }, [])
 
-  // Nessuna whitelist di valori qui di proposito: la colonna è pronta per
-  // verticali futuri ('ristorante', 'bnb', ...) che non sono ancora
-  // implementati lato dashboard — impostare un valore diverso da 'generico'
-  // da qui serve solo a verificare che il resto dell'app lo tratti come
-  // 'generico' (fail-safe), non attiva alcuna funzione.
+  // Campo libero, non un menu con opzioni predefinite di proposito: un
+  // valore non ancora riconosciuto dal codice (o un refuso) si comporta
+  // come 'generico' per costruzione (fail-safe) — vedi i verticali
+  // effettivamente attivi in Dashboard.jsx.
   const setVertical = useCallback(async (biz, nextValue) => {
     const value = nextValue.trim() || 'generico'
     if (value === (biz.vertical ?? 'generico')) return
@@ -325,6 +324,27 @@ export default function Admin() {
     setBizActionError(null)
     setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, vertical: value } : b))
     setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, vertical: value } : prev)
+
+    // Seeding automatico dei 4 turni di default per il verticale
+    // ristorante_bar (Task 4 correzione) — solo quando il business non ha
+    // ancora nessun turno configurato, per non duplicarli se si esce e si
+    // rientra dal verticale più volte (il guard sopra evita solo il caso
+    // "stesso valore", non "va via e ritorna"). Best-effort: un fallimento
+    // qui non deve bloccare il salvataggio del vertical, già andato a buon
+    // fine — solo loggato, il titolare può comunque aggiungere turni a
+    // mano da Tavoli.jsx.
+    if (value === 'ristorante_bar') {
+      const { count } = await supabase
+        .from('business_turns')
+        .select('*', { count: 'exact', head: true })
+        .eq('business_id', biz.id)
+      if (!count) {
+        const { error: turnsErr } = await supabase.from('business_turns').insert(
+          [1, 2, 3, 4].map(slot_number => ({ business_id: biz.id, slot_number, name: null }))
+        )
+        if (turnsErr) console.error('[setVertical seed turns]', turnsErr)
+      }
+    }
   }, [])
 
   const copyLink = useCallback((biz) => {

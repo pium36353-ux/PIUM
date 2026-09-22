@@ -2201,6 +2201,53 @@ body {
   font-size: 14px;
 }
 
+/* Switch turno */
+.tv-turn-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tv-turn-pill {
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+
+  &:hover { background: var(--code-bg); }
+}
+
+.tv-turn-pill--active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.tv-turn-manage-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 99px;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
+  margin-left: 4px;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--code-bg); color: var(--text-h); }
+}
+
 /* ============================================================
    End Tavoli component
    ============================================================ */
