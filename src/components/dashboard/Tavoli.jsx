@@ -537,7 +537,12 @@ export default function Tavoli({ business }) {
                 title="Clicca per prenotare questo tavolo"
               >
                 <div className="tv-card-header">
-                  <span className="tv-card-name">{t.name}</span>
+                  <span className="tv-card-title">
+                    <span className="tv-status-icon" aria-hidden="true">
+                      {occupied ? <IconStatusOccupied /> : <IconStatusFree />}
+                    </span>
+                    <span className="tv-card-name">{t.name}</span>
+                  </span>
                   <button className="tv-icon-btn" title="Modifica tavolo" onClick={(e) => { e.stopPropagation(); openEditTable(t) }}>
                     <IconEdit />
                   </button>
@@ -953,6 +958,11 @@ function ReservationModal({
 
 /* ── Icons ── */
 function IconEdit()  { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> }
+// Forma diversa per stato, non solo colore — un cerchio con spunta (outline)
+// per libero, una sagoma persona piena (filled) per occupato: due glifi
+// distinguibili anche senza percepire il colore (accessibilità).
+function IconStatusFree()     { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12.5 10.5 15 16 9"/></svg> }
+function IconStatusOccupied() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="7" r="4"/><path d="M12 13c-4.42 0-8 2.91-8 6.5V21h16v-1.5c0-3.59-3.58-6.5-8-6.5z"/></svg> }
 function IconCheck() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
 function IconX()     { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
 function IconChevronLeft()  { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg> }

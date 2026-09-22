@@ -1899,8 +1899,50 @@ body {
   &:hover { box-shadow: var(--shadow); }
 }
 
-.tv-card--occupied { border-color: rgba(239,68,68,0.35); }
-.tv-card--free      { border-color: rgba(34,197,94,0.35); }
+/* Riempimento pieno, non solo bordo — colori FISSI (non theme-aware, come
+   .pet-coat-chip in PetIndicators.jsx): lo scopo è un contrasto testo/sfondo
+   garantito indipendentemente dal tema chiaro/scuro del resto dell'app, non
+   un accento che segue il tema. Il colore da solo non deve mai essere
+   l'unico modo di distinguere i due stati (accessibilità) — vedi
+   .tv-status-icon, forma diversa (cerchio+spunta vs sagoma persona), non
+   solo colore diverso. */
+.tv-card--free {
+  background: #E1F0D1;
+  color: #2E5613;
+  border-color: transparent;
+}
+.tv-card--occupied {
+  background: #F7D9CA;
+  color: #7A2E14;
+  border-color: transparent;
+}
+.tv-card--free .tv-card-name,
+.tv-card--free .tv-capacity-label,
+.tv-card--free .tv-no-reservation,
+.tv-card--free .tv-icon-btn,
+.tv-card--free .tv-btn-deactivate,
+.tv-card--occupied .tv-card-name,
+.tv-card--occupied .tv-capacity-label,
+.tv-card--occupied .tv-no-reservation,
+.tv-card--occupied .tv-icon-btn,
+.tv-card--occupied .tv-btn-deactivate {
+  color: inherit;
+}
+.tv-card--free .tv-icon-btn:hover,
+.tv-card--occupied .tv-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+.tv-card--free .tv-btn-deactivate,
+.tv-card--occupied .tv-btn-deactivate {
+  border-color: currentColor;
+  opacity: 0.75;
+}
+.tv-card--free .tv-btn-deactivate:hover,
+.tv-card--occupied .tv-btn-deactivate:hover {
+  background: rgba(0, 0, 0, 0.08);
+  opacity: 1;
+}
+
 .tv-card--inactive  { opacity: 0.55; }
 
 .tv-card-header {
@@ -1908,6 +1950,18 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.tv-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tv-status-icon {
+  display: flex;
+  flex-shrink: 0;
 }
 
 .tv-card-name {
