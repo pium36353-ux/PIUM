@@ -1913,6 +1913,11 @@ body {
   color: #2E5613;
   border-color: transparent;
 }
+.tv-card--reserved {
+  background: #D9E4F5;
+  color: #1E3A66;
+  border-color: transparent;
+}
 .tv-card--occupied {
   background: #F7D9CA;
   color: #7A2E14;
@@ -1923,6 +1928,11 @@ body {
 .tv-card--free .tv-no-reservation,
 .tv-card--free .tv-icon-btn,
 .tv-card--free .tv-btn-deactivate,
+.tv-card--reserved .tv-card-name,
+.tv-card--reserved .tv-capacity-label,
+.tv-card--reserved .tv-no-reservation,
+.tv-card--reserved .tv-icon-btn,
+.tv-card--reserved .tv-btn-deactivate,
 .tv-card--occupied .tv-card-name,
 .tv-card--occupied .tv-capacity-label,
 .tv-card--occupied .tv-no-reservation,
@@ -1931,21 +1941,44 @@ body {
   color: inherit;
 }
 .tv-card--free .tv-icon-btn:hover,
+.tv-card--reserved .tv-icon-btn:hover,
 .tv-card--occupied .tv-icon-btn:hover {
   background: rgba(0, 0, 0, 0.08);
 }
 .tv-card--free .tv-btn-deactivate,
+.tv-card--reserved .tv-btn-deactivate,
 .tv-card--occupied .tv-btn-deactivate {
   border-color: currentColor;
   opacity: 0.75;
 }
 .tv-card--free .tv-btn-deactivate:hover,
+.tv-card--reserved .tv-btn-deactivate:hover,
 .tv-card--occupied .tv-btn-deactivate:hover {
   background: rgba(0, 0, 0, 0.08);
   opacity: 1;
 }
 
 .tv-card--inactive  { opacity: 0.55; }
+
+/* Pulsanti apri/prendi ordine — sullo sfondo pieno della card, stesso
+   principio di .tv-btn-deactivate (bordo/hover in currentColor). */
+.tv-order-btn,
+.tv-walkin-btn {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: inherit;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+
+  &:hover:not(:disabled) { background: rgba(255, 255, 255, 0.8); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
 
 .tv-card-header {
   display: flex;
@@ -2428,6 +2461,192 @@ body {
 
 /* ============================================================
    End Menu component
+   ============================================================ */
+
+/* ============================================================
+   Ordine component (verticale ristorante_bar) — schermata ordine,
+   sostituisce interamente la griglia tavoli mentre è aperta (vedi
+   Tavoli.jsx). Riusa ampiamente sv-*/tv-* già esistenti, solo poche
+   classi proprie per griglia piatti, stepper e righe ordine.
+   ============================================================ */
+
+.ord-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ord-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ord-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ord-table-name {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--text-h) !important;
+  margin: 0 !important;
+}
+
+.ord-turn-label {
+  font-size: 12.5px;
+  color: var(--text);
+  padding: 2px 8px;
+  background: var(--code-bg);
+  border-radius: 99px;
+}
+
+.ord-search-row {
+  max-width: 420px;
+}
+
+.ord-category-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ord-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.ord-tile {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+
+  &:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+}
+
+.ord-tile-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ord-tile-price {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ord-tile-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 4px 6px;
+  background: var(--accent-bg);
+  border-radius: 7px;
+
+  & span { font-size: 13px; font-weight: 700; color: var(--accent); min-width: 14px; text-align: center; }
+  & button {
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 6px;
+    background: var(--bg);
+    color: var(--accent);
+    font-size: 15px; font-weight: 700; line-height: 1;
+    cursor: pointer;
+  }
+  & button:hover { background: var(--accent); color: #fff; }
+}
+
+.ord-current {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ord-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ord-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.ord-line-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.ord-line-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ord-line-price {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.ord-line-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+
+  & span { font-size: 13px; font-weight: 700; color: var(--text-h); min-width: 16px; text-align: center; }
+  & button {
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px; font-weight: 700; line-height: 1;
+    cursor: pointer;
+  }
+  & button:hover { background: var(--code-bg); color: var(--text-h); }
+}
+
+.ord-line-notes {
+  flex: 1;
+  min-width: 140px;
+  font-size: 12.5px !important;
+  padding: 6px 10px !important;
+}
+
+.ord-total {
+  align-self: flex-end;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+/* ============================================================
+   End Ordine component
    ============================================================ */
 
 /* ============================================================

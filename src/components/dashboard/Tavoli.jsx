@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { normalizePhone } from '../../lib/phone'
+import Ordine from './Ordine'
 
 const EMPTY_TABLE_FORM = { name: '', capacity: '' }
 const EMPTY_RESERVATION_FORM = { customer_name: '', customer_phone: '', party_size: '', turn_id: '', notes: '', table_ids: [] }
@@ -89,6 +90,15 @@ export default function Tavoli({ business }) {
   const [confirmCancelResId, setConfirmCancelResId] = useState(null)
   const [busyResId,     setBusyResId]     = useState(null)
 
+  // Ordini aperti (Blocco C) — NON filtrati per data/turno: un ordine
+  // aperto è un fatto fisico attuale ("qualcuno è seduto lì adesso"), resta
+  // vero indipendentemente da quale data/turno si sta sfogliando nello
+  // switch. Determina da solo lo stato OCCUPATO (vedi getTableStatus).
+  const [openOrders, setOpenOrders] = useState([])
+  const [activeOrder,      setActiveOrder]      = useState(null) // riga table_orders in visualizzazione, o null
+  const [activeOrderTable, setActiveOrderTable] = useState(null)
+  const [orderActionBusyId, setOrderActionBusyId] = useState(null) // table.id con un'azione apri-ordine in corso
+
   const load = useCallback(async (signal = null) => {
     if (!business) return
     setLoading(true)
@@ -131,11 +141,30 @@ export default function Tavoli({ business }) {
     setReservations(data ?? [])
   }, [business, selectedDate])
 
+  // Ordini aperti — SENZA filtro per data: vedi nota sullo state più sopra.
+  const loadOpenOrders = useCallback(async (signal = null) => {
+    if (!business) return
+    const { data, error } = await supabase
+      .from('table_orders')
+      .select('*')
+      .eq('business_id', business.id)
+      .eq('status', 'aperto')
+    if (signal?.cancelled) return
+    if (error) { console.error('[loadOpenOrders]', error); return }
+    setOpenOrders(data ?? [])
+  }, [business])
+
   useEffect(() => {
     const signal = { cancelled: false }
     load(signal)
     return () => { signal.cancelled = true }
   }, [load])
+
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadOpenOrders(signal)
+    return () => { signal.cancelled = true }
+  }, [loadOpenOrders])
 
   useEffect(() => {
     const signal = { cancelled: false }
@@ -165,11 +194,13 @@ export default function Tavoli({ business }) {
   const activeTurns = useMemo(() => turns.filter(t => t.is_active), [turns])
 
   // Tavolo → prenotazioni per l'ESATTA combinazione data (già filtrata
-  // lato query) + turno selezionato. Punto centrale della correzione: lo
-  // stato libero/occupato non è mai salvato a parte, è sempre questo
-  // calcolo — lo stesso tavolo può risultare libero per un turno e
-  // occupato per un altro nello stesso giorno, perché sono prenotazioni
-  // diverse (turn_id diverso), non un singolo stato condiviso.
+  // lato query) + turno selezionato. Da sola determina solo lo stato
+  // PRENOTATO ora (Blocco C) — una prenotazione confermata significa
+  // "atteso", non "seduto". Resta comunque il principio di fondo: niente è
+  // mai salvato a parte, è sempre questo calcolo — lo stesso tavolo può
+  // risultare senza prenotazione per un turno e con prenotazione per un
+  // altro nello stesso giorno, perché sono prenotazioni diverse
+  // (turn_id diverso), non un singolo stato condiviso.
   const reservationsByTable = useMemo(() => {
     const map = {}
     for (const r of reservations) {
@@ -182,6 +213,27 @@ export default function Tavoli({ business }) {
     }
     return map
   }, [reservations, selectedTurnId])
+
+  // Tavolo → ordine aperto (al più uno, garantito dall'indice unico
+  // parziale in DB). Da sola determina lo stato OCCUPATO — priorità
+  // assoluta su PRENOTATO, e SENZA guardare il turno: un ordine aperto
+  // rende il tavolo occupato punto e basta, indipendentemente da quale
+  // turno è selezionato nello switch in questo momento (vedi Cronologia
+  // in MAPPA_TECNICA_PIUM.md per il perché di questo affinamento).
+  const openOrderByTable = useMemo(() => {
+    const map = {}
+    for (const o of openOrders) map[o.table_id] = o
+    return map
+  }, [openOrders])
+
+  // Tre stati, calcolati sempre al volo, mai persistiti — stesso principio
+  // già in uso per libero/occupato prima di questo blocco, esteso a tre
+  // valori: 'libero' | 'prenotato' | 'occupato'.
+  const getTableStatus = useCallback((t) => {
+    if (openOrderByTable[t.id]) return 'occupato'
+    if ((reservationsByTable[t.id]?.length ?? 0) > 0) return 'prenotato'
+    return 'libero'
+  }, [openOrderByTable, reservationsByTable])
 
   /* ── Modal tavolo ── */
   const openAddTable = () => {
@@ -475,6 +527,81 @@ export default function Tavoli({ business }) {
     loadReservations()
   }
 
+  /* ── Ordini (Blocco C) ── */
+  const openExistingOrder = (t) => {
+    const order = openOrderByTable[t.id]
+    if (!order) return
+    setActiveOrderTable(t)
+    setActiveOrder(order)
+  }
+
+  // Da una prenotazione confermata (stato PRENOTATO → tap "Prendi ordine"):
+  // turn_id copiato dalla prenotazione stessa, non dal turno selezionato
+  // nello switch — i due normalmente coincidono (la prenotazione è quella
+  // di questo stesso turno), ma se non coincidessero per qualche motivo la
+  // fonte di verità per l'ordine resta la prenotazione che lo ha generato.
+  const startOrderFromReservation = async (t, reservation) => {
+    setOrderActionBusyId(t.id)
+    const { data, error } = await supabase
+      .from('table_orders')
+      .insert({
+        business_id:    business.id,
+        table_id:       t.id,
+        order_date:     formatDate(selectedDate),
+        turn_id:        reservation.turn_id,
+        reservation_id: reservation.id,
+      })
+      .select('*')
+      .single()
+    setOrderActionBusyId(null)
+    if (error) { console.error('[startOrderFromReservation]', error); return }
+    logActivity(business.id, business.user_id, 'table_order_opened', `Ordine aperto da prenotazione: ${t.name}`)
+    setOpenOrders((prev) => [...prev, data])
+    setActiveOrderTable(t)
+    setActiveOrder(data)
+  }
+
+  // Walk-in: nessuna prenotazione dietro, reservation_id resta NULL —
+  // turn_id preso dal turno attualmente selezionato nello switch (unica
+  // fonte disponibile in questo caso).
+  const startWalkInOrder = async (t) => {
+    if (!selectedTurnId) return
+    setOrderActionBusyId(t.id)
+    const { data, error } = await supabase
+      .from('table_orders')
+      .insert({
+        business_id:    business.id,
+        table_id:       t.id,
+        order_date:     formatDate(selectedDate),
+        turn_id:        selectedTurnId,
+        reservation_id: null,
+      })
+      .select('*')
+      .single()
+    setOrderActionBusyId(null)
+    if (error) { console.error('[startWalkInOrder]', error); return }
+    logActivity(business.id, business.user_id, 'table_order_opened', `Ordine aperto (walk-in): ${t.name}`)
+    setOpenOrders((prev) => [...prev, data])
+    setActiveOrderTable(t)
+    setActiveOrder(data)
+  }
+
+  const closeOrderView = () => {
+    setActiveOrder(null)
+    setActiveOrderTable(null)
+  }
+
+  // Chiamato da Ordine.jsx dopo che "Chiudi tavolo" è andato a buon fine —
+  // qui rimuoviamo l'ordine dalla lista degli aperti (non serve un reload,
+  // la riga esiste ancora in DB con status='chiuso', solo non più "aperta")
+  // e torniamo alla griglia.
+  const handleOrderClosed = () => {
+    if (activeOrder) {
+      setOpenOrders((prev) => prev.filter((o) => o.id !== activeOrder.id))
+    }
+    closeOrderView()
+  }
+
   if (!business) {
     return (
       <div className="db-section">
@@ -485,6 +612,24 @@ export default function Tavoli({ business }) {
 
   const today = isToday(selectedDate)
 
+  // Schermata ordine: sostituisce interamente la griglia tavoli quando
+  // attiva (non un overlay sopra), stesso principio di una "schermata"
+  // separata richiesta esplicitamente — non un modale sopra alla griglia.
+  if (activeOrder) {
+    return (
+      <div className="db-section">
+        <Ordine
+          business={business}
+          order={activeOrder}
+          table={activeOrderTable}
+          turns={turns}
+          onClose={closeOrderView}
+          onOrderClosed={handleOrderClosed}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="db-section">
 
@@ -492,7 +637,7 @@ export default function Tavoli({ business }) {
       <div className="db-section-toolbar">
         <p className="db-section-desc">
           {tables.length > 0
-            ? `${tables.length} tavol${tables.length !== 1 ? 'i' : 'o'} — libero/occupato calcolato dalle prenotazioni per data e turno.`
+            ? `${tables.length} tavol${tables.length !== 1 ? 'i' : 'o'} — libero, prenotato o occupato calcolato al volo per data e turno.`
             : 'Aggiungi i tavoli della tua sala.'}
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -572,19 +717,32 @@ export default function Tavoli({ business }) {
               )
             }
             const tableReservations = reservationsByTable[t.id] ?? []
-            const occupied = tableReservations.length > 0
+            const status = getTableStatus(t) // 'libero' | 'prenotato' | 'occupato'
+            // Nomi classe CSS in inglese (free/reserved/occupied), coerenti con
+            // quelli già esistenti prima di questo blocco — status resta in
+            // italiano nel resto della logica/UI perché è il linguaggio del
+            // dominio (vedi Cronologia in MAPPA_TECNICA_PIUM.md).
+            const statusClass = status === 'occupato' ? 'tv-card--occupied'
+              : status === 'prenotato' ? 'tv-card--reserved'
+              : 'tv-card--free'
+            const statusIcon = status === 'occupato' ? <IconStatusOccupied />
+              : status === 'prenotato' ? <IconStatusReserved />
+              : <IconStatusFree />
+            const cardTitle = status === 'occupato' ? "Clicca per aprire l'ordine" : 'Clicca per prenotare questo tavolo'
+            const handleCardClick = () => {
+              if (status === 'occupato') { openExistingOrder(t); return }
+              openAddReservation(t)
+            }
             return (
               <div
                 key={t.id}
-                className={`tv-card tv-card--clickable ${occupied ? 'tv-card--occupied' : 'tv-card--free'}`}
-                onClick={() => openAddReservation(t)}
-                title="Clicca per prenotare questo tavolo"
+                className={`tv-card tv-card--clickable ${statusClass}`}
+                onClick={handleCardClick}
+                title={cardTitle}
               >
                 <div className="tv-card-header">
                   <span className="tv-card-title">
-                    <span className="tv-status-icon" aria-hidden="true">
-                      {occupied ? <IconStatusOccupied /> : <IconStatusFree />}
-                    </span>
+                    <span className="tv-status-icon" aria-hidden="true">{statusIcon}</span>
                     <span className="tv-card-name">{t.name}</span>
                   </span>
                   <button className="tv-icon-btn" title="Modifica tavolo" onClick={(e) => { e.stopPropagation(); openEditTable(t) }}>
@@ -605,26 +763,68 @@ export default function Tavoli({ business }) {
                   />
                 </label>
 
-                {/* Prenotazioni per l'esatta combinazione data+turno selezionata —
-                    a colpo d'occhio, mai da aprire nulla per vederle. Può essercene
-                    più di una sullo stesso tavolo/data/turno (nessun controllo di
-                    doppia prenotazione, come deciso). */}
-                {tableReservations.length > 0 ? (
-                  <div className="tv-reservations">
-                    {tableReservations.map(r => (
+                {status === 'occupato' ? (
+                  /* Ordine aperto: priorità assoluta sulla visualizzazione,
+                     nessuna prenotazione mostrata qui (vedi nota su
+                     openOrderByTable più sopra). */
+                  <button
+                    type="button"
+                    className="tv-order-btn"
+                    onClick={(e) => { e.stopPropagation(); openExistingOrder(t) }}
+                  >
+                    Apri ordine
+                  </button>
+                ) : tableReservations.length > 0 ? (
+                  <>
+                    {/* Prenotazioni per l'esatta combinazione data+turno selezionata —
+                        a colpo d'occhio, mai da aprire nulla per vederle. Può essercene
+                        più di una sullo stesso tavolo/data/turno (nessun controllo di
+                        doppia prenotazione, come deciso). */}
+                    <div className="tv-reservations">
+                      {tableReservations.map(r => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          className="tv-reservation-chip"
+                          onClick={(e) => { e.stopPropagation(); openEditReservation(r) }}
+                        >
+                          <span className="tv-reservation-name">{r.customer_name}</span>
+                          {r.party_size != null && <span className="tv-reservation-size">{r.party_size}p</span>}
+                        </button>
+                      ))}
+                    </div>
+                    {/* "Prendi ordine" solo per oggi — non ha senso aprire un ordine
+                        reale per una data futura, nessuno è fisicamente al tavolo.
+                        Con più prenotazioni sullo stesso tavolo/turno (edge case, non
+                        prevenuto) usa la prima trovata. */}
+                    {today && (
                       <button
-                        key={r.id}
                         type="button"
-                        className="tv-reservation-chip"
-                        onClick={(e) => { e.stopPropagation(); openEditReservation(r) }}
+                        className="tv-order-btn"
+                        disabled={orderActionBusyId === t.id}
+                        onClick={(e) => { e.stopPropagation(); startOrderFromReservation(t, tableReservations[0]) }}
                       >
-                        <span className="tv-reservation-name">{r.customer_name}</span>
-                        {r.party_size != null && <span className="tv-reservation-size">{r.party_size}p</span>}
+                        {orderActionBusyId === t.id ? <TvSpinner small /> : 'Prendi ordine'}
                       </button>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 ) : (
-                  <p className="tv-no-reservation">Nessuna prenotazione</p>
+                  <>
+                    <p className="tv-no-reservation">Nessuna prenotazione</p>
+                    {/* Walk-in: percorso alternativo alla prenotazione per un tavolo
+                        libero, solo per oggi e solo se c'è un turno selezionato (serve
+                        per valorizzare table_orders.turn_id). */}
+                    {today && selectedTurnId && (
+                      <button
+                        type="button"
+                        className="tv-walkin-btn"
+                        disabled={orderActionBusyId === t.id}
+                        onClick={(e) => { e.stopPropagation(); startWalkInOrder(t) }}
+                      >
+                        {orderActionBusyId === t.id ? <TvSpinner small /> : 'Walk-in: apri ordine'}
+                      </button>
+                    )}
+                  </>
                 )}
 
                 {confirmDeactivateId === t.id ? (
@@ -1045,9 +1245,11 @@ function ReservationModal({
 /* ── Icons ── */
 function IconEdit()  { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> }
 // Forma diversa per stato, non solo colore — un cerchio con spunta (outline)
-// per libero, una sagoma persona piena (filled) per occupato: due glifi
-// distinguibili anche senza percepire il colore (accessibilità).
+// per libero, un segnalibro pieno per prenotato, una sagoma persona piena
+// per occupato: tre glifi distinguibili anche senza percepire il colore
+// (accessibilità).
 function IconStatusFree()     { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12.5 10.5 15 16 9"/></svg> }
+function IconStatusReserved() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 2a2 2 0 0 0-2 2v18l8-5.5 8 5.5V4a2 2 0 0 0-2-2z"/></svg> }
 function IconStatusOccupied() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="7" r="4"/><path d="M12 13c-4.42 0-8 2.91-8 6.5V21h16v-1.5c0-3.59-3.58-6.5-8-6.5z"/></svg> }
 function IconCheck() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
 function IconX()     { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
