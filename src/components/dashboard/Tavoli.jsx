@@ -97,7 +97,6 @@ export default function Tavoli({ business }) {
   const [activeOrder,      setActiveOrder]      = useState(null) // riga table_orders in visualizzazione, o null
   const [activeOrderTable, setActiveOrderTable] = useState(null)
   const [orderActionBusyId, setOrderActionBusyId] = useState(null) // table.id con un'azione apri-ordine in corso
-  const [orderActionError, setOrderActionError]   = useState(null)
 
   const load = useCallback(async (signal = null) => {
     if (!business) return
@@ -174,6 +173,40 @@ export default function Tavoli({ business }) {
     return () => { signal.cancelled = true }
   }, [loadOpenOrders])
 
+  // Chiusura automatica degli ordini dimenticati — regola di business:
+  // un ordine aperto su un turno si chiude da solo quando arriva la
+  // successiva occorrenza dello STESSO turno (es. un Pranzo di ieri
+  // lasciato aperto si chiude quando si apre il Pranzo di oggi). Un turno
+  // non tocca mai un turno diverso.
+  //
+  // Scatta SOLO se la data selezionata è davvero oggi — isToday()/
+  // formatDate() usano Date locale del browser (fuso del dispositivo, che
+  // per un business italiano è Europe/Rome), la STESSA funzione già usata
+  // per valorizzare order_date alla creazione — mai now() lato database,
+  // che è in UTC e tra mezzanotte e le 2 darebbe una data diversa da
+  // quella "vissuta" dal titolare. Navigare su una data diversa da oggi
+  // (futura o passata), qualunque turno, resta sempre sola lettura: nessun
+  // UPDATE parte mai da questo effect in quel caso.
+  //
+  // Nessun aggiornamento locale di openOrders necessario dopo: gli ordini
+  // chiusi qui hanno order_date precedente a oggi, quindi non facevano già
+  // parte di openOrders (che carica solo order_date = selectedDate, oggi
+  // in questo ramo) — sono un cleanup in background su dati non
+  // visualizzati in questo momento, non uno stato da rispecchiare in UI
+  // subito. Le righe in table_order_items non vengono toccate.
+  useEffect(() => {
+    if (!business || !selectedTurnId || !isToday(selectedDate)) return
+    const todayStr = formatDate(new Date())
+    supabase
+      .from('table_orders')
+      .update({ status: 'chiuso', closed_at: new Date().toISOString(), auto_closed: true })
+      .eq('business_id', business.id)
+      .eq('turn_id', selectedTurnId)
+      .eq('status', 'aperto')
+      .lt('order_date', todayStr)
+      .then(({ error }) => { if (error) console.error('[autoCloseForgottenOrders]', error) })
+  }, [business, selectedDate, selectedTurnId])
+
   useEffect(() => {
     const signal = { cancelled: false }
     loadTurns(signal)
@@ -224,22 +257,13 @@ export default function Tavoli({ business }) {
 
   // Tavolo → ordine aperto per l'ESATTA combinazione (tavolo, data, turno)
   // selezionata — stesso identico principio di reservationsByTable, niente
-  // eccezione. CORREZIONE: la prima versione ignorava il turno (e la query
-  // a monte ignorava anche la data), rendendo un tavolo "occupato" anche
-  // navigando a un giorno/turno diverso da quello dell'ordine realmente
-  // aperto — sbagliato, corretto qui.
-  //
-  // Nota per chi tocca questo codice in futuro: l'indice UNICO in DB
-  // (idx_table_orders_one_open_per_table) resta volutamente scoped solo su
-  // table_id, non su (table_id, order_date, turn_id) — un tavolo fisico non
-  // può avere due tab aperti in contemporanea, punto, indipendentemente da
-  // quale combinazione data/turno gli si è assegnata alla creazione. Questo
-  // significa che un tavolo può apparire "Libero"/"Prenotato" per la
-  // combinazione che si sta guardando ora pur avendo già un ordine aperto
-  // altrove (altra data/turno, es. dimenticato aperto) — in quel caso un
-  // tentativo di aprirne uno nuovo qui fallisce con 23505: gestito in
-  // startOrderFromReservation/startWalkInOrder con un messaggio dedicato,
-  // non un errore silenzioso in console.
+  // eccezione. Il vincolo UNIQUE in DB (idx_table_orders_one_open_per_slot)
+  // è scoped alla stessa identica combinazione (table_id, order_date,
+  // turn_id), non solo al tavolo — coerente con la regola di business: un
+  // ordine dimenticato aperto su un turno non blocca un ordine nuovo sullo
+  // stesso tavolo in un turno diverso dello stesso giorno, si chiude da
+  // solo alla successiva occorrenza dello STESSO turno (vedi l'effect di
+  // auto-chiusura più sotto).
   const openOrderByTable = useMemo(() => {
     const map = {}
     for (const o of openOrders) {
@@ -558,29 +582,12 @@ export default function Tavoli({ business }) {
     setActiveOrder(order)
   }
 
-  // Messaggio esplicito per il caso limite introdotto dalla correzione: la
-  // visualizzazione è scoped a (tavolo, data, turno), ma il vincolo UNIQUE
-  // in DB resta scoped al solo tavolo (vedi nota su openOrderByTable) — un
-  // tavolo può quindi apparire Libero/Prenotato qui pur avendo già un
-  // ordine aperto su un'altra combinazione, e un tentativo di aprirne uno
-  // nuovo fallisce con 23505. Meglio un messaggio chiaro che un errore
-  // silenzioso in console.
-  const handleOrderInsertError = (error) => {
-    console.error('[order insert]', error)
-    if (error?.code === '23505') {
-      setOrderActionError('Questo tavolo ha già un ordine aperto su un\'altra data/turno — chiudilo prima di aprirne uno nuovo qui.')
-    } else {
-      setOrderActionError('Errore durante l\'apertura dell\'ordine. Riprova.')
-    }
-  }
-
   // Da una prenotazione confermata (stato PRENOTATO → tap "Prendi ordine"):
   // turn_id copiato dalla prenotazione stessa, non dal turno selezionato
   // nello switch — i due normalmente coincidono (la prenotazione è quella
   // di questo stesso turno), ma se non coincidessero per qualche motivo la
   // fonte di verità per l'ordine resta la prenotazione che lo ha generato.
   const startOrderFromReservation = async (t, reservation) => {
-    setOrderActionError(null)
     setOrderActionBusyId(t.id)
     const { data, error } = await supabase
       .from('table_orders')
@@ -594,7 +601,7 @@ export default function Tavoli({ business }) {
       .select('*')
       .single()
     setOrderActionBusyId(null)
-    if (error) { handleOrderInsertError(error); return }
+    if (error) { console.error('[startOrderFromReservation]', error); return }
     logActivity(business.id, business.user_id, 'table_order_opened', `Ordine aperto da prenotazione: ${t.name}`)
     setOpenOrders((prev) => [...prev, data])
     setActiveOrderTable(t)
@@ -606,7 +613,6 @@ export default function Tavoli({ business }) {
   // fonte disponibile in questo caso).
   const startWalkInOrder = async (t) => {
     if (!selectedTurnId) return
-    setOrderActionError(null)
     setOrderActionBusyId(t.id)
     const { data, error } = await supabase
       .from('table_orders')
@@ -620,7 +626,7 @@ export default function Tavoli({ business }) {
       .select('*')
       .single()
     setOrderActionBusyId(null)
-    if (error) { handleOrderInsertError(error); return }
+    if (error) { console.error('[startWalkInOrder]', error); return }
     logActivity(business.id, business.user_id, 'table_order_opened', `Ordine aperto (walk-in): ${t.name}`)
     setOpenOrders((prev) => [...prev, data])
     setActiveOrderTable(t)
@@ -727,13 +733,6 @@ export default function Tavoli({ business }) {
       {activeTurns.length === 0 && (
         <div className="db-empty-banner">
           Nessun turno attivo — aggiungine uno da "Gestisci turni" per vedere e prenotare i tavoli.
-        </div>
-      )}
-
-      {orderActionError && (
-        <div className="db-expired-banner">
-          {orderActionError}
-          <button className="db-load-retry" onClick={() => setOrderActionError(null)} style={{ marginLeft: 'auto' }}>Chiudi</button>
         </div>
       )}
 
