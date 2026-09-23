@@ -9,11 +9,24 @@
 -- stato, cambia solo se reservation_id è valorizzato. Tre stati ora,
 -- calcolati sempre al volo (stesso principio già in uso per
 -- libero/occupato, vedi MAPPA_TECNICA_PIUM.md sezione "Verticali"):
---   LIBERO    — nessuna prenotazione confermata, nessun ordine aperto.
---   PRENOTATO — prenotazione confermata, nessun ordine aperto ancora.
---   OCCUPATO  — un ordine aperto esiste per quel tavolo, INDIPENDENTEMENTE
---               dal turno formale: un ordine aperto rende il tavolo
---               occupato punto e basta, il turno resta solo informativo.
+--   LIBERO    — nessuna prenotazione confermata, nessun ordine aperto per
+--               l'esatta combinazione (tavolo, order_date, turn_id) in vista.
+--   PRENOTATO — prenotazione confermata, nessun ordine aperto ancora per
+--               quella stessa combinazione.
+--   OCCUPATO  — un ordine aperto esiste per QUELLA STESSA combinazione
+--               (tavolo, order_date, turn_id) — non il tavolo in assoluto:
+--               cambiando data o turno in vista, lo stesso tavolo torna a
+--               mostrare il proprio stato reale per la combinazione scelta.
+--
+-- NOTA — vincolo unico e chiusura automatica (letti qui possono fuorviare):
+-- l'indice unico più sotto (idx_table_orders_one_open_per_table, un solo
+-- ordine aperto per tavolo senza guardare data/turno) è stato SOSTITUITO
+-- dalla migration successiva 20260923_table_orders_auto_close.sql con un
+-- indice scoped a (table_id, order_date, turn_id), coerente con gli stati
+-- sopra. Quella migration introduce anche la chiusura automatica: un
+-- ordine dimenticato aperto si chiude da solo alla successiva occorrenza
+-- dello STESSO turno (mai di un turno diverso). Vedi quel file per il
+-- vincolo e la logica realmente in vigore.
 --
 -- Additiva, nessun impatto sulle righe esistenti: due CREATE TABLE nuove
 -- + un indice trigram su menu_items.name (ricerca fuzzy nella schermata
@@ -40,9 +53,14 @@ CREATE INDEX IF NOT EXISTS idx_table_orders_business_date ON table_orders(busine
 CREATE INDEX IF NOT EXISTS idx_table_orders_table_id      ON table_orders(table_id);
 CREATE INDEX IF NOT EXISTS idx_table_orders_reservation_id ON table_orders(reservation_id);
 
--- Un tavolo fisico non può avere più di un ordine aperto contemporaneamente
--- — vincolo garantito dal DB, non solo dall'interfaccia: un secondo
--- insert con status='aperto' sullo stesso table_id fallisce con 23505.
+-- SUPERSEDED — vincolo storico, lasciato qui solo perché questa migration è
+-- già applicata: garantiva un solo ordine aperto per tavolo, senza guardare
+-- data/turno. Sostituito da 20260923_table_orders_auto_close.sql con un
+-- indice scoped a (table_id, order_date, turn_id), per coerenza con la
+-- chiusura automatica introdotta in quella migration (un ordine dimenticato
+-- su un turno non deve bloccare un nuovo ordine sullo stesso tavolo in un
+-- turno diverso). Non fare riferimento a questo indice per il vincolo
+-- realmente in vigore.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_table_orders_one_open_per_table
   ON table_orders(table_id) WHERE status = 'aperto';
 
