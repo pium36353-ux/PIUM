@@ -1,0 +1,350 @@
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { supabase } from '../../lib/supabase'
+import { ensureDefaultCourses, ensureDefaultStation } from '../../lib/kitchenSeed'
+import { resolveStationId, groupItemsByCourse } from '../../lib/kitchenRouting'
+import { subscribeTableOrderItems, sendCallSala } from '../../lib/kitchenRealtime'
+
+// Un ticket "riceve il via" resta in cima alla vista per questa finestra di
+// tempo, poi torna nell'ordine normale (dalla più vecchia alla più
+// recente per orario di invio) — sale in cima sia una portata appena
+// inviata "subito" sia una portata appena passata da "in attesa" a
+// "subito" col pulsante Via: stesso segnale (fired_at appena valorizzato),
+// stesso trattamento.
+const RECENT_FIRE_WINDOW_MS = 90_000
+
+function stationStorageKey(businessId) { return `pium_kitchen_station_${businessId}` }
+function modeStorageKey(businessId)    { return `pium_kitchen_mode_${businessId}` }
+
+function readLocal(key) {
+  try { return window.localStorage.getItem(key) } catch { return null }
+}
+function writeLocal(key, value) {
+  try { window.localStorage.setItem(key, value) } catch { /* storage non disponibile, scelta non salvata sul dispositivo ma la vista funziona comunque */ }
+}
+
+function courseLabel(c) {
+  if (!c) return 'Senza portata'
+  return c.name?.trim() || `Portata ${c.slot_number}`
+}
+
+function formatTime(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+}
+
+// Vista cucina (Blocco D) — nuovo componente, voce di navigazione propria,
+// montato solo per vertical='ristorante_bar' (React.lazy + doppio gate in
+// Dashboard.jsx, stesso pattern di Tavoli/Menu). A differenza di Ordine.jsx
+// non ha protezione offline dedicata (fuori scopo qui, richiesta solo per
+// la schermata ordine): le azioni sono chiamate dirette, stesso stile del
+// resto del progetto prima del Blocco D.
+export default function Cucina({ business }) {
+  const [stations,        setStations]        = useState([])
+  const [courses,         setCourses]         = useState([])
+  const [settingsLoading, setSettingsLoading]  = useState(true)
+
+  const [selectedStationId, setSelectedStationId] = useState(() => business ? readLocal(stationStorageKey(business.id)) : null)
+  const [mode,               setMode]              = useState(() => (business ? readLocal(modeStorageKey(business.id)) : null) ?? 'interattiva')
+  const [stationPickerOpen,  setStationPickerOpen]  = useState(false)
+
+  const [orders,  setOrders]  = useState([])
+  const [loading, setLoading] = useState(true)
+  const [tick,    setTick]    = useState(() => Date.now())
+
+  const activeStations = useMemo(() => stations.filter(s => s.is_active), [stations])
+  const activeCourses  = useMemo(() => courses.filter(c => c.is_active), [courses])
+
+  // Seeding condiviso con Menu.jsx: se questa è la prima schermata mai
+  // aperta per il business, "Cucina" e le 4 portate nascono qui.
+  const loadSettings = useCallback(async (signal = null) => {
+    if (!business) return
+    setSettingsLoading(true)
+    const [st, cs] = await Promise.all([ensureDefaultStation(business.id), ensureDefaultCourses(business.id)])
+    if (signal?.cancelled) return
+    setSettingsLoading(false)
+    setStations(st)
+    setCourses(cs)
+  }, [business])
+
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadSettings(signal)
+    return () => { signal.cancelled = true }
+  }, [loadSettings])
+
+  // Se la postazione salvata sul dispositivo non esiste più o è stata
+  // disattivata, torna al selettore invece di restare bloccati su un id
+  // ormai invalido.
+  useEffect(() => {
+    if (!business || settingsLoading) return
+    if (selectedStationId && !activeStations.some(s => s.id === selectedStationId)) {
+      setSelectedStationId(null)
+      writeLocal(stationStorageKey(business.id), '')
+    }
+  }, [settingsLoading, activeStations, selectedStationId, business])
+
+  const chooseStation = (stationId) => {
+    setSelectedStationId(stationId)
+    writeLocal(stationStorageKey(business.id), stationId)
+    setStationPickerOpen(false)
+  }
+
+  const chooseMode = (nextMode) => {
+    setMode(nextMode)
+    writeLocal(modeStorageKey(business.id), nextMode)
+  }
+
+  // Ordini aperti con le loro voci, embed fino a menu_categories per
+  // risolvere postazione/portata con la stessa identica funzione usata
+  // ovunque altro (kitchenRouting.js) — nessuna duplicazione della logica.
+  const loadOrders = useCallback(async (signal = null) => {
+    if (!business) return
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('table_orders')
+      .select(`
+        id, table_id, order_date, turn_id, status,
+        tables ( name ),
+        table_order_items (
+          id, item_name_snapshot, quantity, notes, sent_at, kitchen_status,
+          ready_at, delivered_at, fire_status, fired_at, menu_item_id,
+          menu_items ( category_id, menu_categories ( id, name, station_id, course_id ) )
+        )
+      `)
+      .eq('business_id', business.id)
+      .eq('status', 'aperto')
+    if (signal?.cancelled) return
+    setLoading(false)
+    if (error) { console.error('[loadOrders]', error); return }
+    setOrders(data ?? [])
+  }, [business])
+
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadOrders(signal)
+    return () => { signal.cancelled = true }
+  }, [loadOrders])
+
+  // Tempo reale: qualunque evento su una voce ricarica tutto — mai un patch
+  // dal payload (stesso principio di Ordine.jsx/Tavoli.jsx), corretto anche
+  // per un evento che riguarda un ordine appena aperto altrove e non ancora
+  // noto qui. Debounce breve: un "Invia in cucina" da più voci in un colpo
+  // solo genera più eventi ravvicinati, ne basta un reload.
+  const [realtimeDown, setRealtimeDown] = useState(false)
+  const wasSubscribedRef = useRef(false)
+  const reloadTimerRef = useRef(null)
+  useEffect(() => {
+    if (!business) return
+    const debouncedReload = () => {
+      clearTimeout(reloadTimerRef.current)
+      reloadTimerRef.current = setTimeout(loadOrders, 200)
+    }
+    const unsubscribe = subscribeTableOrderItems(
+      `cucina-${business.id}`,
+      debouncedReload,
+      (status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeDown(false)
+          if (wasSubscribedRef.current) loadOrders()
+          wasSubscribedRef.current = true
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeDown(true)
+        }
+      }
+    )
+    return () => { unsubscribe(); clearTimeout(reloadTimerRef.current) }
+  }, [business, loadOrders])
+
+  // Avanza "adesso" ogni 15s per far scadere da solo il boost "appena dato
+  // il via" (vedi RECENT_FIRE_WINDOW_MS) senza bisogno di un nuovo evento.
+  useEffect(() => {
+    const t = setInterval(() => setTick(Date.now()), 15_000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Schede: una per ordine aperto, solo le voci inviate della postazione
+  // scelta — se non esiste NESSUNA postazione attiva, nessun filtro:
+  // mostra tutto, mai nessuna (regola esplicita). Una scheda sparisce
+  // quando tutte le sue voci visibili sono consegnate o annullate.
+  const tickets = useMemo(() => {
+    const list = []
+    for (const o of orders) {
+      const sentItems = (o.table_order_items ?? []).filter(i => i.sent_at)
+      const visible = activeStations.length === 0
+        ? sentItems
+        : sentItems.filter(i => resolveStationId(i, activeStations) === selectedStationId)
+      if (visible.length === 0) continue
+      const allDone = visible.every(i => i.kitchen_status === 'consegnato' || i.kitchen_status === 'annullato')
+      if (allDone) continue
+      const bands = groupItemsByCourse(visible, activeCourses)
+      const earliestSentAt = Math.min(...visible.map(i => new Date(i.sent_at).getTime()))
+      const firedTimestamps = visible.filter(i => i.fire_status === 'subito' && i.fired_at).map(i => new Date(i.fired_at).getTime())
+      const maxFiredAt = firedTimestamps.length > 0 ? Math.max(...firedTimestamps) : null
+      list.push({ order: o, table: o.tables, bands, earliestSentAt, maxFiredAt })
+    }
+    list.sort((a, b) => {
+      const aBoost = a.maxFiredAt != null && (tick - a.maxFiredAt) < RECENT_FIRE_WINDOW_MS
+      const bBoost = b.maxFiredAt != null && (tick - b.maxFiredAt) < RECENT_FIRE_WINDOW_MS
+      if (aBoost && !bBoost) return -1
+      if (bBoost && !aBoost) return 1
+      if (aBoost && bBoost) return b.maxFiredAt - a.maxFiredAt
+      return a.earliestSentAt - b.earliestSentAt
+    })
+    return list
+  }, [orders, activeStations, activeCourses, selectedStationId, tick])
+
+  /* ── Azioni ── */
+  const markItemReady = async (item) => {
+    if (item.kitchen_status !== 'da_preparare' || item.fire_status !== 'subito') return
+    const { error } = await supabase
+      .from('table_order_items')
+      .update({ kitchen_status: 'pronto', ready_at: new Date().toISOString() })
+      .eq('id', item.id)
+    if (error) { console.error('[markItemReady]', error); return }
+    loadOrders()
+  }
+
+  const fireBandNow = async (band) => {
+    const ids = band.items.filter(i => i.fire_status === 'in_attesa').map(i => i.id)
+    if (ids.length === 0) return
+    const { error } = await supabase
+      .from('table_order_items')
+      .update({ fire_status: 'subito', fired_at: new Date().toISOString() })
+      .in('id', ids)
+    if (error) { console.error('[fireBandNow]', error); return }
+    loadOrders()
+  }
+
+  const markBandDelivered = async (band) => {
+    const ids = band.items.filter(i => i.kitchen_status === 'pronto').map(i => i.id)
+    if (ids.length === 0) return
+    const { error } = await supabase
+      .from('table_order_items')
+      .update({ kitchen_status: 'consegnato', delivered_at: new Date().toISOString() })
+      .in('id', ids)
+    if (error) { console.error('[markBandDelivered]', error); return }
+    loadOrders()
+  }
+
+  const [callSent, setCallSent] = useState(false)
+  const handleCallSala = () => {
+    sendCallSala(business.id)
+    setCallSent(true)
+    setTimeout(() => setCallSent(false), 3000)
+  }
+
+  if (!business) {
+    return <div className="db-section"><div className="db-empty-banner">Configura prima la tua attività.</div></div>
+  }
+
+  if (settingsLoading) {
+    return <div className="db-section"><div className="sv-loading"><KtSpinner /></div></div>
+  }
+
+  const currentStation = activeStations.find(s => s.id === selectedStationId) ?? null
+
+  // Selettore postazione a tutta pagina — non un modale sopra a una vista
+  // ancora senza senso senza postazione scelta (stesso principio della
+  // schermata Ordine che sostituisce la griglia, non un overlay).
+  if (!currentStation || stationPickerOpen) {
+    return (
+      <div className="db-section">
+        <h2 className="sv-modal-title" style={{ marginBottom: 12 }}>Scegli la postazione di questo dispositivo</h2>
+        {activeStations.length === 0 ? (
+          <div className="db-card"><p className="db-card-empty">Nessuna postazione attiva ancora.</p></div>
+        ) : (
+          <div className="kt-station-picker">
+            {activeStations.map(s => (
+              <button key={s.id} className="kt-station-pick" onClick={() => chooseStation(s.id)}>{s.name}</button>
+            ))}
+          </div>
+        )}
+        {currentStation && (
+          <button className="sv-btn-cancel" style={{ marginTop: 16 }} onClick={() => setStationPickerOpen(false)}>Annulla</button>
+        )}
+      </div>
+    )
+  }
+
+  const interactive = mode === 'interattiva'
+
+  return (
+    <div className={`db-section kt-view ${!interactive ? 'kt-view--tv' : ''}`}>
+      {interactive && (
+        <div className="db-section-toolbar">
+          <p className="db-section-desc">Postazione: <strong>{currentStation.name}</strong> — {tickets.length} tavol{tickets.length !== 1 ? 'i' : 'o'} in corso.</p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="sv-btn-cancel" onClick={() => chooseMode('solo_schermo')}>Modalità solo schermo</button>
+            <button className="sv-btn-cancel" onClick={() => setStationPickerOpen(true)}>Cambia postazione</button>
+            <button className="db-btn-primary" disabled={callSent} onClick={handleCallSala}>{callSent ? 'Chiamata inviata' : 'Chiama sala'}</button>
+          </div>
+        </div>
+      )}
+
+      {!interactive && (
+        <button className="kt-tv-exit" onClick={() => chooseMode('interattiva')} title="Esci da modalità solo schermo">
+          {currentStation.name}
+        </button>
+      )}
+
+      {realtimeDown && (
+        <div className="ord-offline-banner">
+          Aggiornamenti in tempo reale interrotti — riconnessione in corso, lo stato si aggiorna da solo appena torna attiva.
+        </div>
+      )}
+
+      {loading && orders.length === 0 ? (
+        <div className="sv-loading"><KtSpinner /></div>
+      ) : tickets.length === 0 ? (
+        <div className="db-card"><p className="db-card-empty">Nessuna comanda in corso per questa postazione.</p></div>
+      ) : (
+        <div className="kt-tickets">
+          {tickets.map(({ order, table, bands, earliestSentAt, maxFiredAt }) => {
+            const boosted = maxFiredAt != null && (tick - maxFiredAt) < RECENT_FIRE_WINDOW_MS
+            return (
+              <div key={order.id} className={`kt-ticket ${boosted ? 'kt-ticket--boosted' : ''}`}>
+                <div className="kt-ticket-header">
+                  <span className="kt-ticket-table">{table?.name ?? 'Tavolo'}</span>
+                  <span className="kt-ticket-time">{formatTime(new Date(earliestSentAt).toISOString())}</span>
+                </div>
+                {bands.map((band, idx) => {
+                  const anyWaiting = band.items.some(i => i.fire_status === 'in_attesa')
+                  const anyReady   = band.items.some(i => i.kitchen_status === 'pronto')
+                  return (
+                    <div key={band.course?.id ?? `none-${idx}`} className={`kt-band ${anyWaiting ? 'kt-band--waiting' : ''}`}>
+                      <div className="kt-band-header">
+                        <span className="kt-band-title">{courseLabel(band.course)}</span>
+                        {interactive && (
+                          <div className="ord-band-actions">
+                            {anyWaiting && <button className="sv-btn-cancel" onClick={() => fireBandNow(band)}>Via</button>}
+                            {anyReady && <button className="sv-btn-save" onClick={() => markBandDelivered(band)}>Consegnata</button>}
+                          </div>
+                        )}
+                      </div>
+                      <div className="kt-band-items">
+                        {band.items.map(item => (
+                          <div
+                            key={item.id}
+                            className={`kt-item ${item.kitchen_status === 'pronto' ? 'kt-item--ready' : ''} ${item.kitchen_status === 'annullato' ? 'kt-item--cancelled' : ''} ${item.fire_status === 'in_attesa' ? 'kt-item--waiting' : ''}`}
+                            onClick={interactive ? () => markItemReady(item) : undefined}
+                          >
+                            <span className="kt-item-name">{item.quantity}× {item.item_name_snapshot}</span>
+                            {item.notes && <span className="kt-item-note">{item.notes}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function KtSpinner() {
+  return <svg style={{ width: 18, height: 18, animation: 'sv-spin 0.8s linear infinite', flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+}

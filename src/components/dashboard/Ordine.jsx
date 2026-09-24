@@ -1,23 +1,43 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
+import { groupItemsByCourse } from '../../lib/kitchenRouting'
+import { subscribeTableOrderItems, subscribeCallSala, notifyReady } from '../../lib/kitchenRealtime'
 
 function turnLabel(t) {
   if (!t) return ''
   return t.name?.trim() || `Turno ${t.slot_number}`
 }
 
+function courseLabel(c) {
+  if (!c) return 'Senza portata'
+  return c.name?.trim() || `Portata ${c.slot_number}`
+}
+
+function kitchenStatusLabel(s) {
+  return { da_preparare: 'Da preparare', pronto: 'Pronto', consegnato: 'Consegnato', annullato: 'Annullato' }[s] ?? s
+}
+
 function formatPrice(n) {
   return `€${Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-// Schermata ordine (Blocco C) — sostituisce interamente la griglia tavoli
-// mentre è aperta (vedi Tavoli.jsx), non un modale sopra di essa. Montata
-// solo indirettamente dietro il gate su vertical='ristorante_bar': non ha
-// un proprio controllo perché è importata staticamente solo da Tavoli.jsx,
-// che è già React.lazy() e già gated in Dashboard.jsx — nessun secondo
-// punto d'ingresso da cui potrebbe essere raggiunta altrimenti (verificato
-// con grep, vedi report).
+// Toglie dalla riga i campi che sono un embed di lettura (menu_items/
+// menu_categories, aggiunti dalla select per risolvere la portata — vedi
+// kitchenRouting.js), mai colonne reali di table_order_items: scriverli
+// dritti su un insert/upsert farebbe fallire la chiamata.
+function stripEmbeds(row) {
+  const { menu_items: _menu_items, ...rest } = row
+  return rest
+}
+
+// Schermata ordine (Blocco C, esteso nel Blocco D con invio in cucina,
+// portate/attesa/via, protezione offline) — sostituisce interamente la
+// griglia tavoli mentre è aperta (vedi Tavoli.jsx), non un modale sopra di
+// essa. Montata solo indirettamente dietro il gate su
+// vertical='ristorante_bar': non ha un proprio controllo perché è importata
+// staticamente solo da Tavoli.jsx, che è già React.lazy() e già gated in
+// Dashboard.jsx.
 export default function Ordine({ business, order, table, turns, onClose, onOrderClosed }) {
   const [items,        setItems]        = useState([])
   const [itemsLoading, setItemsLoading] = useState(true)
@@ -29,16 +49,71 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
   const [gridLoading, setGridLoading] = useState(false)
   const searchTimerRef = useRef(null)
 
+  const [activeCourses, setActiveCourses] = useState([])
+
   const [closeConfirm, setCloseConfirm] = useState(false)
   const [closing,      setClosing]      = useState(false)
 
   const turn = useMemo(() => turns.find(t => t.id === order.turn_id) ?? null, [turns, order.turn_id])
 
+  /* ── Protezione dalle cadute di rete ──────────────────────────────────
+     Coda locale (outbox) per ogni voce: ogni modifica (aggiunta, quantità,
+     nota, invio, via, consegnata, annulla) aggiorna PRIMA lo stato locale,
+     poi tenta subito il salvataggio via upsert-per-id (id generato lato
+     client, riusato a ogni retry — una violazione di chiave primaria
+     equivarrebbe a "già salvata", ma con upsert non si presenta nemmeno: un
+     retry con lo stesso id scrive semplicemente lo stato più recente).
+     Se il salvataggio fallisce la voce resta in outboxRef con l'id ancora in
+     pendingIds (badge "in attesa di rete" + blocco invio), riprovata da sola
+     al prossimo evento 'online' o al giro dell'intervallo di retry — mai
+     serve ritoccare la voce. Una cancellazione (quantity a 0 o "annulla")
+     converte l'eventuale upsert ancora in coda in un delete, mai lo scarta:
+     se l'insert non era mai arrivato al server il delete è un no-op
+     innocuo, se invece era arrivato (solo l'ack è andato perso) il delete
+     lo rimuove davvero — corretto in entrambi i casi. */
+  const outboxRef = useRef(new Map()) // id -> { type: 'upsert', row } | { type: 'delete' }
+  const flushingRef = useRef(false)
+  const [pendingIds, setPendingIds] = useState(() => new Set())
+  const [isOffline, setIsOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false)
+
+  const flushOutbox = useCallback(async () => {
+    if (flushingRef.current) return
+    flushingRef.current = true
+    for (const id of Array.from(outboxRef.current.keys())) {
+      const op = outboxRef.current.get(id)
+      if (!op) continue
+      const { error } = op.type === 'upsert'
+        ? await supabase.from('table_order_items').upsert(op.row, { onConflict: 'id' })
+        : await supabase.from('table_order_items').delete().eq('id', id)
+      if (error) { flushingRef.current = false; return } // rete probabilmente ancora giù, riprovato dopo
+      // Rimuovi dalla coda solo se nessuna nuova modifica è arrivata nel
+      // frattempo (stessa istanza dell'op appena processata) — altrimenti
+      // una modifica arrivata durante l'invio andrebbe persa dalla coda.
+      if (outboxRef.current.get(id) === op) {
+        outboxRef.current.delete(id)
+        setPendingIds((prev) => { if (!prev.has(id)) return prev; const n = new Set(prev); n.delete(id); return n })
+      }
+    }
+    flushingRef.current = false
+  }, [])
+
+  const enqueueUpsert = useCallback((id, row) => {
+    outboxRef.current.set(id, { type: 'upsert', row: stripEmbeds(row) })
+    setPendingIds((prev) => new Set(prev).add(id))
+    flushOutbox()
+  }, [flushOutbox])
+
+  const enqueueDelete = useCallback((id) => {
+    outboxRef.current.set(id, { type: 'delete' })
+    setPendingIds((prev) => new Set(prev).add(id))
+    flushOutbox()
+  }, [flushOutbox])
+
   const loadItems = useCallback(async (signal = null) => {
     setItemsLoading(true)
     const { data, error } = await supabase
       .from('table_order_items')
-      .select('*')
+      .select('*, menu_items(category_id, menu_categories(id, course_id))')
       .eq('order_id', order.id)
       .order('created_at')
     if (signal?.cancelled) return
@@ -59,14 +134,26 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
     setCategories(data ?? [])
   }, [business])
 
+  const loadCourses = useCallback(async (signal = null) => {
+    const { data, error } = await supabase
+      .from('business_courses')
+      .select('*')
+      .eq('business_id', business.id)
+      .eq('is_active', true)
+      .order('slot_number')
+    if (signal?.cancelled) return
+    if (error) { console.error('[loadCourses]', error); return }
+    setActiveCourses(data ?? [])
+  }, [business])
+
   // Griglia piatti: ricerca fuzzy per nome (ilike, indice trigram
   // idx_menu_items_name_trgm) + filtro categoria, solo piatti disponibili.
-  // Un'unica funzione per entrambi i filtri: il pill categoria non ha
-  // bisogno di debounce (click discreto), la ricerca testuale sì.
+  // menu_categories(id, course_id) incluso per poter risolvere la portata
+  // di una voce appena aggiunta senza un round-trip in più (vedi addItem).
   const loadGrid = useCallback(async (term, categoryId, signal = null) => {
     setGridLoading(true)
     let q = supabase.from('menu_items')
-      .select('id, name, price, category_id')
+      .select('id, name, price, category_id, menu_categories(id, course_id)')
       .eq('business_id', business.id)
       .eq('is_available', true)
     if (categoryId) q = q.eq('category_id', categoryId)
@@ -93,79 +180,232 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
 
   useEffect(() => {
     const signal = { cancelled: false }
+    loadCourses(signal)
+    return () => { signal.cancelled = true }
+  }, [loadCourses])
+
+  useEffect(() => {
+    const signal = { cancelled: false }
     clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => loadGrid(searchTerm, selectedCategoryId, signal), 150)
     return () => { signal.cancelled = true; clearTimeout(searchTimerRef.current) }
   }, [searchTerm, selectedCategoryId, loadGrid])
 
+  // Indicatore offline + riconciliazione: al ritorno online ritenta subito
+  // la coda E ricarica lo stato completo dal DB (mai restare con dati
+  // vecchi/parziali dopo un'interruzione).
+  useEffect(() => {
+    const onOnline  = () => { setIsOffline(false); flushOutbox(); loadItems() }
+    const onOffline = () => setIsOffline(true)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline) }
+  }, [flushOutbox, loadItems])
+
+  // Rete che sembra ok ma il salvataggio fallisce comunque (proxy, server
+  // momentaneamente irraggiungibile...): un ritentativo periodico finché
+  // c'è qualcosa in coda, oltre al solo evento 'online' del browser.
+  useEffect(() => {
+    if (pendingIds.size === 0) return
+    const t = setInterval(flushOutbox, 4000)
+    return () => clearInterval(t)
+  }, [pendingIds.size, flushOutbox])
+
+  // Tempo reale: qualunque cambiamento su una voce di QUESTO ordine
+  // (arrivato da un altro dispositivo, dalla cucina, o da questo stesso
+  // dispositivo tramite un altro tab) ricarica lo stato completo — mai un
+  // patch dal payload, stesso principio della riconnessione. Se la voce
+  // diventa 'pronto', avviso (vibrazione+suono) ed evidenza visiva.
+  const [readyPulse, setReadyPulse] = useState(false)
+  const [realtimeDown, setRealtimeDown] = useState(false)
+  const wasSubscribedRef = useRef(false)
+  useEffect(() => {
+    const unsubscribe = subscribeTableOrderItems(
+      `order-items-${order.id}`,
+      (payload) => {
+        const orderId = payload.new?.order_id ?? payload.old?.order_id
+        if (orderId !== order.id) return
+        if (payload.new?.kitchen_status === 'pronto') {
+          notifyReady()
+          setReadyPulse(true)
+          setTimeout(() => setReadyPulse(false), 3000)
+        }
+        loadItems()
+      },
+      (status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeDown(false)
+          if (wasSubscribedRef.current) loadItems() // riconnessione dopo una caduta, non il primo aggancio
+          wasSubscribedRef.current = true
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeDown(true)
+        }
+      }
+    )
+    return unsubscribe
+  }, [order.id, loadItems])
+
+  // "Chiama sala" dalla vista cucina — stesso avviso ovunque, nessun dato da
+  // ricaricare, solo un banner transitorio + avviso audio/vibrazione.
+  const [salaCallBanner, setSalaCallBanner] = useState(false)
+  useEffect(() => {
+    const unsubscribe = subscribeCallSala(business.id, () => {
+      notifyReady()
+      setSalaCallBanner(true)
+      setTimeout(() => setSalaCallBanner(false), 6000)
+    })
+    return unsubscribe
+  }, [business.id])
+
+  const composingItems = useMemo(() => items.filter(i => !i.sent_at), [items])
+  const sentItems       = useMemo(() => items.filter(i => i.sent_at), [items])
+  const sentBands        = useMemo(() => groupItemsByCourse(sentItems, activeCourses), [sentItems, activeCourses])
+  const composingGroups  = useMemo(() => groupItemsByCourse(composingItems, activeCourses), [composingItems, activeCourses])
+
   const orderedQtyByMenuItemId = useMemo(() => {
     const map = {}
     for (const i of items) {
-      if (!i.menu_item_id) continue
+      if (!i.menu_item_id || i.kitchen_status === 'annullato') continue
       map[i.menu_item_id] = (map[i.menu_item_id] ?? 0) + i.quantity
     }
     return map
   }, [items])
 
+  // Il conto esclude le voci annullate.
   const total = useMemo(() => {
-    return items.reduce((sum, i) => sum + (Number(i.price_snapshot) || 0) * i.quantity, 0)
+    return items
+      .filter(i => i.kitchen_status !== 'annullato')
+      .reduce((sum, i) => sum + (Number(i.price_snapshot) || 0) * i.quantity, 0)
   }, [items])
 
-  const findRowForMenuItem = (menuItemId) => items.find(i => i.menu_item_id === menuItemId)
+  const findRowForMenuItem = (menuItemId) => composingItems.find(i => i.menu_item_id === menuItemId)
 
-  // Tap su un piatto in griglia: se è già nell'ordine, incrementa la riga
-  // esistente (stesso comportamento del "+" nello stepper); altrimenti
-  // inserisce una nuova riga. Righe indipendenti per ogni nuovo inserimento
-  // (Blocco C punto 6): due camerieri che aggiungono lo STESSO piatto per
-  // la prima volta nello stesso istante ottengono due insert separati, mai
-  // una race su un unico update.
-  const addItem = async (menuItem) => {
+  // Tap su un piatto in griglia: se è già nell'ordine E ANCORA IN
+  // COMPOSIZIONE, incrementa la riga esistente; altrimenti inserisce una
+  // nuova riga (anche se lo stesso piatto è già stato inviato in cucina in
+  // un'altra riga — righe indipendenti, mai un update su una riga già
+  // inviata). Righe indipendenti per ogni nuovo inserimento (Blocco C punto
+  // 6): due camerieri che aggiungono lo STESSO piatto per la prima volta
+  // nello stesso istante ottengono due insert separati, mai una race su un
+  // unico update.
+  const addItem = (menuItem) => {
     const existing = findRowForMenuItem(menuItem.id)
-    if (existing) { await bumpQuantity(existing, 1); return }
-    const { data, error } = await supabase
-      .from('table_order_items')
-      .insert({
-        order_id:           order.id,
-        menu_item_id:        menuItem.id,
-        item_name_snapshot:  menuItem.name,
-        price_snapshot:      menuItem.price,
-        quantity:            1,
-      })
-      .select('*')
-      .single()
-    if (error) { console.error('[addItem]', error); return }
-    setItems((prev) => [...prev, data])
+    if (existing) { bumpQuantity(existing, 1); return }
+    const id = crypto.randomUUID()
+    const row = {
+      id,
+      order_id:           order.id,
+      menu_item_id:        menuItem.id,
+      item_name_snapshot:  menuItem.name,
+      price_snapshot:      menuItem.price,
+      quantity:            1,
+      notes:               null,
+      sent_at:             null,
+      kitchen_status:      'da_preparare',
+      ready_at:            null,
+      delivered_at:        null,
+      fire_status:         'subito',
+      fired_at:            null,
+      menu_items:          { category_id: menuItem.category_id, menu_categories: menuItem.menu_categories ?? null },
+    }
+    setItems((prev) => [...prev, row])
+    enqueueUpsert(id, row)
   }
 
-  // delta positivo o negativo su una riga già nota (id conosciuto
+  // delta positivo o negativo su una riga in composizione (id conosciuto
   // localmente) — quantity<=0 cancella la riga invece di scrivere 0 o
-  // negativo, non ha senso una riga d'ordine a quantità zero.
-  const bumpQuantity = async (row, delta) => {
+  // negativo, non ha senso una riga d'ordine a quantità zero. Solo voci non
+  // ancora inviate: le voci inviate non sono più modificabili in quantità
+  // (vedi cancelSentItem per l'unica azione possibile su quelle).
+  const bumpQuantity = (row, delta) => {
     const nextQty = row.quantity + delta
     if (nextQty <= 0) {
-      const { error } = await supabase.from('table_order_items').delete().eq('id', row.id)
-      if (error) { console.error('[bumpQuantity delete]', error); return }
       setItems((prev) => prev.filter((i) => i.id !== row.id))
+      outboxRef.current.delete(row.id) // se era ancora solo locale, niente da annullare in coda
+      enqueueDelete(row.id)
       return
     }
-    const { error } = await supabase.from('table_order_items').update({ quantity: nextQty }).eq('id', row.id)
-    if (error) { console.error('[bumpQuantity update]', error); return }
-    setItems((prev) => prev.map((i) => i.id === row.id ? { ...i, quantity: nextQty } : i))
+    const nextRow = { ...row, quantity: nextQty }
+    setItems((prev) => prev.map((i) => i.id === row.id ? nextRow : i))
+    enqueueUpsert(row.id, nextRow)
   }
 
-  const updateNotes = async (row, rawValue) => {
+  const updateNotes = (row, rawValue) => {
     const notes = rawValue.trim() || null
     if (notes === (row.notes ?? null)) return
-    const { error } = await supabase.from('table_order_items').update({ notes }).eq('id', row.id)
-    if (error) { console.error('[updateNotes]', error); return }
-    setItems((prev) => prev.map((i) => i.id === row.id ? { ...i, notes } : i))
+    const nextRow = { ...row, notes }
+    setItems((prev) => prev.map((i) => i.id === row.id ? nextRow : i))
+    enqueueUpsert(row.id, nextRow)
+  }
+
+  /* ── Invio in cucina ── */
+  const [sendModalOpen, setSendModalOpen] = useState(false)
+  const [fireChoices,   setFireChoices]   = useState({})
+  const [sending,       setSending]       = useState(false)
+
+  const openSendPicker = () => {
+    if (composingItems.length === 0 || pendingIds.size > 0) return
+    if (business.kitchen_fire_immediately) { sendToKitchen({}); return }
+    const realCourseGroups = composingGroups.filter(g => g.course)
+    if (realCourseGroups.length <= 1) { sendToKitchen({}); return } // niente da scegliere
+    const defaults = {}
+    realCourseGroups.forEach((g, idx) => { defaults[g.course.id] = idx === 0 ? 'subito' : 'in_attesa' })
+    setFireChoices(defaults)
+    setSendModalOpen(true)
+  }
+
+  const sendToKitchen = async (choices) => {
+    setSending(true)
+    const now = new Date().toISOString()
+    for (const group of composingGroups) {
+      const fireStatus = !group.course ? 'subito' : (choices[group.course.id] ?? 'subito')
+      for (const it of group.items) {
+        const nextRow = { ...it, sent_at: now, fire_status: fireStatus, fired_at: fireStatus === 'subito' ? now : null }
+        setItems((prev) => prev.map((x) => x.id === it.id ? nextRow : x))
+        enqueueUpsert(it.id, nextRow)
+      }
+    }
+    setSending(false)
+    setSendModalOpen(false)
+    logActivity(business.id, business.user_id, 'table_order_sent_to_kitchen', `Invio in cucina: ${table?.name ?? ''}`)
+  }
+
+  /* ── Azioni su voci già inviate ── */
+  const cancelSentItem = (row) => {
+    const nextRow = { ...row, kitchen_status: 'annullato' }
+    setItems((prev) => prev.map((x) => x.id === row.id ? nextRow : x))
+    enqueueUpsert(row.id, nextRow)
+  }
+
+  // "Via" per portata — disponibile anche qui, non solo in cucina: chiunque
+  // può darlo, nessun passaggio obbligatorio.
+  const fireBandNow = (band) => {
+    const now = new Date().toISOString()
+    for (const it of band.items.filter(i => i.fire_status === 'in_attesa')) {
+      const nextRow = { ...it, fire_status: 'subito', fired_at: now }
+      setItems((prev) => prev.map((x) => x.id === it.id ? nextRow : x))
+      enqueueUpsert(it.id, nextRow)
+    }
+  }
+
+  // "Consegnata" per portata — segna consegnate tutte le voci pronte di
+  // quella fascia in un colpo solo, stesso pulsante disponibile in cucina.
+  const markBandDelivered = (band) => {
+    const now = new Date().toISOString()
+    for (const it of band.items.filter(i => i.kitchen_status === 'pronto')) {
+      const nextRow = { ...it, kitchen_status: 'consegnato', delivered_at: now }
+      setItems((prev) => prev.map((x) => x.id === it.id ? nextRow : x))
+      enqueueUpsert(it.id, nextRow)
+    }
   }
 
   // "Chiudi tavolo": azione esplicita, mai automatica — richiede un tap di
   // conferma in più (stesso pattern "disattiva con conferma" del resto del
   // progetto), perché è l'unico modo per liberare davvero il tavolo
   // (status='aperto' → status libera lo stato OCCUPATO, vedi
-  // getTableStatus in Tavoli.jsx).
+  // getTableStatus in Tavoli.jsx). Bloccata finché c'è qualcosa in coda di
+  // rete: chiudere ora rischierebbe di perdere di vista una modifica non
+  // ancora salvata.
   const handleCloseTable = async () => {
     setClosing(true)
     const { error } = await supabase
@@ -177,6 +417,30 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
     logActivity(business.id, business.user_id, 'table_order_closed', `Tavolo chiuso: ${table?.name ?? ''}`)
     onOrderClosed()
   }
+
+  const renderComposingLine = (item) => (
+    <div key={item.id} className="ord-line">
+      <div className="ord-line-main">
+        <span className="ord-line-name">{item.item_name_snapshot}</span>
+        {item.price_snapshot != null && (
+          <span className="ord-line-price">{formatPrice(item.price_snapshot * item.quantity)}</span>
+        )}
+      </div>
+      <div className="ord-line-stepper">
+        <button onClick={() => bumpQuantity(item, -1)}>−</button>
+        <span>{item.quantity}</span>
+        <button onClick={() => bumpQuantity(item, 1)}>+</button>
+      </div>
+      <input
+        className="sv-input ord-line-notes"
+        type="text"
+        defaultValue={item.notes ?? ''}
+        placeholder="Nota (facoltativo)"
+        onBlur={(e) => updateNotes(item, e.target.value)}
+      />
+      {pendingIds.has(item.id) && <span className="ord-pending-badge" title="In attesa di rete">In attesa</span>}
+    </div>
+  )
 
   return (
     <div className="ord-screen">
@@ -198,9 +462,28 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
             <button className="tv-icon-btn" onClick={() => setCloseConfirm(false)}><IconX /></button>
           </div>
         ) : (
-          <button className="mn-btn-sold-out" onClick={() => setCloseConfirm(true)}>Chiudi tavolo</button>
+          <button
+            className="mn-btn-sold-out"
+            disabled={pendingIds.size > 0}
+            title={pendingIds.size > 0 ? 'Attendi il salvataggio delle modifiche in sospeso' : undefined}
+            onClick={() => setCloseConfirm(true)}
+          >
+            Chiudi tavolo
+          </button>
         )}
       </div>
+
+      {isOffline && (
+        <div className="ord-offline-banner">
+          <IconOffline /> Dispositivo senza connessione — le modifiche restano salvate qui e partiranno da sole al ritorno della rete.
+        </div>
+      )}
+      {!isOffline && realtimeDown && (
+        <div className="ord-offline-banner">
+          <IconOffline /> Aggiornamenti in tempo reale interrotti — riconnessione in corso, lo stato si aggiorna da solo appena torna attiva.
+        </div>
+      )}
+      {salaCallBanner && <div className="ord-call-banner">La cucina chiama in sala</div>}
 
       <div className="ord-search-row">
         <input
@@ -257,39 +540,130 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
       )}
 
       <div className="ord-current">
-        <h3 className="mn-group-title">Ordinato {items.length > 0 ? `(${items.length})` : ''}</h3>
+        <div className="ord-current-header">
+          <h3 className="mn-group-title">Da inviare {composingItems.length > 0 ? `(${composingItems.length})` : ''}</h3>
+          {composingItems.length > 0 && (
+            <button
+              className="db-btn-primary"
+              disabled={pendingIds.size > 0}
+              onClick={openSendPicker}
+            >
+              Invia in cucina
+            </button>
+          )}
+        </div>
+        {pendingIds.size > 0 && (
+          <p className="ord-pending-hint">
+            {pendingIds.size} voc{pendingIds.size !== 1 ? 'i' : 'e'} in attesa di rete — l'invio riparte da solo appena tornano salvate.
+          </p>
+        )}
         {itemsLoading ? (
           <div className="sv-loading"><OrdSpinner /></div>
-        ) : items.length === 0 ? (
-          <p className="mn-empty-hint">Nessun piatto ordinato ancora — tocca un piatto in griglia per aggiungerlo.</p>
+        ) : composingItems.length === 0 ? (
+          <p className="mn-empty-hint">Nessun piatto da inviare — tocca un piatto in griglia per aggiungerlo.</p>
         ) : (
           <div className="ord-lines">
-            {items.map(item => (
-              <div key={item.id} className="ord-line">
-                <div className="ord-line-main">
-                  <span className="ord-line-name">{item.item_name_snapshot}</span>
-                  {item.price_snapshot != null && (
-                    <span className="ord-line-price">{formatPrice(item.price_snapshot * item.quantity)}</span>
-                  )}
-                </div>
-                <div className="ord-line-stepper">
-                  <button onClick={() => bumpQuantity(item, -1)}>−</button>
-                  <span>{item.quantity}</span>
-                  <button onClick={() => bumpQuantity(item, 1)}>+</button>
-                </div>
-                <input
-                  className="sv-input ord-line-notes"
-                  type="text"
-                  defaultValue={item.notes ?? ''}
-                  placeholder="Nota (facoltativo)"
-                  onBlur={(e) => updateNotes(item, e.target.value)}
-                />
-              </div>
-            ))}
+            {composingItems.map(renderComposingLine)}
           </div>
         )}
-        <div className="ord-total">Totale: <strong>{formatPrice(total)}</strong></div>
       </div>
+
+      {sentItems.length > 0 && (
+        <div className={`ord-current ord-sent-section ${readyPulse ? 'ord-ready-pulse' : ''}`}>
+          <h3 className="mn-group-title">In cucina ({sentItems.filter(i => i.kitchen_status !== 'annullato').length})</h3>
+          <div className="ord-course-bands">
+            {sentBands.map((band, idx) => {
+              const anyWaiting   = band.items.some(i => i.fire_status === 'in_attesa')
+              const anyReady     = band.items.some(i => i.kitchen_status === 'pronto')
+              return (
+                <div key={band.course?.id ?? `none-${idx}`} className="ord-band">
+                  <div className="ord-band-header">
+                    <span className="ord-band-title">{courseLabel(band.course)}</span>
+                    <div className="ord-band-actions">
+                      {anyWaiting && (
+                        <button className="sv-btn-cancel" onClick={() => fireBandNow(band)}>Via</button>
+                      )}
+                      {anyReady && (
+                        <button className="sv-btn-save" onClick={() => markBandDelivered(band)}>Consegnata</button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="ord-lines">
+                    {band.items.map(item => (
+                      <div
+                        key={item.id}
+                        className={`ord-line ord-line--sent ${item.fire_status === 'in_attesa' ? 'ord-line--waiting' : ''} ${item.kitchen_status === 'annullato' ? 'ord-line--cancelled' : ''}`}
+                      >
+                        <div className="ord-line-main">
+                          <span className="ord-line-name">{item.item_name_snapshot} × {item.quantity}</span>
+                          {item.notes && <span className="ord-line-note-text">{item.notes}</span>}
+                        </div>
+                        <span className={`db-badge ${item.kitchen_status === 'pronto' ? 'db-badge--green' : item.kitchen_status === 'consegnato' ? 'db-badge--gray' : item.kitchen_status === 'annullato' ? 'db-badge--red' : 'db-badge--blue'}`}>
+                          {kitchenStatusLabel(item.kitchen_status)}
+                        </span>
+                        {item.fire_status === 'in_attesa' && <span className="db-badge db-badge--gray">In attesa</span>}
+                        {pendingIds.has(item.id) && <span className="ord-pending-badge" title="In attesa di rete">In attesa rete</span>}
+                        {item.kitchen_status !== 'consegnato' && item.kitchen_status !== 'annullato' && (
+                          <button className="ord-cancel-item-btn" title="Annulla voce" onClick={() => cancelSentItem(item)}>
+                            <IconX />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="ord-total">Totale: <strong>{formatPrice(total)}</strong></div>
+
+      {sendModalOpen && (
+        <div className="sv-modal-overlay" onClick={(e) => e.target === e.currentTarget && setSendModalOpen(false)}>
+          <div className="sv-modal">
+            <div className="sv-modal-header">
+              <h2 className="sv-modal-title">Invia in cucina</h2>
+              <button className="sv-modal-close" onClick={() => setSendModalOpen(false)} aria-label="Chiudi"><IconX /></button>
+            </div>
+            <div className="sv-modal-body">
+              <p className="mn-empty-hint">Scegli per ogni portata se partire subito o restare in attesa del "via".</p>
+              <div className="ord-fire-choices">
+                {composingGroups.filter(g => g.course).map(g => (
+                  <div key={g.course.id} className="ord-fire-choice-row">
+                    <span className="ord-band-title">{courseLabel(g.course)}</span>
+                    <div className="ord-fire-toggle">
+                      <button
+                        className={fireChoices[g.course.id] === 'subito' ? 'tv-turn-pill tv-turn-pill--active' : 'tv-turn-pill'}
+                        onClick={() => setFireChoices((f) => ({ ...f, [g.course.id]: 'subito' }))}
+                      >
+                        Subito
+                      </button>
+                      <button
+                        className={fireChoices[g.course.id] === 'in_attesa' ? 'tv-turn-pill tv-turn-pill--active' : 'tv-turn-pill'}
+                        onClick={() => setFireChoices((f) => ({ ...f, [g.course.id]: 'in_attesa' }))}
+                      >
+                        In attesa
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {composingGroups.some(g => !g.course) && (
+                  <p className="mn-empty-hint">Le voci senza portata partono comunque subito.</p>
+                )}
+              </div>
+            </div>
+            <div className="sv-modal-footer">
+              <button className="sv-btn-cancel" onClick={() => setSendModalOpen(false)}>Annulla</button>
+              <button className="sv-btn-save" onClick={() => sendToKitchen(fireChoices)} disabled={sending}>
+                {sending ? <OrdSpinner small /> : null}
+                {sending ? 'Invio…' : 'Invia'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -298,6 +672,7 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
 function IconArrowLeft() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> }
 function IconCheck()     { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
 function IconX()         { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
+function IconOffline()   { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg> }
 function OrdSpinner({ small }) {
   const s = small ? 14 : 18
   return <svg style={{ width: s, height: s, animation: 'sv-spin 0.8s linear infinite', flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2a10 10 0 0 1 10 10"/></svg>

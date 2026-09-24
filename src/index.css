@@ -1960,6 +1960,18 @@ body {
 
 .tv-card--inactive  { opacity: 0.55; }
 
+/* Blocco D: una voce dell'ordine di questo tavolo è appena diventata
+   "pronto" — evidenza visiva temporanea (vedi readyHighlightIds in
+   Tavoli.jsx), oltre a vibrazione/suono. currentColor eredita già dal
+   colore di stato del tavolo, qui solo l'animazione del bordo. */
+.tv-card--ready-pulse {
+  animation: tv-ready-pulse 0.9s ease-in-out 2;
+}
+@keyframes tv-ready-pulse {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.5); }
+}
+
 /* Pulsanti apri/prendi ordine — sullo sfondo pieno della card, stesso
    principio di .tv-btn-deactivate (bordo/hover in currentColor). */
 .tv-order-btn,
@@ -2439,6 +2451,17 @@ body {
   flex-shrink: 0;
 }
 
+/* Blocco D: select portata/postazione sotto il nome categoria, nel modale
+   "Gestisci categorie" — stessa riga, sotto l'input nome. */
+.mn-category-routing {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+
+  & select { flex: 1; min-width: 160px; }
+}
+
 .mn-btn-sold-out {
   display: inline-flex;
   align-items: center;
@@ -2466,7 +2489,7 @@ body {
 /* ============================================================
    Ordine component (verticale ristorante_bar) — schermata ordine,
    sostituisce interamente la griglia tavoli mentre è aperta (vedi
-   Tavoli.jsx). Riusa ampiamente sv-*/tv-* già esistenti, solo poche
+   Tavoli.jsx). Riusa ampiamente sv-* e tv-* già esistenti, solo poche
    classi proprie per griglia piatti, stepper e righe ordine.
    ============================================================ */
 
@@ -2645,8 +2668,305 @@ body {
   color: var(--text-h);
 }
 
+/* ── Blocco D: invio in cucina, portate/attesa, protezione offline ── */
+
+.ord-current-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ord-pending-hint {
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--accent-bg);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.ord-pending-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.18);
+  padding: 2px 7px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.ord-offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.ord-call-banner {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1E3A66;
+  background: #D9E4F5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.ord-sent-section {
+  transition: box-shadow 0.3s;
+}
+.ord-ready-pulse {
+  animation: ord-pulse 0.9s ease-in-out 2;
+}
+@keyframes ord-pulse {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.35); border-radius: 12px; }
+}
+
+.ord-course-bands {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ord-band-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ord-band-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.ord-band-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ord-line--sent {
+  opacity: 0.9;
+}
+.ord-line--waiting {
+  opacity: 0.55;
+}
+.ord-line--cancelled {
+  opacity: 0.5;
+
+  & .ord-line-name { text-decoration: line-through; }
+}
+
+.ord-line-note-text {
+  font-size: 11.5px;
+  color: var(--text);
+  font-style: italic;
+}
+
+.ord-cancel-item-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: #dc2626;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.ord-cancel-item-btn:hover { background: rgba(239, 68, 68, 0.1); }
+
+.ord-fire-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.ord-fire-choice-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ord-fire-toggle {
+  display: flex;
+  gap: 6px;
+}
+
 /* ============================================================
    End Ordine component
+   ============================================================ */
+
+/* ============================================================
+   Cucina component (verticale ristorante_bar) — vista cucina, Blocco D.
+   Riusa ampiamente sv-*, ord-* e db-* già esistenti.
+   ============================================================ */
+
+.kt-station-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  max-width: 640px;
+}
+
+.kt-station-pick {
+  padding: 20px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--sans);
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+
+  &:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+}
+
+.kt-tv-exit {
+  align-self: flex-start;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-h);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.kt-tickets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.kt-ticket {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+.kt-ticket--boosted {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+}
+
+.kt-ticket-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.kt-ticket-table {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.kt-ticket-time {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.kt-band {
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--accent-bg);
+}
+.kt-band--waiting {
+  background: var(--code-bg);
+}
+
+.kt-band-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.kt-band-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-h);
+}
+
+.kt-band-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kt-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: var(--bg);
+  cursor: pointer;
+}
+.kt-item--ready {
+  background: rgba(34, 197, 94, 0.16);
+}
+.kt-item--waiting {
+  opacity: 0.55;
+  cursor: default;
+}
+.kt-item--cancelled {
+  opacity: 0.5;
+  cursor: default;
+
+  & .kt-item-name { text-decoration: line-through; }
+}
+
+.kt-item-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.kt-item-note {
+  font-size: 11.5px;
+  color: var(--text);
+  font-style: italic;
+}
+
+/* Modalità "solo schermo" (TV) — caratteri molto grandi, nessun pulsante
+   (già non renderizzati lato JS, qui solo l'ingrandimento). */
+.kt-view--tv .kt-ticket-table   { font-size: 24px; }
+.kt-view--tv .kt-band-title     { font-size: 16px; }
+.kt-view--tv .kt-item-name      { font-size: 19px; }
+.kt-view--tv .kt-item-note      { font-size: 15px; }
+.kt-view--tv .kt-ticket-time    { font-size: 15px; }
+.kt-view--tv .kt-item           { cursor: default; }
+.kt-view--tv .kt-tickets        { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+
+/* ============================================================
+   End Cucina component
    ============================================================ */
 
 /* ============================================================

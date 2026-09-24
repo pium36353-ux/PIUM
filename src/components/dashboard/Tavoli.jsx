@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { normalizePhone } from '../../lib/phone'
+import { subscribeTableOrderItems, subscribeCallSala, notifyReady } from '../../lib/kitchenRealtime'
 import Ordine from './Ordine'
 
 const EMPTY_TABLE_FORM = { name: '', capacity: '' }
@@ -206,6 +207,40 @@ export default function Tavoli({ business }) {
       .lt('order_date', todayStr)
       .then(({ error }) => { if (error) console.error('[autoCloseForgottenOrders]', error) })
   }, [business, selectedDate, selectedTurnId])
+
+  // Blocco D — avviso "pronto" e "Chiama sala": ogni evento su una voce
+  // (arrivato da un altro dispositivo o dalla cucina) è mappato al suo
+  // tavolo tramite l'order_id già noto in openOrders (table_order_items non
+  // ha table_id diretto) — se l'ordine non è tra quelli attualmente in
+  // vista (data/turno diversi) non c'è nulla da evidenziare qui, non è un
+  // errore. Nessun ricaricamento di openOrders da qui: lo stato
+  // libero/prenotato/occupato non dipende dal contenuto delle voci, solo
+  // dall'esistenza dell'ordine aperto (vedi getTableStatus).
+  const [readyHighlightIds, setReadyHighlightIds] = useState(() => new Set())
+  useEffect(() => {
+    if (!business) return
+    const unsubscribe = subscribeTableOrderItems(`tavoli-ready-${business.id}`, (payload) => {
+      if (payload.new?.kitchen_status !== 'pronto') return
+      const relatedOrder = openOrders.find((o) => o.id === payload.new.order_id)
+      if (!relatedOrder) return
+      notifyReady()
+      const tableId = relatedOrder.table_id
+      setReadyHighlightIds((prev) => new Set(prev).add(tableId))
+      setTimeout(() => setReadyHighlightIds((prev) => { const n = new Set(prev); n.delete(tableId); return n }), 6000)
+    })
+    return unsubscribe
+  }, [business, openOrders])
+
+  const [salaCallBanner, setSalaCallBanner] = useState(false)
+  useEffect(() => {
+    if (!business) return
+    const unsubscribe = subscribeCallSala(business.id, () => {
+      notifyReady()
+      setSalaCallBanner(true)
+      setTimeout(() => setSalaCallBanner(false), 6000)
+    })
+    return unsubscribe
+  }, [business])
 
   useEffect(() => {
     const signal = { cancelled: false }
@@ -680,6 +715,8 @@ export default function Tavoli({ business }) {
   return (
     <div className="db-section">
 
+      {salaCallBanner && <div className="ord-call-banner">La cucina chiama in sala</div>}
+
       {/* Toolbar */}
       <div className="db-section-toolbar">
         <p className="db-section-desc">
@@ -783,7 +820,7 @@ export default function Tavoli({ business }) {
             return (
               <div
                 key={t.id}
-                className={`tv-card tv-card--clickable ${statusClass}`}
+                className={`tv-card tv-card--clickable ${statusClass} ${readyHighlightIds.has(t.id) ? 'tv-card--ready-pulse' : ''}`}
                 onClick={handleCardClick}
                 title={cardTitle}
               >

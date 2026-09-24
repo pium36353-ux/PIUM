@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
+import { ensureDefaultCourses, ensureDefaultStation } from '../../lib/kitchenSeed'
 
 const EMPTY_CATEGORY_FORM = { name: '' }
 const EMPTY_ITEM_FORM = { name: '', price: '', category_id: '', is_available: true }
 
-export default function Menu({ business }) {
+function courseLabel(c) {
+  if (!c) return 'Subito (nessuna portata)'
+  return c.name?.trim() || `Portata ${c.slot_number}`
+}
+
+export default function Menu({ business, onBusinessPatch }) {
   const [categories,        setCategories]        = useState([])
   const [categoriesLoading, setCategoriesLoading]  = useState(true)
   const [items,             setItems]              = useState([])
@@ -25,6 +31,23 @@ export default function Menu({ business }) {
   const [itemErrors,    setItemErrors]    = useState({})
   const [flaggedFeedbackId, setFlaggedFeedbackId] = useState(null)
   const [flaggingId,        setFlaggingId]        = useState(null)
+
+  /* ── Blocco D: portate ── */
+  const [courses,        setCourses]        = useState([])
+  const [coursesModalOpen, setCoursesModalOpen] = useState(false)
+  const [confirmDeactivateCourseId, setConfirmDeactivateCourseId] = useState(null)
+  const [busyCourseId,   setBusyCourseId]   = useState(null)
+  const [addingCourse,   setAddingCourse]   = useState(false)
+  const [fireImmediateSaving, setFireImmediateSaving] = useState(false)
+
+  /* ── Blocco D: postazioni ── */
+  const [stations,        setStations]        = useState([])
+  const [stationsModalOpen, setStationsModalOpen] = useState(false)
+  const [confirmDeactivateStationId, setConfirmDeactivateStationId] = useState(null)
+  const [busyStationId,   setBusyStationId]   = useState(null)
+  const [stationBlockedId, setStationBlockedId] = useState(null)
+  const [newStationName,  setNewStationName]  = useState('')
+  const [addingStation,   setAddingStation]   = useState(false)
 
   const loadCategories = useCallback(async (signal = null) => {
     if (!business) return
@@ -59,6 +82,23 @@ export default function Menu({ business }) {
     setItems(data ?? [])
   }, [business])
 
+  // Seeding condiviso con Cucina.jsx (vedi kitchenSeed.js) — qualunque delle
+  // due schermate venga aperta per prima per un business senza ancora
+  // portate/postazioni.
+  const loadCourses = useCallback(async (signal = null) => {
+    if (!business) return
+    const data = await ensureDefaultCourses(business.id)
+    if (signal?.cancelled) return
+    setCourses(data)
+  }, [business])
+
+  const loadStations = useCallback(async (signal = null) => {
+    if (!business) return
+    const data = await ensureDefaultStation(business.id)
+    if (signal?.cancelled) return
+    setStations(data)
+  }, [business])
+
   useEffect(() => {
     const signal = { cancelled: false }
     loadCategories(signal)
@@ -71,7 +111,27 @@ export default function Menu({ business }) {
     return () => { signal.cancelled = true }
   }, [loadItems])
 
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadCourses(signal)
+    return () => { signal.cancelled = true }
+  }, [loadCourses])
+
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadStations(signal)
+    return () => { signal.cancelled = true }
+  }, [loadStations])
+
   const activeCategories = useMemo(() => categories.filter(c => c.is_active), [categories])
+  const activeCourses    = useMemo(() => courses.filter(c => c.is_active), [courses])
+  const activeStations   = useMemo(() => stations.filter(s => s.is_active), [stations])
+
+  // Categorie attive senza postazione assegnata — i loro piatti finiscono
+  // comunque nella prima postazione attiva (vedi resolveStationId in
+  // kitchenRouting.js, stessa funzione usata da Cucina.jsx), ma il
+  // titolare deve vederlo finché non assegna esplicitamente.
+  const orphanStationCategories = useMemo(() => categories.filter(c => c.is_active && !c.station_id), [categories])
 
   // Gruppi da mostrare: tutte le categorie attive (anche senza piatti, per
   // poterci aggiungere qualcosa subito) + le categorie disattivate che
@@ -188,6 +248,118 @@ export default function Menu({ business }) {
     if (error) { console.error('[handleReactivateCategory]', error); setBusyCategoryId(null); return }
     setCategories((prev) => prev.map((x) => x.id === c.id ? { ...x, is_active: true } : x))
     setBusyCategoryId(null)
+  }
+
+  const handleAssignCourse = async (c, courseId) => {
+    const { error } = await supabase.from('menu_categories').update({ course_id: courseId }).eq('id', c.id)
+    if (error) { console.error('[handleAssignCourse]', error); return }
+    setCategories((prev) => prev.map((x) => x.id === c.id ? { ...x, course_id: courseId } : x))
+  }
+
+  const handleAssignStation = async (c, stationId) => {
+    const { error } = await supabase.from('menu_categories').update({ station_id: stationId }).eq('id', c.id)
+    if (error) { console.error('[handleAssignStation]', error); return }
+    setCategories((prev) => prev.map((x) => x.id === c.id ? { ...x, station_id: stationId } : x))
+  }
+
+  /* ── CRUD portate — stesso identico pattern di business_turns in
+     Tavoli.jsx, solo tabella diversa. ── */
+  const handleRenameCourse = async (c, rawValue) => {
+    const nextName = rawValue.trim() || null
+    if (nextName === (c.name ?? null)) return
+    const { error } = await supabase.from('business_courses').update({ name: nextName }).eq('id', c.id)
+    if (error) { console.error('[handleRenameCourse]', error); return }
+    setCourses((prev) => prev.map((x) => x.id === c.id ? { ...x, name: nextName } : x))
+  }
+
+  const handleAddCourse = async () => {
+    setAddingCourse(true)
+    const nextSlot = courses.length > 0 ? Math.max(...courses.map(c => c.slot_number)) + 1 : 1
+    const { data, error } = await supabase
+      .from('business_courses')
+      .insert({ business_id: business.id, slot_number: nextSlot, name: null })
+      .select('*')
+      .single()
+    setAddingCourse(false)
+    if (error) { console.error('[handleAddCourse]', error); return }
+    setCourses((prev) => [...prev, data])
+  }
+
+  const handleDeactivateCourse = async (c) => {
+    setBusyCourseId(c.id)
+    const { error } = await supabase.from('business_courses').update({ is_active: false }).eq('id', c.id)
+    if (error) { console.error('[handleDeactivateCourse]', error); setBusyCourseId(null); return }
+    setCourses((prev) => prev.map((x) => x.id === c.id ? { ...x, is_active: false } : x))
+    setBusyCourseId(null)
+    setConfirmDeactivateCourseId(null)
+  }
+
+  const handleReactivateCourse = async (c) => {
+    setBusyCourseId(c.id)
+    const { error } = await supabase.from('business_courses').update({ is_active: true }).eq('id', c.id)
+    if (error) { console.error('[handleReactivateCourse]', error); setBusyCourseId(null); return }
+    setCourses((prev) => prev.map((x) => x.id === c.id ? { ...x, is_active: true } : x))
+    setBusyCourseId(null)
+  }
+
+  const toggleFireImmediate = async () => {
+    const next = !business.kitchen_fire_immediately
+    setFireImmediateSaving(true)
+    const { error } = await supabase.from('businesses').update({ kitchen_fire_immediately: next }).eq('id', business.id)
+    setFireImmediateSaving(false)
+    if (error) { console.error('[toggleFireImmediate]', error); return }
+    onBusinessPatch?.({ kitchen_fire_immediately: next })
+  }
+
+  /* ── CRUD postazioni ── */
+  const handleRenameStation = async (s, rawValue) => {
+    const name = rawValue.trim()
+    if (!name || name === s.name) return
+    const { error } = await supabase.from('kitchen_stations').update({ name }).eq('id', s.id)
+    if (error) { console.error('[handleRenameStation]', error); return }
+    setStations((prev) => prev.map((x) => x.id === s.id ? { ...x, name } : x))
+  }
+
+  const handleAddStation = async () => {
+    const name = newStationName.trim()
+    if (!name) return
+    setAddingStation(true)
+    const { data, error } = await supabase
+      .from('kitchen_stations')
+      .insert({ business_id: business.id, name })
+      .select('*')
+      .single()
+    setAddingStation(false)
+    if (error) { console.error('[handleAddStation]', error); return }
+    setStations((prev) => [...prev, data])
+    setNewStationName('')
+  }
+
+  // Disattivazione bloccata se ci sono ancora categorie attive assegnate a
+  // questa postazione — altrimenti i loro piatti sparirebbero da ogni vista
+  // cucina finché qualcuno non li riassegna. Controllo locale sulle
+  // categorie già caricate, nessun round-trip in più.
+  const handleDeactivateStation = async (s) => {
+    const hasAssignedCategories = categories.some((c) => c.is_active && c.station_id === s.id)
+    if (hasAssignedCategories) {
+      setStationBlockedId(s.id)
+      setTimeout(() => setStationBlockedId((cur) => cur === s.id ? null : cur), 4000)
+      return
+    }
+    setBusyStationId(s.id)
+    const { error } = await supabase.from('kitchen_stations').update({ is_active: false }).eq('id', s.id)
+    if (error) { console.error('[handleDeactivateStation]', error); setBusyStationId(null); return }
+    setStations((prev) => prev.map((x) => x.id === s.id ? { ...x, is_active: false } : x))
+    setBusyStationId(null)
+    setConfirmDeactivateStationId(null)
+  }
+
+  const handleReactivateStation = async (s) => {
+    setBusyStationId(s.id)
+    const { error } = await supabase.from('kitchen_stations').update({ is_active: true }).eq('id', s.id)
+    if (error) { console.error('[handleReactivateStation]', error); setBusyStationId(null); return }
+    setStations((prev) => prev.map((x) => x.id === s.id ? { ...x, is_active: true } : x))
+    setBusyStationId(null)
   }
 
   /* ── CRUD piatti ── */
@@ -333,10 +505,18 @@ export default function Menu({ business }) {
             Conferme fine turno
             {flaggedItems.length > 0 && <span className="mn-badge-count">{flaggedItems.length}</span>}
           </button>
+          <button className="sv-btn-cancel" onClick={() => setStationsModalOpen(true)}>Postazioni</button>
+          <button className="sv-btn-cancel" onClick={() => setCoursesModalOpen(true)}>Portate</button>
           <button className="sv-btn-cancel" onClick={() => setCategoriesModalOpen(true)}>Gestisci categorie</button>
           <button className="db-btn-primary" onClick={openAddItem}>+ Aggiungi piatto</button>
         </div>
       </div>
+
+      {orphanStationCategories.length > 0 && (
+        <div className="db-empty-banner">
+          {orphanStationCategories.length} categori{orphanStationCategories.length !== 1 ? 'e' : 'a'} senza postazione assegnata — i piatti finiscono nella prima postazione attiva finché non l{orphanStationCategories.length !== 1 ? 'e' : 'a'} assegni da "Gestisci categorie".
+        </div>
+      )}
 
       {/* Elenco raggruppato per categoria */}
       {(categoriesLoading || itemsLoading) ? (
@@ -395,6 +575,28 @@ export default function Menu({ business }) {
                         disabled={!c.is_active}
                         onBlur={(e) => handleRenameCategory(c, e.target.value)}
                       />
+                      <div className="mn-category-routing">
+                        <select
+                          className="sv-input sv-select"
+                          value={c.course_id ?? ''}
+                          disabled={!c.is_active}
+                          title="Portata"
+                          onChange={(e) => handleAssignCourse(c, e.target.value || null)}
+                        >
+                          <option value="">Subito (nessuna portata)</option>
+                          {activeCourses.map(x => <option key={x.id} value={x.id}>{courseLabel(x)}</option>)}
+                        </select>
+                        <select
+                          className={`sv-input sv-select ${!c.station_id ? 'sv-input--error' : ''}`}
+                          value={c.station_id ?? ''}
+                          disabled={!c.is_active}
+                          title="Postazione"
+                          onChange={(e) => handleAssignStation(c, e.target.value || null)}
+                        >
+                          <option value="">— Postazione non assegnata —</option>
+                          {activeStations.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                        </select>
+                      </div>
                     </div>
                     <div className="sv-row-actions">
                       {c.is_active && (
@@ -450,6 +652,157 @@ export default function Menu({ business }) {
 
             <div className="sv-modal-footer">
               <button className="sv-btn-cancel" onClick={() => setCategoriesModalOpen(false)}>Chiudi</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal portate — stesso identico pattern del modale Turni in
+          Tavoli.jsx (rinomina inline, aggiungi, disattiva/riattiva),
+          più l'interruttore "invia sempre tutto subito" in testa: è
+          l'unico posto dove ha senso, disattiva l'intera logica attesa/via. */}
+      {coursesModalOpen && (
+        <div className="sv-modal-overlay" onClick={(e) => e.target === e.currentTarget && setCoursesModalOpen(false)}>
+          <div className="sv-modal">
+            <div className="sv-modal-header">
+              <h2 className="sv-modal-title">Portate</h2>
+              <button className="sv-modal-close" onClick={() => setCoursesModalOpen(false)} aria-label="Chiudi"><IconX /></button>
+            </div>
+
+            <div className="sv-modal-body">
+              <label className="sv-toggle-row" style={{ marginBottom: 12 }}>
+                <div className="sv-toggle-text">
+                  <span className="sv-toggle-label">Invia sempre tutto subito</span>
+                  <span className="sv-toggle-hint">Se attivo, l'invio in cucina non chiede mai la scelta subito/in attesa tra portate.</span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!business.kitchen_fire_immediately}
+                  disabled={fireImmediateSaving}
+                  className={`sv-toggle ${business.kitchen_fire_immediately ? 'sv-toggle--on' : ''}`}
+                  onClick={toggleFireImmediate}
+                >
+                  <span className="sv-toggle-thumb" />
+                </button>
+              </label>
+
+              <div className="sv-list">
+                {courses.map(c => (
+                  <div key={c.id} className={`sv-row ${!c.is_active ? 'sv-row--inactive' : ''}`}>
+                    <div className="sv-row-main">
+                      <input
+                        className="sv-input"
+                        type="text"
+                        defaultValue={c.name ?? ''}
+                        placeholder={`Portata ${c.slot_number}`}
+                        disabled={!c.is_active}
+                        onBlur={(e) => handleRenameCourse(c, e.target.value)}
+                      />
+                    </div>
+                    <div className="sv-row-actions">
+                      {!c.is_active ? (
+                        <button className="mn-btn-reactivate" disabled={busyCourseId === c.id} onClick={() => handleReactivateCourse(c)}>
+                          {busyCourseId === c.id ? <MnSpinner small /> : 'Riattiva'}
+                        </button>
+                      ) : confirmDeactivateCourseId === c.id ? (
+                        <div className="mn-confirm-row">
+                          <span className="mn-confirm-label">Disattivare?</span>
+                          <button className="sv-action-btn sv-action-btn--danger" disabled={busyCourseId === c.id} onClick={() => handleDeactivateCourse(c)}>
+                            {busyCourseId === c.id ? <MnSpinner small /> : <IconCheck />}
+                          </button>
+                          <button className="sv-action-btn" onClick={() => setConfirmDeactivateCourseId(null)}><IconX /></button>
+                        </div>
+                      ) : (
+                        <button className="sv-action-btn sv-action-btn--danger" title="Disattiva" onClick={() => setConfirmDeactivateCourseId(c.id)}>
+                          <IconTrash />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button className="db-btn-primary" style={{ marginTop: 12 }} onClick={handleAddCourse} disabled={addingCourse}>
+                {addingCourse ? <MnSpinner small /> : null} + Aggiungi portata
+              </button>
+            </div>
+
+            <div className="sv-modal-footer">
+              <button className="sv-btn-cancel" onClick={() => setCoursesModalOpen(false)}>Chiudi</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal postazioni */}
+      {stationsModalOpen && (
+        <div className="sv-modal-overlay" onClick={(e) => e.target === e.currentTarget && setStationsModalOpen(false)}>
+          <div className="sv-modal">
+            <div className="sv-modal-header">
+              <h2 className="sv-modal-title">Postazioni</h2>
+              <button className="sv-modal-close" onClick={() => setStationsModalOpen(false)} aria-label="Chiudi"><IconX /></button>
+            </div>
+
+            <div className="sv-modal-body">
+              <div className="sv-list">
+                {stations.map(s => (
+                  <div key={s.id} className={`sv-row ${!s.is_active ? 'sv-row--inactive' : ''}`}>
+                    <div className="sv-row-main">
+                      <input
+                        className="sv-input"
+                        type="text"
+                        defaultValue={s.name}
+                        disabled={!s.is_active}
+                        onBlur={(e) => handleRenameStation(s, e.target.value)}
+                      />
+                      {stationBlockedId === s.id && (
+                        <p className="sv-field-error">Sposta prima le categorie assegnate su un'altra postazione.</p>
+                      )}
+                    </div>
+                    <div className="sv-row-actions">
+                      {!s.is_active ? (
+                        <button className="mn-btn-reactivate" disabled={busyStationId === s.id} onClick={() => handleReactivateStation(s)}>
+                          {busyStationId === s.id ? <MnSpinner small /> : 'Riattiva'}
+                        </button>
+                      ) : confirmDeactivateStationId === s.id ? (
+                        <div className="mn-confirm-row">
+                          <span className="mn-confirm-label">Disattivare?</span>
+                          <button className="sv-action-btn sv-action-btn--danger" disabled={busyStationId === s.id} onClick={() => handleDeactivateStation(s)}>
+                            {busyStationId === s.id ? <MnSpinner small /> : <IconCheck />}
+                          </button>
+                          <button className="sv-action-btn" onClick={() => setConfirmDeactivateStationId(null)}><IconX /></button>
+                        </div>
+                      ) : (
+                        <button className="sv-action-btn sv-action-btn--danger" title="Disattiva" onClick={() => setConfirmDeactivateStationId(s.id)}>
+                          <IconTrash />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="sv-field" style={{ marginTop: 12 }}>
+                <label className="sv-label" htmlFor="mn-new-station">Nuova postazione</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    id="mn-new-station"
+                    className="sv-input"
+                    type="text"
+                    value={newStationName}
+                    onChange={(e) => setNewStationName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddStation() }}
+                    placeholder="es. Bar"
+                  />
+                  <button className="db-btn-primary" onClick={handleAddStation} disabled={addingStation || !newStationName.trim()}>
+                    {addingStation ? <MnSpinner small /> : '+ Aggiungi'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="sv-modal-footer">
+              <button className="sv-btn-cancel" onClick={() => setStationsModalOpen(false)}>Chiudi</button>
             </div>
           </div>
         </div>
