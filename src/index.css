@@ -2837,15 +2837,34 @@ body {
   &:hover { border-color: var(--accent); box-shadow: var(--shadow); }
 }
 
-.kt-tv-exit {
-  align-self: flex-start;
+.kt-tv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.kt-tv-station-label {
   font-size: 22px;
   font-weight: 700;
   color: var(--text-h);
-  background: transparent;
-  border: none;
+}
+
+/* Piccolo ma esplicito — un'etichetta leggibile, non un'icona ambigua o il
+   nome della postazione riusato come pulsante travestito. */
+.kt-tv-exit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
   cursor: pointer;
-  margin-bottom: 12px;
+  flex-shrink: 0;
+
+  &:hover { border-color: var(--accent); color: var(--accent); }
 }
 
 .kt-tickets {

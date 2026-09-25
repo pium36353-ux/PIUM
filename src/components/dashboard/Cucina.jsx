@@ -44,7 +44,15 @@ export default function Cucina({ business }) {
   const [settingsLoading, setSettingsLoading]  = useState(true)
 
   const [selectedStationId, setSelectedStationId] = useState(() => business ? readLocal(stationStorageKey(business.id)) : null)
-  const [mode,               setMode]              = useState(() => (business ? readLocal(modeStorageKey(business.id)) : null) ?? 'interattiva')
+  // Predefinita SEMPRE 'interattiva' al primo avvio su un dispositivo —
+  // solo il valore esatto 'solo_schermo' salvato in precedenza sposta la
+  // modalità, qualunque altra cosa (niente salvato, storage corrotto,
+  // valore imprevisto) resta interattiva. Whitelist esplicita, non un
+  // `??` che si limiterebbe a coprire il solo caso "niente salvato".
+  const [mode, setMode] = useState(() => {
+    const stored = business ? readLocal(modeStorageKey(business.id)) : null
+    return stored === 'solo_schermo' ? 'solo_schermo' : 'interattiva'
+  })
   const [stationPickerOpen,  setStationPickerOpen]  = useState(false)
 
   const [orders,  setOrders]  = useState([])
@@ -281,10 +289,18 @@ export default function Cucina({ business }) {
         </div>
       )}
 
+      {/* Modalità "solo schermo": il nome postazione resta un'etichetta
+          informativa, MAI un pulsante — toccarlo per errore non deve
+          uscire dalla modalità TV rivelando "Chiama sala"/"Cambia
+          postazione" di sorpresa. Il ritorno all'interattiva è un comando
+          separato, piccolo ma esplicito, sempre presente. */}
       {!interactive && (
-        <button className="kt-tv-exit" onClick={() => chooseMode('interattiva')} title="Esci da modalità solo schermo">
-          {currentStation.name}
-        </button>
+        <div className="kt-tv-header">
+          <span className="kt-tv-station-label">{currentStation.name}</span>
+          <button className="kt-tv-exit" onClick={() => chooseMode('interattiva')}>
+            ↩ Modalità interattiva
+          </button>
+        </div>
       )}
 
       {realtimeDown && (
