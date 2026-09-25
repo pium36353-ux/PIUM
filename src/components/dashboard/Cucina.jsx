@@ -27,6 +27,18 @@ function courseLabel(c) {
   return c.name?.trim() || `Portata ${c.slot_number}`
 }
 
+// Colore automatico per slot_number, mai una scelta del titolare — palette
+// fissa (6 tinte, come i fogli colorati delle comande a carta carbone),
+// ciclica se le portate attive superano la palette. La fascia "senza
+// portata" resta neutra (kt-band senza modificatore): non è una vera
+// portata, va distinta per posizione (sempre in cima), non per colore.
+const COURSE_COLOR_COUNT = 6
+function courseColorClass(course) {
+  if (!course) return ''
+  const idx = (course.slot_number - 1 + COURSE_COLOR_COUNT * 100) % COURSE_COLOR_COUNT
+  return `kt-band--c${idx}`
+}
+
 function formatTime(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
@@ -327,7 +339,7 @@ export default function Cucina({ business }) {
                   const anyWaiting = band.items.some(i => i.fire_status === 'in_attesa')
                   const anyReady   = band.items.some(i => i.kitchen_status === 'pronto')
                   return (
-                    <div key={band.course?.id ?? `none-${idx}`} className={`kt-band ${anyWaiting ? 'kt-band--waiting' : ''}`}>
+                    <div key={band.course?.id ?? `none-${idx}`} className={`kt-band ${courseColorClass(band.course)} ${anyWaiting ? 'kt-band--waiting' : ''}`}>
                       <div className="kt-band-header">
                         <span className="kt-band-title">{courseLabel(band.course)}</span>
                         {interactive && (

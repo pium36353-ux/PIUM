@@ -2913,8 +2913,34 @@ body {
   padding: 8px 10px;
   background: var(--accent-bg);
 }
+
+/* Colore automatico per slot_number (vedi courseColorClass in Cucina.jsx),
+   MAI una scelta del titolare — sei tinte distinguibili, come i fogli
+   colorati delle comande a carta carbone. Colori FISSI non theme-aware
+   (stesso principio di .tv-card--free/--reserved/--occupied): il
+   contrasto del titolo fascia deve reggere indipendentemente dal tema
+   chiaro/scuro del resto dell'app. Le singole voci dentro (.kt-item) hanno
+   un proprio sfondo e non ereditano questa tinta, solo il titolo fascia
+   siede direttamente sul colore. */
+.kt-band--c0 { background: #FEF3C7; }
+.kt-band--c1 { background: #FCE7F3; }
+.kt-band--c2 { background: #DBEAFE; }
+.kt-band--c3 { background: #D1FAE5; }
+.kt-band--c4 { background: #FFEDD5; }
+.kt-band--c5 { background: #EDE9FE; }
+.kt-band--c0 .kt-band-title { color: #78350F; }
+.kt-band--c1 .kt-band-title { color: #831843; }
+.kt-band--c2 .kt-band-title { color: #1E3A66; }
+.kt-band--c3 .kt-band-title { color: #065F46; }
+.kt-band--c4 .kt-band-title { color: #7C2D12; }
+.kt-band--c5 .kt-band-title { color: #4C1D95; }
+
+/* In attesa: la fascia resta della sua tinta di portata (deve restare
+   riconoscibile), solo attenuata — il grigio pieno di prima copriva
+   qualunque colore proprio quando serviva di più, dato che di default la
+   maggior parte delle fasce di un invio appena fatto parte in attesa. */
 .kt-band--waiting {
-  background: var(--code-bg);
+  opacity: 0.6;
 }
 
 .kt-band-header {

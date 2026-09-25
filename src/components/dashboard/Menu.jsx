@@ -500,7 +500,7 @@ export default function Menu({ business, onBusinessPatch }) {
             ? `${items.length} piatt${items.length !== 1 ? 'i' : 'o'} nel menu.`
             : 'Aggiungi i piatti del tuo menu.'}
         </p>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="sv-btn-cancel mn-confirmations-btn" onClick={() => setConfirmationsModalOpen(true)}>
             Conferme fine turno
             {flaggedItems.length > 0 && <span className="mn-badge-count">{flaggedItems.length}</span>}
