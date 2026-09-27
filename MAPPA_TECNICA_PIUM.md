@@ -1277,6 +1277,8 @@ Coperto in dettaglio dalla **Fase 2**. In sintesi: ogni pagina/componente legge/
 | `notify-new-booking/index.ts` | lato server, usa la libreria `web-push` (npm, via `import webpush from 'npm:web-push'` in Deno) con la chiave privata VAPID per firmare e inviare le notifiche ai browser (che le instradano a loro volta ai servizi push nativi: FCM per Chrome, servizio Apple per Safari — invisibili al codice PIUM) |
 | `public/sw.js` | service worker che riceve l'evento `push` e mostra la notifica |
 
+**Convenzione**: la costante `CACHE` in `public/sw.js` (es. `'pium-v2'` → `'pium-v3'`) va incrementata a ogni aggiornamento importante del progetto — l'`activate` handler cancella ogni cache con un nome diverso da quello corrente, così un service worker già installato su un dispositivo si allinea alla versione nuova invece di restare indefinitamente su cache datate. Bump più recente: `2e87c5f` (branch `feature/ristorante-tavoli`, in occasione del Blocco D di `ristorante_bar`) — irrilevante per il verticale in sé, è la convenzione generale del progetto applicata a un aggiornamento che la meritava.
+
 ---
 
 ### 3. Variabili d'ambiente / secret — elenco completo
