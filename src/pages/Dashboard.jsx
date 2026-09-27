@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
@@ -17,7 +17,21 @@ import PromemoriaClienti from '../components/dashboard/PromemoriaClienti'
 import Agenda      from '../components/dashboard/Agenda'
 import Clienti     from '../components/dashboard/Clienti'
 
-const NAV = [
+// Componenti specifici di un singolo verticale (business.vertical diverso
+// da 'generico') vanno SEMPRE caricati con import() dinamico, mai importati
+// staticamente qui in cima: così il loro codice scende sul browser solo per
+// i business che hanno davvero quel vertical attivo, non per tutti. Tavoli è
+// il primo caso reale di questo pattern — qualunque componente futuro dello
+// stesso tipo (nuovo verticale) va aggiunto allo stesso modo.
+const Tavoli = lazy(() => import('../components/dashboard/Tavoli'))
+const Menu   = lazy(() => import('../components/dashboard/Menu'))
+const Cucina = lazy(() => import('../components/dashboard/Cucina'))
+
+// Base sempre visibile, indipendente dal verticale. La voce 'tavoli' viene
+// aggiunta SOLO per business.vertical === 'ristorante_bar' — vedi NAV
+// calcolato dentro il componente, non qui (qui business non è ancora
+// disponibile).
+const NAV_BASE = [
   { id: 'panoramica', label: 'Panoramica',  icon: IconGrid },
   { id: 'agenda',     label: 'Agenda',      icon: IconCalendar },
   { id: 'clienti',    label: 'Clienti',     icon: IconUsers },
@@ -49,6 +63,23 @@ export default function Dashboard() {
   const [pendingActivation,  setPendingActivation]  = useState(false)
   const [loadError,          setLoadError]          = useState(false)
   const [adminMessages,      setAdminMessages]      = useState([])
+
+  // Voce 'tavoli' presente in nav SOLO se business.vertical === 'ristorante_bar'
+  // (confronto case-sensitive, valore esatto) — per qualunque altro valore (incluso
+  // 'generico', vuoto, non riconosciuto o business non ancora caricato) la
+  // voce non esiste nell'array, quindi non è né cliccabile né raggiungibile
+  // via il deep-link ?s= (vedi effect sotto, che verifica l'appartenenza a
+  // questo stesso array prima di cambiare sezione).
+  const NAV = useMemo(() => {
+    if (business?.vertical !== 'ristorante_bar') return NAV_BASE
+    const withRistorante = [...NAV_BASE]
+    withRistorante.splice(3, 0,
+      { id: 'tavoli', label: 'Tavoli', icon: IconTable },
+      { id: 'menu',   label: 'Menu',   icon: IconMenuBook },
+      { id: 'cucina', label: 'Cucina', icon: IconChefHat },
+    )
+    return withRistorante
+  }, [business?.vertical])
 
   // Aggiorna lo stato business condiviso quando una sezione (es. Orari) scrive una
   // config per-business — così le altre sezioni già montate (es. Agenda) vedono
@@ -118,11 +149,15 @@ export default function Dashboard() {
     setAdminMessages(prev => prev.filter(m => m.id !== msg.id))
   }
 
-  // Handle ?s= query param for deep-linking into a section
+  // Handle ?s= query param for deep-linking into a section — dipende anche
+  // da business.vertical (non solo da location.search) perché NAV cambia
+  // quando business finisce di caricare in modo asincrono: un deep-link a
+  // ?s=tavoli letto prima che business sia noto deve poter essere
+  // riverificato una volta che NAV include davvero quella voce.
   useEffect(() => {
     const s = new URLSearchParams(location.search).get('s')
     if (s && NAV.some(n => n.id === s)) setSection(s)
-  }, [location.search])
+  }, [location.search, business?.vertical]) // eslint-disable-line
 
   // Step 1 — rileva il ritorno da Stripe e avvia il polling
   useEffect(() => {
@@ -178,6 +213,11 @@ export default function Dashboard() {
     'promemoria-clienti': PromemoriaClienti,
     agenda:     Agenda,
     clienti:    Clienti,
+    // Chiave presente SOLO per business.vertical === 'ristorante_bar' —
+    // per qualunque altro valore Section risolve a undefined per
+    // section === 'tavoli' e più sotto `{Section && (...)}` non monta nulla,
+    // indipendentemente da come lo stato `section` sia finito su 'tavoli'.
+    ...(business?.vertical === 'ristorante_bar' ? { tavoli: Tavoli, menu: Menu, cucina: Cucina } : {}),
   }[section]
 
   useEffect(() => {
@@ -441,7 +481,9 @@ export default function Dashboard() {
           )}
           {Section && (
             <ErrorBoundary key={section}>
-              <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} onBusinessPatch={patchBusiness} />
+              <Suspense fallback={<div className="sv-loading">Caricamento…</div>}>
+                <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} onBusinessPatch={patchBusiness} />
+              </Suspense>
             </ErrorBoundary>
           )}
         </main>
@@ -471,6 +513,15 @@ function IconBell() {
 }
 function IconMessageCircle() {
   return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>
+}
+function IconTable() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="4" rx="1"/><line x1="6" y1="11" x2="6" y2="20"/><line x1="18" y1="11" x2="18" y2="20"/></svg>
+}
+function IconMenuBook() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+}
+function IconChefHat() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
 }
 function IconHome() {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>

@@ -13,8 +13,29 @@ PIUM è nato come dashboard generica per attività locali. Da settembre 2026 esi
 - **Regola architetturale — componente separato, mai condizioni sparse dentro la dashboard generica**: una feature di verticale vive in un componente proprio (es. `PetBoneIcon.jsx`, `PetIndicators.jsx`) montato/renderizzato **solo** dentro un `if (business.vertical === '<valore esatto>')` messo **prima** che qualunque JSX o query specifica del verticale venga anche solo costruita da React (`return null`/return anticipato — non un nascondimento CSS a posteriori, non un componente sempre montato con dati vuoti). `Agenda.jsx`/`Clienti.jsx` restano i componenti condivisi esistenti: le sezioni specifiche del verticale sono rami interni gated, non hanno trasformato quei file in componenti "per toelettatura".
 - **Verticali riconosciuti ad oggi** (valore esatto da scrivere in Admin, case-sensitive, identico carattere per carattere al confronto nel codice):
   - `toelettatura` — UI animali (pets): sezione "Animali" nel modulo appuntamento e sul blocco appuntamento di `Agenda.jsx`, sezione "Animali" nella scheda cliente di `Clienti.jsx`. Dettagli tabella `pets` e componenti in Fase 2/Fase 1.
+  - `ristorante_bar` — piantina tavoli, prenotazioni per data/turno, catalogo menu, comande/ordinazioni con invio in cucina (portate, attesa/via, protezione offline) e vista cucina dedicata per postazione: componenti `Tavoli.jsx`/`Menu.jsx`/`Ordine.jsx`/`Cucina.jsx`. **Esiste solo sul branch `feature/ristorante-tavoli`, non ancora unito a master** — se stai leggendo questo documento da master e non trovi questi file/tabelle, è per questo, non un errore. Copre indistintamente ristoranti e bar (nessuna distinzione di categoria a livello di schema o UI, per scelta esplicita). Dettagli tabelle in Fase 2, componenti in Fase 1, cronologia delle correzioni subito sotto.
 - **Da non confondere con `businesses.category`**: colonna preesistente, testo libero scelto dal merchant in `Onboarding.jsx` (es. la voce `"Toelettatura"` con emoji 🐾, aggiunta al `CATEGORIES` array da `a2f1966`) — è solo un'etichetta mostrata sul sito pubblico/dashboard, **non attiva alcuna UI**. Solo `vertical`, impostato dall'admin, attiva funzionalità. Un business può avere `category='Toelettatura'` e `vertical='generico'` (nessuna UI animali) o viceversa.
 - **Lezione dalla prima implementazione** (utile per verificare ogni verticale futuro con lo stesso rigore): la UI animali era stata inizialmente montata come universale per errore (commit `a2f1966`), corretto con un fix urgente subito dopo (`05d166f`, "gating pets/PetBoneIcon dietro business.vertical='toelettatura'"). Il gate va verificato con un **grep su ogni riferimento** ai simboli della feature (nomi componenti, funzioni di load, stato React) in tutto `src/`, non solo letto "a occhio" nel punto dove sembra ovvio — le uniche eccezioni legittime a un grep del genere sono le dichiarazioni `useState` (obbligatorie e unconditional per le regole di React, non producono output da sole) e le definizioni di funzione mai invocate se il pulsante che le richiama non è nel DOM.
+- **Componenti di verticale vanno SEMPRE caricati con `React.lazy()`, mai importati staticamente**: regola aggiunta con `ristorante_bar` (commit `015111d`), applicata anche retroattivamente ai componenti `toelettatura` già esistenti (`PetBoneIcon.jsx`, `PetIndicators.jsx`, prima importati staticamente in cima ad `Agenda.jsx`/`Clienti.jsx`). Così il codice di un componente specifico di un verticale scende sul browser solo per i business che hanno davvero quel verticale attivo, non per tutti — verificato in build (`npm run build`): ogni componente di verticale produce un chunk separato dal bundle principale, e `dist/index.html` non lo referenzia con alcun `<link rel="modulepreload">`. In `Dashboard.jsx`: `const Tavoli = lazy(() => import(...))`, un unico `<Suspense fallback="Caricamento…">` attorno al rendering della sezione attiva (non ha effetto sulle sezioni non-lazy, che risolvono subito). Nei componenti condivisi (`Agenda.jsx`/`Clienti.jsx`), `<Suspense fallback={null}>` avvolge solo i punti d'uso già gated dietro il controllo su `vertical` — componenti troppo piccoli per giustificare uno spinner visibile.
+- **Stato "calcolato al volo", mai persistito, quando dipende da una combinazione di fattori**: principio emerso durante `ristorante_bar` (vedi Cronologia sotto) — se un dato (es. "il tavolo X è libero o occupato") dipende dall'incrocio di più dimensioni indipendenti (tavolo, data, turno), **non va salvato come colonna** da tenere sincronizzata, va **ricalcolato ogni volta** interrogando i dati che lo determinano davvero (qui: esiste una `table_reservations` confermata per l'esatta combinazione richiesta?). Salvarlo a parte richiederebbe aggiornarlo da ogni punto che potrebbe farlo cambiare, con margine costante di disallineamento; calcolarlo al volo lo rende impossibile da disallineare, per costruzione. Vale ogni volta che uno "stato" sembra un singolo campo ma in realtà è una domanda con più parametri. Esteso a OCCUPATO nel Blocco C (punto 7 della Cronologia) e alla risoluzione postazione/portata nel Blocco D.
+- **Una sola funzione condivisa per una regola di ripiego usata in più punti**: quando la stessa regola (es. "quale postazione riceve questa voce se la sua categoria non ne ha una assegnata") serve a più componenti — `Cucina.jsx` per filtrare le voci da mostrare, `Ordine.jsx` per raggruppare l'invio per portata, `Menu.jsx` per segnalare le categorie orfane — la logica vive in **una** funzione condivisa (`resolveStationId`/`resolveCourseId`/`groupItemsByCourse` in `src/lib/kitchenRouting.js`), mai riscritta punto per punto. Altrimenti i casi limite (categoria senza postazione, piatto senza categoria, piatto cancellato dal catalogo dopo l'ordine) rischiano di essere gestiti in modo diverso da un componente all'altro senza che nessuno se ne accorga. Principio emerso con `ristorante_bar` Blocco D, esplicitamente richiesto prima di scrivere il codice.
+
+### Cronologia: decisioni corrette durante lo sviluppo di `ristorante_bar`
+
+Sequenza di iterazioni, con cinque correzioni sostanziali (punti 2→3, 3→4, 4→6, 6→7, 7→8), prima di arrivare alla forma descritta in questo documento — utile a chi tocca questo codice per capire **perché** è fatto così e non riproporre un'idea già scartata. Tutti i commit citati sono sul branch `feature/ristorante-tavoli`.
+
+1. **`24ef2bf` — versione minima**: tabella `tables` senza alcuna colonna di stato, di proposito — il toggle libero/occupato era solo `useState` locale in `Tavoli.jsx`, si azzerava a ogni reload. Nessuna migration per uno stato che "oggi non rappresenterebbe alcun dato reale".
+2. **`172010b` — persistenza richiesta**: aggiunta `tables.status` (`text` CHECK `libero`/`occupato`, non `boolean`, per poter aggiungere un terzo stato in futuro senza cambiare tipo) + toggle manuale che lo scrive. Ancora nessun collegamento a prenotazioni reali.
+3. **`015111d` — "Blocco A": riuso del modello di `appointments`**. Idea: un appuntamento normale (orario + durata) può avere un tavolo assegnato. Aggiunta `appointments.table_id`, select tavolo nel modulo appuntamento di `Agenda.jsx`, `Tavoli.jsx` che deriva lo stato "oggi" da un appuntamento in corso adesso collegato a quel tavolo (con `tables.status` tenuto come override manuale solo per le date diverse da oggi).
+4. **`1927c27` — CORREZIONE: il modello di `appointments` non si adatta a una prenotazione ristorante.** Una prenotazione ha data + turno ("pranzo", "cena"), non un orario fisso con una durata calcolabile — nessuno sa in anticipo quando un tavolo si libererà. Disfatto il Blocco A: rimossa la select tavolo da `Agenda.jsx`, rimossa da `Tavoli.jsx` ogni logica basata su un appuntamento collegato. **`appointments.table_id` (e la sua migration, `20260922_appointments_table_id.sql`) restano nello schema inutilizzati** — nessun rollback, il codice applicativo ha semplicemente smesso di leggerlo/scriverlo (rischio di un rollback ritenuto superiore al beneficio di una colonna morta). Introdotto il nuovo modello `table_reservations`/`table_reservation_tables`, con `turn` ancora testo libero in questa fase, e `tables.status` ancora presente ma ora esplicitamente **disaccoppiato dalle prenotazioni** (nessun incrocio dati) e limitato alla sola vista di "oggi".
+5. **`a9a2d00`/`310f963` — collegamento al sistema clienti**: `ensureContact()` crea/riusa un `contacts` in base al telefono al salvataggio di una prenotazione (dettagli in Fase 2, tabella `table_reservations`); correzione successiva perché la ricerca live del cliente era stata agganciata per errore al campo "Telefono" invece che al campo "Cliente" (bug di UX scoperto testando il comportamento, non di logica).
+6. **`406b667` — CORREZIONE, la più importante del Blocco iniziale**: realizzato che libero/occupato **non è un valore unico per giorno** — lo stesso tavolo può essere libero a pranzo e occupato a cena, sono stati indipendenti legati anche al turno, non solo alla data. Introdotti i turni come entità propria (`business_turns`, configurabili per business, 4 creati automaticamente quando si imposta `vertical='ristorante_bar'` da `Admin.jsx`); `table_reservations.turn` (testo libero) sostituito da `turn_id` (FK obbligatoria). **`tables.status` e ogni toggle manuale eliminati per sempre** (colonna droppata): lo stato è ora **sempre calcolato al volo** per l'esatta combinazione (tavolo, data, turno) richiesta — vedi il principio generale poco sopra. I dati di prova delle sessioni precedenti in `table_reservations`/`table_reservation_tables` sono stati ripuliti con una `TRUNCATE` nella stessa migration (dati di test, non reali, mai avuto bisogno di essere migrati).
+7. **`dd39b10`→`d70ad01` — CORREZIONE (Blocco C): OCCUPATO non può essere uno stato globale.** Il primo Blocco C (comande/ordinazioni — tabella `table_orders`, tre stati LIBERO/PRENOTATO/OCCUPATO) è partito con OCCUPATO derivato dalla sola esistenza di un ordine aperto sul tavolo, **indipendentemente da `order_date`/`turn_id`** — trattato come "un fatto fisico assoluto": un ordine aperto rende il tavolo occupato punto e basta, il turno resta solo informativo (così diceva letteralmente il commento originale della migration). Sbagliato per lo stesso identico motivo del punto 6: un ordine dimenticato aperto di ieri rendeva occupato il tavolo anche navigando su oggi, in un turno diverso — violava il principio "stato calcolato al volo per l'ESATTA combinazione" già stabilito per le prenotazioni, trattandolo come un'eccezione ingiustificata. Corretto scoping `openOrderByTable` (query `.eq('order_date', ...)` + filtro client su `turn_id`) alla stessa identica combinazione (tavolo, order_date, turn_id) di `reservationsByTable`, nessuna eccezione residua.
+8. **`dd09580` — allineamento del vincolo DB, conseguenza diretta del punto 7.** Il vincolo unico originale (`idx_table_orders_one_open_per_table`) restava scoped al solo `table_id` — **"un tavolo fisico non può avere più di un ordine aperto contemporaneamente, punto"**. Corretto lo scoping applicativo (punto 7) ma non quello del vincolo DB, un ordine dimenticato aperto su un turno bloccava (errore 23505) l'apertura di un nuovo ordine sullo stesso tavolo a un turno diverso dello stesso giorno, anche se la UI mostrava già quel tavolo come libero per quella combinazione — un disallineamento tra ciò che il vincolo permette e ciò che la UI promette. Sostituito con `idx_table_orders_one_open_per_slot`, scoped a `(table_id, order_date, turn_id)`, introdotta insieme alla **chiusura automatica degli ordini dimenticati** (`table_orders.auto_closed`): un ordine aperto su un turno si chiude da solo quando arriva la successiva occorrenza dello STESSO turno (es. un Pranzo di ieri lasciato aperto si chiude quando si apre il Pranzo di oggi) — un turno non tocca mai un turno diverso, e navigare su una data diversa da oggi resta sempre sola lettura. Il commento in testa a `20260923_table_orders.sql` descriveva ancora la vecchia logica quando scoperto (la migration era già applicata in produzione) — corretto **solo nel commento**, con un commit separato (`0da027b`), nessuna modifica allo SQL eseguito.
+
+Il Blocco B (catalogo menu — `menu_categories`/`menu_items`/`menu_item_flags`, commit `8041238`/`7d0af76`) è arrivato dopo le correzioni 1-6 ed è un modello indipendente, senza una propria cronologia di ripensamenti.
+
+Il Blocco D (invio in cucina, portate, postazioni, vista cucina — `c913b7f`) ha portato la propria correzione di modello, sullo stesso principio dei punti 7-8: **nessuna voce d'ordine può restare senza postazione**, mai un'eccezione silenziosa. La regola di ripiego (prima postazione attiva) copre esplicitamente tre casi — categoria senza `station_id`, piatto senza categoria, piatto cancellato dal catalogo dopo l'ordine — risolti da un'**unica funzione condivisa** (`resolveStationId`/`resolveCourseId`/`groupItemsByCourse` in `src/lib/kitchenRouting.js`), mai duplicata tra `Cucina.jsx`/`Ordine.jsx`/`Menu.jsx` (vedi principio generale poco sopra). La messa a punto ha richiesto alcune correzioni minori scoperte in test dal vivo (bug, non decisioni di modello): `kitchen_stations` creata senza colonna `created_at` nonostante il codice la ordini per quella colonna, migration di fix separata (`36b1f0b`); l'uscita dalla modalità "solo schermo" della vista cucina agganciata per errore a un tocco sul nome della postazione invece che a un comando esplicito, causa di due test falliti (`d3e04cd`); i colori per portata mai realmente implementati e il pulsante "Postazioni" reso irraggiungibile da un contenitore toolbar senza `flex-wrap` in `Menu.jsx` (`faa49f0`).
 
 ---
 
@@ -60,7 +81,10 @@ localhub/                              root del progetto (nome interno "pium")
 │   │   ├── phone.js                    normalizePhone()/buildWaLink(): normalizzazione numeri IT e generazione link wa.me
 │   │   ├── pushSubscription.js         iscrizione/disiscrizione Web Push (VAPID) tramite Service Worker
 │   │   ├── safeUrl.js                  safeHref(): whitelist di protocolli (http/https/mailto/tel) per evitare javascript: URL non sicuri nei link generati da dati utente
-│   │   └── useStripeCheckout.js        hook React: avvia il checkout Stripe (piano PIUM, pieno o scontato "-on") condiviso da Dashboard e Settings
+│   │   ├── useStripeCheckout.js        hook React: avvia il checkout Stripe (piano PIUM, pieno o scontato "-on") condiviso da Dashboard e Settings
+│   │   ├── kitchenRouting.js           [verticale 'ristorante_bar', solo branch feature/ristorante-tavoli] resolveStationId/resolveCourseId/groupItemsByCourse — unica fonte di verità per la risoluzione postazione/portata di una voce d'ordine (coi 3 casi di ripiego), usata da Cucina.jsx/Ordine.jsx/Menu.jsx
+│   │   ├── kitchenRealtime.js          [verticale 'ristorante_bar', solo branch feature/ristorante-tavoli] subscribeTableOrderItems/subscribeCallSala/sendCallSala/notifyReady — wrapper Supabase Realtime (postgres_changes su table_order_items, senza filtro business_id: la tabella non ha quella colonna, RLS scopa comunque le righe) + canale broadcast "Chiama sala" + vibrazione/suono
+│   │   └── kitchenSeed.js              [verticale 'ristorante_bar', solo branch feature/ristorante-tavoli] ensureDefaultCourses/ensureDefaultStation — seeding condiviso tra Menu.jsx e Cucina.jsx (qualunque delle due schermate si apra per prima su un business senza ancora portate/postazioni)
 │   │
 │   ├── components/                     componenti condivisi/trasversali
 │   │   ├── ErrorBoundary.jsx           React error boundary di primo livello, cattura crash e mostra fallback
@@ -81,7 +105,11 @@ localhub/                              root del progetto (nome interno "pium")
 │   │   │   ├── Social.jsx               generazione post social (Instagram/Facebook) assistita da AI (Claude), con toni predefiniti
 │   │   │   ├── Recensioni.jsx           gestione recensioni multi-sorgente (manuale, Google, TripAdvisor, Facebook, Yelp) con risposte generate via AI
 │   │   │   ├── Promemoria.jsx           todo/reminder interni per l'attività (priorità alta/media/bassa, stato pending/done)
-│   │   │   └── PromemoriaClienti.jsx    promemoria manuali verso i clienti via WhatsApp (genera link wa.me con messaggio precompilato)
+│   │   │   ├── PromemoriaClienti.jsx    promemoria manuali verso i clienti via WhatsApp (genera link wa.me con messaggio precompilato) — legge solo `appointments`, NON `table_reservations`: un cliente con una prenotazione tavolo per oggi non compare qui (verificato, non esteso di proposito)
+│   │   │   ├── Tavoli.jsx               [verticale 'ristorante_bar', solo branch feature/ristorante-tavoli] piantina tavoli: CRUD tavoli (incl. "+ Aggiungi N tavoli" in blocco), switch di turno, prenotazioni per data/turno, gestione turni (business_turns), TRE stati tavolo (LIBERO/PRENOTATO/OCCUPATO) SEMPRE calcolati al volo per l'esatta combinazione tavolo+data+turno (mai persistiti — vedi sezione "Verticali"), avviso vibrazione+suono+evidenza visiva sulla card quando una voce diventa "pronto", ricezione "Chiama sala". Monta Ordine.jsx a schermo intero al posto della griglia quando un ordine è aperto. Caricato con `React.lazy()` da Dashboard.jsx, mai staticamente
+│   │   │   ├── Menu.jsx                 [verticale 'ristorante_bar', solo branch feature/ristorante-tavoli] catalogo menu: categorie (CRUD + riordino, assegnazione portata/postazione), piatti (CRUD + disponibilità), pulsante "Segnala esaurito" senza restrizioni, sezione separata "Conferme fine turno", gestione Portate (business_courses) e Postazioni (kitchen_stations) con avviso categorie orfane, interruttore "invia sempre tutto subito". Caricato con `React.lazy()`, stesso principio di Tavoli.jsx
+│   │   │   ├── Ordine.jsx               [verticale 'ristorante_bar', solo branch feature/ristorante-tavoli] schermata ordine (Blocco C, estesa nel Blocco D): ricerca+griglia piatti, righe "da inviare" (editabili) vs "in cucina" (sent_at valorizzato, sola azione "Annulla"), invio in cucina con scelta subito/in attesa per portata, "Via"/"Consegnata" per fascia, protezione dalle cadute di rete (coda locale con id generato lato client, upsert-per-id, badge "in attesa di rete", blocco invio finché non è tutto salvato), indicatore realtime disconnesso. Importata staticamente SOLO da Tavoli.jsx (che è già `React.lazy()` e già gated) — nessun secondo punto d'ingresso, verificato con grep
+│   │   │   └── Cucina.jsx               [verticale 'ristorante_bar', solo branch feature/ristorante-tavoli] vista cucina — voce di navigazione propria, `React.lazy()` + doppio gate (NAV + Section map in Dashboard.jsx) come Tavoli/Menu. Selezione postazione/modalità per dispositivo (localStorage, mai sul server), schede per tavolo divise in fasce colorate per portata (palette fissa per slot_number), tap→pronto, Via/Consegnata, "Chiama sala", modalità "solo schermo" per TV (testo grande, nessun pulsante — il cambio modalità è un comando esplicito separato, mai un tocco sul nome della postazione). Tempo reale con reload completo a ogni evento/riconnessione, mai patch parziali
 │   │   │
 │   │   └── public/
 │   │       └── BookingSection.jsx      form di prenotazione pubblico multi-step (servizio → data → slot → dati → conferma → successo), con Cloudflare Turnstile anti-bot, chiama la Edge Function create-booking
@@ -90,7 +118,7 @@ localhub/                              root del progetto (nome interno "pium")
 │       ├── Landing.jsx                  homepage marketing pubblica (www.piumapp.com/)
 │       ├── Auth.jsx                     login/registrazione utente business
 │       ├── Onboarding.jsx               wizard di configurazione iniziale del business (categoria, dati, generazione contenuti con Claude)
-│       ├── Dashboard.jsx                shell della dashboard autenticata: carica il business, gestisce il gate abbonamento, monta le sezioni di components/dashboard
+│       ├── Dashboard.jsx                shell della dashboard autenticata: carica il business, gestisce il gate abbonamento, monta le sezioni di components/dashboard — i componenti specifici di verticale (Tavoli.jsx/Menu.jsx/Cucina.jsx, solo branch feature/ristorante-tavoli) sono `React.lazy()`, non import statici, e compaiono in NAV/vengono montati solo se business.vertical corrisponde
 │       ├── Settings.jsx                 impostazioni account/abbonamento: notifiche push, stato piano, checkout/gestione Stripe
 │       ├── ResetPassword.jsx            flusso di reset password (link da email Supabase Auth)
 │       ├── PublicSite.jsx               sito pubblico del business (per slug o sottodominio): presenta servizi, galleria, orari, recensioni e il BookingSection
@@ -206,6 +234,12 @@ Componenti ausiliari montati sempre in `App.jsx` (non route, sempre presenti sul
 8. `Promemoria.jsx` — reminder interni
 9. `PromemoriaClienti.jsx` — reminder WhatsApp verso clienti
 
+**Solo branch `feature/ristorante-tavoli`**, montati SOLO per `business.vertical === 'ristorante_bar'`, caricati con `React.lazy()` (non nell'elenco sopra perché non presenti in master e non statici — `Ordine.jsx` fa eccezione, importato staticamente ma solo da `Tavoli.jsx`, già lazy):
+10. `Tavoli.jsx` — piantina tavoli, prenotazioni per data/turno, gestione turni, tre stati tavolo calcolati al volo
+11. `Menu.jsx` — catalogo menu (categorie, piatti, segnalazioni esaurito, portate, postazioni)
+12. `Ordine.jsx` — schermata ordine (invio in cucina, attesa/via, protezione offline), montata da `Tavoli.jsx`
+13. `Cucina.jsx` — vista cucina per postazione, nav propria, tempo reale
+
 Componente pubblico separato: `src/components/public/BookingSection.jsx`, usato da `PublicSite.jsx`.
 
 ---
@@ -270,6 +304,21 @@ Componente pubblico separato: `src/components/public/BookingSection.jsx`, usato 
 | `20260920_business_vertical.sql` | Aggiunge `businesses.vertical` (text, `DEFAULT 'generico'`, nullable, nessun CHECK) — fondamento del meccanismo verticali, vedi sezione dedicata a inizio documento |
 | `20260920_grooming_universal_fields.sql` | Task 3 toelettatura: `services.color` (nullable), `contacts.display_name` (nullable), **crea la tabella `pets`** (id, business_id, client_phone, name, breed, coat, gender, weight_note) con RLS owner-all — stesso pattern di `contacts`/`appointment_services` |
 | `20260921_pets_size_and_appointment_link.sql` | Estende Task 3: `appointments.pet_id` (FK → `pets`, nullable, ON DELETE SET NULL), `pets.size` (CHECK `xs`\|`s`\|`m`\|`l`\|`xl`, nullable), indice GIN trigram `idx_pets_name_trgm` su `pets.name` (ricerca fuzzy, stesso pattern di `contacts.name`/`appointments.client_name`) |
+
+**Solo branch `feature/ristorante-tavoli`** (non in master — vedi sezione "Verticali" a inizio documento per la cronologia completa delle correzioni):
+
+| File | Cosa fa |
+|---|---|
+| `20260921_ristorante_tables.sql` | Crea `tables` (piantina tavoli), RLS owner-only. Nessuna colonna di stato di proposito (Task 4 "versione minima") |
+| `20260921_ristorante_tables_status.sql` | **Superata**: aggiunge `tables.status` (libero/occupato persistito). Rimossa da `20260922_table_reservations_turns.sql` — lo stato non è mai un valore salvato a parte, vedi Cronologia |
+| `20260922_appointments_table_id.sql` | **Superata, mai realmente usata**: aggiunge `appointments.table_id` ("Blocco A" — riuso del modello orario+durata di appointments per le prenotazioni ristorante). Scartata quasi subito da `20260922_table_reservations.sql` perché quel modello non si adatta a una prenotazione con turno invece di un orario preciso. Colonna lasciata nello schema inutilizzata, nessun rollback |
+| `20260922_table_reservations.sql` | Crea `table_reservations` (prenotazioni per data, con `turn` ancora testo libero in questa fase) e `table_reservation_tables` (ponte N↔N tavolo↔prenotazione, PK composita), RLS owner-only |
+| `20260922_table_reservations_turns.sql` | **Rifacimento del sistema turni/stato** (la correzione più importante, vedi Cronologia): crea `business_turns`; sostituisce `table_reservations.turn` (testo) con `turn_id` (FK obbligatoria verso business_turns); **droppa `tables.status`** — lo stato libero/occupato diventa sempre calcolato al volo per combinazione (tavolo, data, turno). `TRUNCATE` dei dati di test preesistenti in `table_reservations`/`table_reservation_tables` (dati di prova, non reali, autorizzati a essere ripuliti) |
+| `20260922_menu_catalog.sql` | Blocco B — crea `menu_categories`, `menu_items`, `menu_item_flags` (catalogo menu manuale, nessuna lettura foto/AI in questa migration), RLS owner-only |
+| `20260923_table_orders.sql` | Blocco C — crea `table_orders` (un ordine aperto = tavolo fisicamente occupato) e `table_order_items`, indice trigram su `menu_items.name`. Contiene un vincolo unico ormai **superato** (vedi riga successiva) e un commento di testa corretto a posteriori (`0da027b`, solo commento, nessuna modifica allo SQL già applicato) — vedi Cronologia punti 7-8 |
+| `20260923_table_orders_auto_close.sql` | Chiusura automatica ordini dimenticati + **sostituisce** il vincolo unico di `20260923_table_orders.sql` (da `table_id` solo a `(table_id, order_date, turn_id)`) — vedi Cronologia punto 8. Aggiunge `table_orders.auto_closed` |
+| `20260924_kitchen_courses_stations.sql` | Blocco D — crea `business_courses`, `kitchen_stations` (quest'ultima con un bug, vedi riga successiva); estende `menu_categories` (`course_id`, `station_id`), `table_order_items` (`sent_at`, `kitchen_status`, `ready_at`, `delivered_at`, `fire_status`, `fired_at`), `businesses` (`kitchen_fire_immediately`); abilita Realtime su `table_order_items` |
+| `20260924_kitchen_stations_created_at.sql` | Fix: `kitchen_stations` era stata creata senza `created_at` nonostante `kitchenSeed.js`/`kitchenRouting.js` la ordinino per quella colonna (query falliva con 42703, il seeding della postazione "Cucina" non scriveva mai — bug scoperto in test dal vivo, vedi Cronologia chiusura Blocco D) |
 
 **Nota ricorrente**: diverse migration (`20260719_*`, `20260720_*`, alcune di agosto) sono etichettate come "già applicate manualmente in produzione via SQL Editor" — servono a documentare lo stato reale del DB per chi crea un ambiente nuovo, non riflettono l'ordine cronologico di applicazione originale in produzione.
 
@@ -446,8 +495,9 @@ Agenda: appuntamenti effettivi del commerciante (creati manualmente o generati d
 | manual_minutes | int | — | YES | Smart Time: durata inserita a mano — `20260809` |
 | time_status | text | `'none'` | NO | Smart Time: CHECK `none`\|`temp`\|`confirmed`\|`excluded` — `20260809` |
 | pet_id | uuid | — | YES | FK → `pets(id)` ON DELETE SET NULL — quale animale è questo appuntamento; sempre NULL per business non-toelettatura o per pet non ancora censiti — `20260921_pets_size_and_appointment_link.sql` |
+| table_id | uuid | — | YES | 🟡 **Solo branch `feature/ristorante-tavoli`, INUTILIZZATA** — FK → `tables(id)` ON DELETE SET NULL, aggiunta per il "Blocco A" (collegare un appuntamento a un tavolo riusando il modello orario+durata di `appointments`), scartata quasi subito perché una prenotazione ristorante è data+turno, non un orario con durata calcolabile — vedi Cronologia in "Verticali" a inizio documento. Colonna lasciata nello schema di proposito (nessun rollback), ma **nessun punto del codice applicativo la legge o la scrive più** — `20260922_appointments_table_id.sql` |
 
-- **Indici**: PK, `idx_appointments_business_id`, `idx_appointments_date`/`idx_appointments_business_date` (business_id, date[, start_time] — duplicati funzionali, uno da `schema.sql` uno da `20260520_performance_indexes.sql`), `idx_appointments_business_completed` (business_id, completed, updated_at desc), `idx_appointments_booking_id`, `idx_appointments_client_name_trgm` (GIN trigram su `client_name`, ricerca fuzzy), `idx_appointments_pet_id`.
+- **Indici**: PK, `idx_appointments_business_id`, `idx_appointments_date`/`idx_appointments_business_date` (business_id, date[, start_time] — duplicati funzionali, uno da `schema.sql` uno da `20260520_performance_indexes.sql`), `idx_appointments_business_completed` (business_id, completed, updated_at desc), `idx_appointments_booking_id`, `idx_appointments_client_name_trgm` (GIN trigram su `client_name`, ricerca fuzzy), `idx_appointments_pet_id`, `idx_appointments_table_id` (solo branch feature/ristorante-tavoli).
 - **RLS**: `appointments: owner access` (ALL, via `businesses.user_id = auth.uid()`); in produzione coesiste con una policy legacy equivalente `"Appointments visibili solo al proprietario"` (mai in una migration, stessa condizione, solo ridondante).
 
 #### `bookings`
@@ -471,6 +521,38 @@ Prenotazioni self-service dal mini-sito pubblico, stato `pending` finché il tit
 - **Indici**: PK, `idx_bookings_business_id`, `idx_bookings_business_status` (business_id, status), `idx_bookings_email` (su `lower(customer_email)`).
 - **RLS**: `bookings: owner read` (SELECT), `bookings: owner update` (UPDATE) — entrambe via `businesses.user_id = auth.uid()`. **Nessuna policy INSERT**: by design, l'unico modo di creare una riga è la funzione `create_booking()` (SECURITY DEFINER); l'accesso diretto di `anon`/`authenticated` alla funzione stessa è stato revocato (`20260806_create_booking_revoke_anon.sql`) — solo il `service_role` (usato dalla Edge Function `create-booking`) può eseguirla.
 - **Trigger**: `on_new_booking` (AFTER INSERT) → chiama `supabase_functions.http_request(...)` verso l'Edge Function `notify-new-booking`, con header `X-Webhook-Secret` in chiaro nella definizione del trigger (leggibile da chi ha accesso a `pg_trigger`, tipicamente solo ruoli con privilegi elevati).
+
+#### `business_courses` — solo branch `feature/ristorante-tavoli`
+Portate configurabili per business (es. "Antipasti"/"Primi"/"Secondi"/"Dolci") — verticale `'ristorante_bar'`, Blocco D. Stesso identico modello di `business_turns` (`slot_number` come ancoraggio stabile, `name` rinominabile, `is_active`), stessa ragione: locali diversi vogliono portate diverse, nessun set universale. **Differenza dal seeding di `business_turns`**: qui il seeding NON scatta all'attivazione del vertical, ma alla prima apertura di `Menu.jsx` **o** `Cucina.jsx` (qualunque delle due arrivi prima) — vedi `src/lib/kitchenSeed.js`, condiviso tra i due componenti. Creata da `20260924_kitchen_courses_stations.sql`.
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK |
+| business_id | uuid | — | NO | FK → `businesses(id)` ON DELETE CASCADE |
+| slot_number | int | — | NO | posizione della portata, usata per l'ordinamento (fasce in `Cucina.jsx`, colore automatico — vedi `menu_categories`) e come seme del nome segnaposto |
+| name | text | — | YES | se NULL, mostrato come "Portata {slot_number}" |
+| is_active | boolean | `true` | NO | mai un DELETE reale |
+
+- **Vincoli**: UNIQUE(business_id, slot_number) — `idx_business_courses_business_slot`, permette al seeding di usare `upsert(..., { onConflict: 'business_id,slot_number', ignoreDuplicates: true })` senza doppioni se due dispositivi aprono Menu.jsx/Cucina.jsx nello stesso momento.
+- **Indici**: PK, `idx_business_courses_business_id`, unique(business_id, slot_number).
+- **RLS**: `business_courses: owner all` (ALL, via `businesses.user_id = auth.uid()`).
+- **Una categoria senza portata (`menu_categories.course_id` NULL) è "subito" sempre**, non un dato mancante — per questo non esiste una portata fittizia "Subito" da gestire come le altre. Stesso trattamento per una voce d'ordine la cui portata non è risolvibile per nessuno dei 3 motivi di ripiego — vedi `menu_categories`/`table_order_items` e `src/lib/kitchenRouting.js`.
+
+#### `business_turns` — solo branch `feature/ristorante-tavoli`
+Slot di turno configurabili per business (es. "Pranzo"/"Cena"/"Aperitivo") — verticale `'ristorante_bar'`. Testo libero scelto dal titolare, nessun enum di sistema: locali diversi usano turni diversi, non esiste un set universale valido per tutti (a differenza del seeding automatico iniziale, vedi sotto). Creata da `20260922_table_reservations_turns.sql`.
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK |
+| business_id | uuid | — | NO | FK → `businesses(id)` ON DELETE CASCADE |
+| slot_number | int | — | NO | posizione del turno, usata per l'ordinamento e come seme del nome segnaposto |
+| name | text | — | YES | se NULL, mostrato come "Turno {slot_number}" lato UI (`Tavoli.jsx`, funzione `turnLabel()`) — il codice normalizza una stringa vuota digitata a `NULL`, mai salvata com'è |
+| is_active | boolean | `true` | NO | mai un DELETE reale — un turno disattivato sparisce dallo switch e dal selettore di una nuova prenotazione, ma le prenotazioni storiche che lo referenziano (FK da `table_reservations.turn_id`) restano intatte e ne mostrano ancora il nome |
+
+- **Vincoli**: UNIQUE(business_id, slot_number) — `idx_business_turns_business_slot`, impedisce al seeding (o a un bug futuro) di creare due volte lo stesso slot.
+- **Indici**: PK, `idx_business_turns_business_id`, unique(business_id, slot_number).
+- **RLS**: `business_turns: owner all` (ALL, via `businesses.user_id = auth.uid()`).
+- **Seeding automatico**: quando `Admin.jsx` (funzione `setVertical`) imposta `businesses.vertical = 'ristorante_bar'`, se il business non ha ancora nessun turno vengono create 4 righe (`slot_number` 1-4, `name` NULL) — best-effort, un fallimento non blocca il salvataggio del vertical. Il controllo è "il business non ha ancora nessun turno" (non solo "il valore è appena cambiato"), per coprire il caso di un business che esce e rientra più volte dal verticale senza duplicare i turni.
 
 #### `businesses`
 Tabella centrale: un'attività per utente proprietario (UNIQUE su `user_id` — `20260719_businesses_user_id_unique.sql`). ~42 colonne: anagrafica, piano/stato abbonamento, dati Stripe, rate limit AI, referral, orari, smart-time.
@@ -517,6 +599,7 @@ Tabella centrale: un'attività per utente proprietario (UNIQUE su `user_id` — 
 | smart_time_enabled | boolean | `false` | NO | `20260809_smart_time_foundations.sql` |
 | is_free | boolean | `false` | NO | account omaggio legittimo: mai bloccato da `isBusinessBlocked`, mai contato come pagante (`getBusinessRealStatus` → `'gift'`) — `20260907_business_is_free.sql` |
 | vertical | text | `'generico'` | YES | tipo di attività per attivare funzionalità dedicate (es. `'toelettatura'`); nessun CHECK sui valori ammessi, impostata solo da `Admin.jsx` — vedi sezione "Verticali" a inizio documento — `20260920_business_vertical.sql` |
+| kitchen_fire_immediately | boolean | `false` | NO | 🟡 **Solo branch `feature/ristorante-tavoli`** — verticale `'ristorante_bar'`, Blocco D: se attivo, l'invio in cucina da `Ordine.jsx` non chiede mai la scelta subito/in attesa tra portate, tutto parte subito. Sta su `businesses` (come `vertical` stesso) perché è una preferenza di business, non di singolo ordine; toggle in `Menu.jsx` → gestione Portate — `20260924_kitchen_courses_stations.sql` |
 | opening_hours | jsonb | (orari 9-18 standard, gestito lato applicazione) | YES | 🔴 **FANTASMA** — mai in una migration/schema.sql, ma letta/scritta da `Orari.jsx:36,62`, da `create_booking()` (validazione orari) e da `BookingSection.jsx`/`PublicSite.jsx`/`Agenda.jsx`. Struttura: oggetto con chiave per giorno (`monday`...`sunday`), ciascuno `{closed, morning:{open,close,active}, afternoon:{open,close,active}}` (formato nuovo) o `{open,close}` (formato legacy, gestito come fallback da `create_booking`) |
 | template | text | `'standard'` | NO | 🔴 **FANTASMA** — mai in una migration/schema.sql; **nessun uso trovato nel codice frontend attuale** in questa passata — verificare se è un residuo morto o una feature non ancora collegata |
 
@@ -573,6 +656,22 @@ FAQ del supporto self-service (`SupportBot.jsx`). **Tracciata per la prima volta
 
 - **RLS**: `Lettura pubblica FAQ` (SELECT, `using (true)` — corretto per contenuto pubblico, ricreata idempotente dalla migration con `DROP POLICY IF EXISTS` prima).
 
+#### `kitchen_stations` — solo branch `feature/ristorante-tavoli`
+Postazioni di preparazione (es. "Cucina"/"Bar"/"Pizzeria") — verticale `'ristorante_bar'`, Blocco D. Ogni categoria del menu è assegnata a una postazione (`menu_categories.station_id`); la vista `Cucina.jsx` mostra solo le voci della postazione scelta dal dispositivo. Seeding di una postazione "Cucina" alla prima apertura di `Menu.jsx` **o** `Cucina.jsx` (qualunque arrivi prima), stesso meccanismo condiviso di `business_courses` (`src/lib/kitchenSeed.js`). Creata da `20260924_kitchen_courses_stations.sql`, **con un bug**: mancava `created_at` nonostante il codice la usi per ordinare — corretto da `20260924_kitchen_stations_created_at.sql` (vedi Cronologia in "Verticali").
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK |
+| business_id | uuid | — | NO | FK → `businesses(id)` ON DELETE CASCADE |
+| name | text | — | NO | es. "Cucina" |
+| is_active | boolean | `true` | NO | mai un DELETE reale |
+| created_at | timestamptz | `now()` | NO | aggiunta da `20260924_kitchen_stations_created_at.sql`, non presente nella migration originale — vedi Cronologia |
+
+- **Vincoli**: UNIQUE(business_id, lower(name)) — `idx_kitchen_stations_business_name`, indice su un'espressione. **Non è un target valido per `upsert(...).onConflict(...)`** (richiede colonne semplici): il seeding usa un `insert` normale, trattando l'errore 23505 (violazione di unicità) come "la postazione esiste già", non come un fallimento — scelta esplicita, diversa dall'`upsert` usato per `business_courses`.
+- **Indici**: PK, `idx_kitchen_stations_business_id`, unique(business_id, lower(name)).
+- **RLS**: `kitchen_stations: owner all` (ALL, via `businesses.user_id = auth.uid()`).
+- **REGOLA DI SICUREZZA — nessuna categoria/voce può restare senza postazione**: se `menu_categories.station_id` è NULL (o punta a una postazione non più attiva), `resolveStationId()` (`src/lib/kitchenRouting.js`) ricade sulla **prima postazione attiva** — mai su "nessuna postazione" (che farebbe sparire la voce da ogni vista cucina). Se non esiste **nessuna** postazione attiva, `Cucina.jsx` mostra **tutte** le voci, mai nessuna. `Menu.jsx` mostra un avviso persistente per le categorie orfane finché il titolare non le assegna esplicitamente. Disattivare una postazione con categorie ancora assegnate è bloccato lato applicazione (controllo locale su `menu_categories` già caricate, nessun vincolo DB).
+
 #### `legal_acceptances` [FANTASMA]
 Traccia le accettazioni di termini/privacy/DPA con versioning dei documenti accettati. Scritta oggi **solo** da `Onboarding.jsx:191-203` (contesto merchant, upsert con `onConflict: 'user_id,acceptance_type', ignoreDuplicates: true`).
 
@@ -590,6 +689,53 @@ Traccia le accettazioni di termini/privacy/DPA con versioning dei documenti acce
 - **Vincoli**: UNIQUE(user_id, acceptance_type) — `legal_acceptances_unique_user_type`, è il target dell'`onConflict` usato dall'upsert.
 - **RLS**: `legal_acceptances: owner insert`, `legal_acceptances: owner read`.
 - ⚠️ **Discrepanza trovata in questa passata**: il CHECK su `acceptance_type` prevede anche `'affiliate_contract_privacy'` (verificato in produzione il 16/08), ma **nessun punto del codice attuale scrive questa riga** — `AffiliatesAuth.jsx` mostra solo una checkbox obbligatoria lato client (`legalAccepted`, righe 32/47/172-179) per accettare il Contratto di Affiliazione, senza persistere nulla in `legal_acceptances`. L'accettazione dell'affiliato non risulta oggi tracciata lato server, a differenza di quella del merchant.
+
+#### `menu_categories` — solo branch `feature/ristorante-tavoli`
+Categorie del menu (es. "Antipasti", "Primi") — verticale `'ristorante_bar'`. **Nessuna riga pre-creata di default**, a differenza di `business_turns`/`business_courses`/`kitchen_stations`: qui non esiste un set universale sensato per qualunque locale, il titolare le crea da zero in `Menu.jsx`. Creata da `20260922_menu_catalog.sql`, estesa da `20260924_kitchen_courses_stations.sql` (Blocco D: `course_id`, `station_id`).
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK |
+| business_id | uuid | — | NO | FK → `businesses(id)` ON DELETE CASCADE |
+| name | text | — | NO | |
+| sort_order | int | `0` | NO | riordino manuale (frecce su/giù in `Menu.jsx` → scambio di `sort_order` con il vicino nella lista ordinata, nessun drag-and-drop) |
+| is_active | boolean | `true` | NO | mai un DELETE reale; una categoria disattivata con piatti ancora agganciati resta visibile nel catalogo (badge "Disattivata"), sparisce dalla vista solo se non ha più nessun piatto |
+| course_id | uuid | — | YES | FK → `business_courses(id)` ON DELETE SET NULL — **nullable di proposito**: NULL significa "questa categoria è sempre subito" (es. bevande), non un dato mancante da segnalare, a differenza di `station_id` sotto. Assegnata da `Menu.jsx` → "Gestisci categorie" — `20260924_kitchen_courses_stations.sql` |
+| station_id | uuid | — | YES | FK → `kitchen_stations(id)` ON DELETE SET NULL — nullable **a livello DB** ma con una regola di sicurezza applicativa: nessuna categoria dovrebbe restare senza postazione, vedi `kitchen_stations` per il ripiego e l'avviso in `Menu.jsx`. Assegnata da `Menu.jsx` → "Gestisci categorie" — `20260924_kitchen_courses_stations.sql` |
+
+- **Indici**: PK, `idx_menu_categories_business_id`, `idx_menu_categories_course_id`, `idx_menu_categories_station_id`.
+- **RLS**: `menu_categories: owner all` (ALL, via `businesses.user_id = auth.uid()`).
+
+#### `menu_item_flags` — solo branch `feature/ristorante-tavoli`
+Segnalazioni "questo piatto potrebbe essere esaurito" — verticale `'ristorante_bar'`. Una riga per segnalazione, nessun contatore mantenuto a parte (si conta con la lunghezza dell'embed). **Unica tabella di tutto il progetto le cui righe vengono cancellate per davvero invece che soft-disattivate**: sono segnalazioni transitorie senza valore storico da conservare (a differenza di tavoli/prenotazioni/turni/categorie/piatti, dove non si cancella mai nulla) — decisione esplicita discussa con l'utente prima di scrivere la migration. Niente `resolved_at`: "risolvere" una segnalazione (sezione "Conferme fine turno" di `Menu.jsx`) è un `DELETE` diretto di tutte le righe per quel `menu_item_id`. Creata da `20260922_menu_catalog.sql`.
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK |
+| menu_item_id | uuid | — | NO | FK → `menu_items(id)` ON DELETE CASCADE |
+| flagged_at | timestamptz | `now()` | NO | non mostrato in UI in questa versione — solo il conteggio conta |
+| flagged_by | text | — | YES | testo libero, oggi non popolato lato UI (nessun sistema di permessi/ruoli staff in questo progetto — un solo login per business); campo predisposto per un'eventuale distinzione futura |
+
+- **Indici**: PK, `idx_menu_item_flags_menu_item_id`.
+- **RLS**: `menu_item_flags: owner all` (ALL, via join `menu_item_id → menu_items → businesses.user_id = auth.uid()` — stesso pattern di `appointment_services`/`table_reservation_tables`, nessun `business_id` diretto su questa tabella).
+- **Uso**: "Segnala esaurito" in `Menu.jsx` — un tap, nessuna restrizione oltre il normale accesso alla dashboard (non esiste un ruolo "staff" separato dal titolare da poter restringere), insert diretto, **non tocca** `menu_items.is_available`. Sezione separata "Conferme fine turno" (pulsante con badge di conteggio nella toolbar, non nel percorso quotidiano di chi si limita a segnalare): una riga per piatto con il conteggio, ordinate per numero di segnalazioni decrescente poi alfabetico, nessun raggruppamento per categoria, nessun timestamp mostrato. "Segna esaurito davvero" imposta `menu_items.is_available = false` **e** cancella le segnalazioni di quel piatto; "Ignora, resta disponibile" le cancella senza toccare `is_available`. Entrambe operano su tutte le segnalazioni del piatto in blocco, mai una alla volta.
+
+#### `menu_items` — solo branch `feature/ristorante-tavoli`
+Piatti/voci di menu — verticale `'ristorante_bar'`. Creata da `20260922_menu_catalog.sql`.
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK |
+| business_id | uuid | — | NO | FK → `businesses(id)` ON DELETE CASCADE |
+| category_id | uuid | — | YES | FK → `menu_categories(id)` ON DELETE SET NULL — un piatto può non avere ancora una categoria; selezionabile in `Menu.jsx` solo tra le categorie attive, ma un piatto già assegnato a una categoria poi disattivata resta visibile lì (non si sposta in "Senza categoria" da solo) |
+| name | text | — | NO | |
+| price | numeric(10,2) | — | YES | |
+| is_available | boolean | `true` | NO | mai un DELETE reale; nasconderà il piatto dalle ordinazioni (blocco non ancora costruito) senza cancellarlo — toggle rapido dalla riga in `Menu.jsx`, stesso pattern di `toggleAvailable` in `Servizi.jsx` |
+| created_at | timestamptz | `now()` | NO | |
+
+- **Indici**: PK, `idx_menu_items_business_id`, `idx_menu_items_category_id`.
+- **RLS**: `menu_items: owner all` (ALL, via `businesses.user_id = auth.uid()`).
+- **Fuori scope esplicito di questo blocco** (per scelta, non dimenticanza): nessuna lettura menu da foto/AI, nessuna nota testuale per piatto (arriverà legata alla riga d'ordine, non al catalogo), nessun tracciamento quantità/scorte fisiche.
 
 #### `pets`
 Animali dei clienti, funzionalità del verticale `'toelettatura'` (vedi sezione "Verticali" a inizio documento) — ma la tabella e la RLS restano sempre attive per qualunque business: è la UI in `Agenda.jsx`/`Clienti.jsx` a essere gated, non la lettura/scrittura del dato. Agganciata per `client_phone` normalizzato, stesso identificativo già usato da `contacts`/`appointments` — nessun nuovo sistema di riconoscimento cliente. Creata da `20260920_grooming_universal_fields.sql`, estesa da `20260921_pets_size_and_appointment_link.sql`.
@@ -743,8 +889,104 @@ Bozze di post social (Instagram/Facebook) generate dall'AI o scritte a mano, con
 - **Indici**: PK, `idx_social_drafts_business_id`, `idx_social_drafts_status`, `idx_social_drafts_scheduled_at`, `idx_social_drafts_business_status` (business_id, status, created_at desc — `20260520_performance_indexes.sql`).
 - **RLS**: `social_drafts: owner access` (ALL, via `businesses.user_id = auth.uid()`); coesiste con policy legacy equivalente `"Users can manage own social drafts"`.
 
+#### `table_order_items` — solo branch `feature/ristorante-tavoli`
+Righe di una comanda (`table_orders`) — verticale `'ristorante_bar'`, Blocco C esteso nel Blocco D. Righe **indipendenti l'una dall'altra di proposito**: due camerieri che aggiungono lo stesso piatto nello stesso istante ottengono due insert separati, mai una race su un unico update — niente realtime a livello di singola riga per la scrittura, solo per la lettura (vedi sotto). Creata da `20260923_table_orders.sql`, estesa da `20260924_kitchen_courses_stations.sql` (Blocco D).
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK — **generato lato client** (`crypto.randomUUID()`) in `Ordine.jsx`, non lasciato al default server: riusato a ogni retry di un salvataggio fallito per rete, così un upsert-per-id successivo converge sempre sullo stesso stato invece di creare un doppione |
+| order_id | uuid | — | NO | FK → `table_orders(id)` ON DELETE CASCADE |
+| menu_item_id | uuid | — | YES | FK → `menu_items(id)` ON DELETE SET NULL — **nullable apposta**: se il piatto viene cancellato dal catalogo dopo l'ordine, la riga sopravvive (grazie a `item_name_snapshot`) ma perde il collegamento; è uno dei 3 casi di ripiego per postazione/portata, vedi `kitchen_stations`/`kitchenRouting.js` |
+| item_name_snapshot | text | — | NO | copia del nome al momento dell'ordine, non un join live — sopravvive a una modifica/cancellazione del piatto |
+| price_snapshot | numeric(10,2) | — | YES | idem, prezzo congelato al momento dell'ordine |
+| quantity | int | `1` | NO | portata a 0 → la riga viene cancellata (DELETE reale, unica eccezione al "mai DELETE" di questo verticale: una riga in composizione senza quantità non rappresenta nulla) |
+| notes | text | — | YES | nota libera per riga (es. "senza cipolla") |
+| sent_at | timestamptz | — | YES | NULL = ancora "in composizione" (editabile liberamente, cancellabile); valorizzato = inviata in cucina col pulsante "Invia in cucina" — da questo momento **non più cancellabile né modificabile in quantità**, solo `kitchen_status='annullato'` |
+| kitchen_status | text | `'da_preparare'` | NO | CHECK: `da_preparare`\|`pronto`\|`consegnato`\|`annullato`. Nome scelto deliberatamente diverso da `'attesa'` per non confondersi con `fire_status='in_attesa'` (due colonne, stati opposti, nomi troppo simili sarebbero stati un rischio concreto). Prima dell'invio (`sent_at` NULL) non ha significato, si guarda solo `sent_at` |
+| ready_at | timestamptz | — | YES | valorizzato quando `kitchen_status` passa a `'pronto'` (tap sulla voce in `Cucina.jsx`) |
+| delivered_at | timestamptz | — | YES | valorizzato quando `kitchen_status` passa a `'consegnato'` (pulsante "Consegnata" per fascia/portata, disponibile sia in `Cucina.jsx` sia in `Ordine.jsx`) |
+| fire_status | text | `'subito'` | NO | CHECK: `subito`\|`in_attesa` — la voce parte subito in cucina o resta in attesa del "via". Le voci senza portata risolvibile sono **sempre** `'subito'` (vedi `kitchenRouting.js`) |
+| fired_at | timestamptz | — | YES | valorizzato quando `fire_status` diventa (o resta) `'subito'` — al momento dell'invio se la portata è scelta come "subito", oppure più tardi col "via". Usato anche da `Cucina.jsx` per far salire in cima la scheda del tavolo che ha appena ricevuto un "via" |
+
+- **Indici**: PK, `idx_table_order_items_order_id`, `idx_table_order_items_menu_item_id`, `idx_table_order_items_sent_at` (parziale, WHERE `sent_at IS NOT NULL` — le query della vista cucina filtrano sempre su questo).
+- **RLS**: `table_order_items: owner all` (ALL, via join `order_id → table_orders → businesses.user_id = auth.uid()` — nessun `business_id` diretto, stesso pattern di `appointment_services`/`menu_item_flags`/`table_reservation_tables`).
+- **Realtime**: pubblicata su `supabase_realtime` (`ALTER PUBLICATION ... ADD TABLE table_order_items` in `20260924_kitchen_courses_stations.sql`, riga non idempotente — fallisce se rilanciata due volte, va bene per un'esecuzione singola). Nessun filtro `business_id=eq.…` possibile lato canale (la colonna non esiste su questa tabella, a differenza di `bookings`): la sottoscrizione arriva senza filtro, RLS realtime scopa comunque le righe al proprietario, e per difesa in profondità ogni ascoltatore (`Cucina.jsx`/`Ordine.jsx`/`Tavoli.jsx`) tratta qualunque evento come "qualcosa è cambiato, ricarica tutto" invece di fidarsi del payload — mai un patch parziale, nemmeno alla riconnessione.
+- **Protezione dalle cadute di rete** (solo `Ordine.jsx`, non richiesta altrove): ogni modifica locale (aggiungi/quantità/nota/invio/via/consegnata/annulla) aggiorna prima lo stato React, poi tenta un `upsert(row, {onConflict:'id'})` — se fallisce, la voce resta in una coda locale (`outboxRef`) con badge "in attesa di rete" e blocca "Invia in cucina"/"Chiudi tavolo", ritentata da sola all'evento `online` del browser e a un intervallo di retry, **mai serve ritoccarla**. Una cancellazione converte un eventuale upsert ancora in coda in un `delete` invece di scartarlo silenziosamente: se l'insert non era mai arrivato al server il delete è un no-op innocuo, se invece era arrivato (solo l'ack perso) lo rimuove per davvero — corretto in entrambi i casi.
+
+#### `table_orders` — solo branch `feature/ristorante-tavoli`
+Una comanda aperta = un tavolo fisicamente occupato **per l'esatta combinazione (tavolo, data, turno)** — verticale `'ristorante_bar'`, Blocco C. Affina il modello di stato: una `table_reservations` confermata significa solo "il cliente è atteso" (PRENOTATO), non "è seduto"; il tavolo diventa davvero OCCUPATO solo quando esiste una riga qui con `status='aperto'` per quella combinazione — che nasca da una prenotazione (`reservation_id` valorizzato) o da un walk-in (NULL) non cambia lo stato, solo la provenienza. Creata da `20260923_table_orders.sql`, estesa da `20260923_table_orders_auto_close.sql` (`auto_closed`).
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK |
+| business_id | uuid | — | NO | FK → `businesses(id)` ON DELETE CASCADE |
+| table_id | uuid | — | NO | FK → `tables(id)` ON DELETE CASCADE |
+| order_date | date | — | NO | valorizzata con la data **locale del browser** al momento dell'apertura (mai `now()` DB, che è UTC — tra mezzanotte e le 2 darebbe una data diversa da quella "vissuta" dal titolare in Italia) |
+| turn_id | uuid | — | NO | FK → `business_turns(id)`, obbligatoria — stesso principio di `table_reservations.turn_id`: lo stato OCCUPATO è calcolato per l'esatta combinazione (tavolo, data, turno), non ha senso un ordine "senza turno" |
+| reservation_id | uuid | — | YES | FK → `table_reservations(id)` ON DELETE SET NULL — valorizzata se l'ordine nasce da "Prendi ordine" su una prenotazione esistente, NULL per un walk-in ("Walk-in: apri ordine") |
+| status | text | `'aperto'` | NO | CHECK: `aperto`\|`chiuso`. "Chiudi tavolo" (conferma a due passaggi in `Ordine.jsx`) è l'unico modo di liberare davvero il tavolo — l'unico UPDATE esplicito dell'utente; la chiusura automatica (vedi `auto_closed`) è l'altro modo, non manuale |
+| opened_at | timestamptz | `now()` | NO | |
+| closed_at | timestamptz | — | YES | valorizzato alla chiusura, manuale o automatica |
+| auto_closed | boolean | `false` | NO | `true` se la chiusura è scattata da sola (ordine dimenticato) invece che da un tap esplicito su "Chiudi tavolo" — `20260923_table_orders_auto_close.sql` |
+
+- **Vincoli**: UNIQUE parziale WHERE `status='aperto'`, **scoped a `(table_id, order_date, turn_id)`** — `idx_table_orders_one_open_per_slot` (`20260923_table_orders_auto_close.sql`). **Sostituisce** un vincolo precedente scoped al solo `table_id` (`idx_table_orders_one_open_per_table`, ora dropped) — vedi Cronologia punto 8 in "Verticali" per il perché del cambio.
+- **Indici**: PK, `idx_table_orders_business_id`, `idx_table_orders_business_date` (business_id, order_date), `idx_table_orders_table_id`, `idx_table_orders_reservation_id`.
+- **RLS**: `table_orders: owner all` (ALL, via `businesses.user_id = auth.uid()`).
+- **Chiusura automatica degli ordini dimenticati** (`Tavoli.jsx`, effect dedicato): un ordine aperto su un turno si chiude da solo (`status='chiuso'`, `auto_closed=true`) quando arriva la successiva occorrenza dello **stesso** turno — mai un turno diverso, e solo se la data in vista è davvero oggi (stesso motivo `order_date`: `Date` locale del browser). Navigare su una data diversa da oggi, qualunque turno, resta sempre sola lettura — nessun UPDATE parte mai da lì. Nessun aggiornamento locale di `openOrders` necessario dopo: gli ordini chiusi così hanno `order_date` precedente a oggi, quindi non facevano già parte della lista visualizzata.
+- **Tre stati tavolo, sempre calcolati al volo** (mai persistiti, vedi principio generale in "Verticali"): LIBERO (nessuna prenotazione confermata, nessun ordine aperto per l'esatta combinazione), PRENOTATO (prenotazione confermata, nessun ordine aperto ancora), OCCUPATO (un ordine aperto esiste per l'esatta combinazione). Calcolo in `Tavoli.jsx` (`getTableStatus`), stesso principio già in uso per `table_reservations`.
+
+#### `table_reservation_tables` — solo branch `feature/ristorante-tavoli`
+Tabella ponte N↔N: una prenotazione può occupare più tavoli (gruppi grandi, tavoli uniti) — verticale `'ristorante_bar'`. Stesso principio di `appointment_services`, ma **PK composita invece di un `id` surrogato**: qui la riga non porta dati propri oltre alle due FK, quindi la coppia è già una chiave naturale e impedisce da sola il duplicato "stesso tavolo aggiunto due volte alla stessa prenotazione" — scelta discussa esplicitamente con l'utente prima di scrivere la migration. Creata da `20260922_table_reservations.sql`.
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| reservation_id | uuid | — | NO | FK → `table_reservations(id)` ON DELETE CASCADE — **PK composita** insieme a `table_id` |
+| table_id | uuid | — | NO | FK → `tables(id)` ON DELETE CASCADE |
+
+- **Indici**: PK composita (reservation_id, table_id), `idx_table_reservation_tables_table_id`.
+- **RLS**: `table_reservation_tables: owner all` (ALL, via join `reservation_id → table_reservations → businesses.user_id = auth.uid()` — stesso pattern di `appointment_services`/`menu_item_flags`, nessun `business_id` diretto).
+- ⚠️ **Integrità referenziale non completa a livello di DB**: nulla impedisce che una `table_reservations` di un business venga collegata (per bug applicativo) a un `table_id` di un *altro* business — le due FK sono indipendenti, nessun vincolo/trigger verifica `business_id` coerente su entrambi i lati. Non è un buco di sicurezza (le RLS restano owner-only su entrambe le tabelle), solo un'integrità referenziale incompleta, accettata come rischio teorico per non introdurre un trigger nella "versione minima" — prevenuta lato applicazione (il selettore tavoli usa sempre e solo `tables` dello stesso business).
+
+#### `table_reservations` — solo branch `feature/ristorante-tavoli`
+Prenotazioni tavolo per data e turno — verticale `'ristorante_bar'`. **Seconda versione** di questo concetto: la prima (`appointments.table_id`, "Blocco A") è stata scartata quasi subito — vedi Cronologia nella sezione "Verticali" a inizio documento. Creata da `20260922_table_reservations.sql`, poi modificata da `20260922_table_reservations_turns.sql` (colonna `turn` testo libero → `turn_id` FK obbligatoria).
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK |
+| business_id | uuid | — | NO | FK → `businesses(id)` ON DELETE CASCADE |
+| reservation_date | date | — | NO | non un orario+durata come `appointments` — vedi Cronologia |
+| turn_id | uuid | — | NO | FK → `business_turns(id)`, **obbligatoria** — ogni prenotazione appartiene esattamente a un turno perché lo stato libero/occupato è calcolato per l'esatta combinazione (tavolo, data, turno): una prenotazione "senza turno" non avrebbe un modo coerente di entrare in quel calcolo. FK vera e non un intero (`slot_number`) copiato a mano, per lo stesso motivo di `pet_id`/`table_id`/`employee_id` altrove nel progetto — integrità referenziale, e se il titolare rinomina un turno le prenotazioni storiche mostrano subito il nome aggiornato. Sostituisce la precedente colonna `turn` (text libero) — `20260922_table_reservations_turns.sql` |
+| party_size | int | — | YES | |
+| customer_name | text | — | NO | |
+| customer_phone | text | — | YES | normalizzato con `normalizePhone()` prima del salvataggio, stesso identificativo di `contacts`/`appointments`/`pets` |
+| notes | text | — | YES | |
+| status | text | `'confermata'` | NO | CHECK: `confermata`\|`cancellata` — mai un DELETE reale, "cancellare" una prenotazione da `Tavoli.jsx` è un update di questo campo |
+| created_at | timestamptz | `now()` | NO | |
+
+- **Indici**: PK, `idx_table_reservations_business_id`, `idx_table_reservations_business_date` (business_id, reservation_date), `idx_table_reservations_turn_id`.
+- **RLS**: `table_reservations: owner all` (ALL, via `businesses.user_id = auth.uid()`).
+- **Collegamento al sistema clienti** (non un identificativo separato): al salvataggio, se il telefono inserito non corrisponde a un contatto esistente del business, `Tavoli.jsx` (funzione `ensureContact`) crea automaticamente una riga in `contacts` (`source='ristorante'`) — stesso identificativo (telefono normalizzato) di tutto il resto del progetto, così il cliente compare subito in `Clienti.jsx` indipendentemente da dove sia arrivato. Se il telefono corrisponde già, non duplica — best-effort, un suo errore non blocca il salvataggio della prenotazione. Ricerca del cliente nel form: stesso pattern debounced di `handleNameChange` in `Agenda.jsx` (nome O telefono, merge di `contacts`+`appointments`, deduplicato per telefono), agganciato al campo "Cliente" — non "Telefono": la prima versione l'aveva agganciato al campo sbagliato, corretto dopo verifica del comportamento con l'utente.
+- ⚠️ **Non collegata a `PromemoriaClienti.jsx`**: quella sezione (promemoria WhatsApp) legge solo `appointments`, non questa tabella — un cliente con una prenotazione tavolo per oggi non compare nei promemoria. Verificato esplicitamente, non esteso di proposito (in attesa di una decisione separata dell'utente).
+- **Nessun controllo di doppia prenotazione**: lo stesso tavolo può avere più righe confermate per la stessa combinazione (data, turno) — nessuna UI né vincolo DB lo impedisce, scelta esplicita ("versione semplice funzionante prima di una complessa incompleta").
+
+#### `tables` — solo branch `feature/ristorante-tavoli`
+Piantina tavoli — verticale `'ristorante_bar'`. Creata da `20260921_ristorante_tables.sql`. **Ha avuto una colonna `status`** (libero/occupato persistito, tra `20260921_ristorante_tables_status.sql` e `20260922_table_reservations_turns.sql`) **poi rimossa**: vedi Cronologia nella sezione "Verticali" a inizio documento per il perché — non è un refuso di questo documento, la colonna è stata davvero droppata.
+
+| Colonna | Tipo | Default | Null | Note |
+|---|---|---|---|---|
+| id | uuid | `gen_random_uuid()` | NO | PK |
+| business_id | uuid | — | NO | FK → `businesses(id)` ON DELETE CASCADE |
+| name | text | — | NO | es. "Tavolo 3"; il pulsante "+ Aggiungi N tavoli" in `Tavoli.jsx` crea più righe in un colpo solo con nome automatico "Tavolo N" in sequenza, a partire dal numero di tavoli già esistenti (mai da 1, per non creare doppioni di nome), capienza di default 4 |
+| capacity | int | — | YES | |
+| is_active | boolean | `true` | NO | mai un DELETE reale — disattivazione con conferma a due passaggi |
+| created_at | timestamptz | `now()` | NO | |
+
+- **Indici**: PK, `idx_tables_business_id`.
+- **RLS**: `tables: owner all` (ALL, via `businesses.user_id = auth.uid()`).
+- **Stato del tavolo: non è una colonna.** Sempre calcolato al volo per l'esatta combinazione tavolo+data+turno, TRE stati da Blocco C in poi (prima erano due, libero/occupato) — vedi `table_orders` per la definizione completa di LIBERO/PRENOTATO/OCCUPATO, principio generale in "Verticali".
+
 #### `analytics_events` — dichiarata ma **non esistente in produzione**
-`schema.sql` (righe 158-172) dichiara questa tabella con indici e 2 policy (owner read + public insert per tracking anonimo), ma l'audit di produzione del 16/08 **non l'ha trovata** tra le tabelle reali, e nessuna chiamata `.from('analytics_events')` esiste nel codice attuale. Se si usa `schema.sql` per bootstrappare un ambiente nuovo, questa parte viene creata comunque (nessun errore) ma non riflette lo stato di produzione. **Non contarla tra le 20 tabelle reali** (19 fotografate dall'audit del 16/08 + `pets`, aggiunta il 20/09 da `20260920_grooming_universal_fields.sql`).
+`schema.sql` (righe 158-172) dichiara questa tabella con indici e 2 policy (owner read + public insert per tracking anonimo), ma l'audit di produzione del 16/08 **non l'ha trovata** tra le tabelle reali, e nessuna chiamata `.from('analytics_events')` esiste nel codice attuale. Se si usa `schema.sql` per bootstrappare un ambiente nuovo, questa parte viene creata comunque (nessun errore) ma non riflette lo stato di produzione. **Non contarla tra le tabelle reali** — 19 fotografate dall'audit del 16/08 + `pets` (20/09) sono in master; su questo branch (`feature/ristorante-tavoli`, non ancora unito) se ne aggiungono altre 11: `business_courses`, `business_turns`, `kitchen_stations`, `menu_categories`, `menu_items`, `menu_item_flags`, `table_order_items`, `table_orders`, `table_reservation_tables`, `table_reservations`, `tables` — 31 in totale qui, 20 su master.
 
 ---
 
@@ -987,6 +1229,7 @@ Coperto in dettaglio dalla **Fase 2**. In sintesi: ogni pagina/componente legge/
 | Dove | Cosa fa |
 |---|---|
 | `Dashboard.jsx:208-219` | `supabase.channel('pending-bookings-<businessId>').on('postgres_changes', {event:'INSERT', table:'bookings', filter:'business_id=eq.<id>'}, ...)` — riceve in diretta le nuove prenotazioni pending per aggiornare il badge/contatore senza refresh; richiede `alter publication supabase_realtime add table bookings` (`20260514_realtime_bookings.sql`) |
+| 🟡 `src/lib/kitchenRealtime.js` — solo branch `feature/ristorante-tavoli` | `subscribeTableOrderItems()`: `supabase.channel(...).on('postgres_changes', {event:'*', table:'table_order_items'}, ...)` **senza filtro** `business_id` (la tabella non ha quella colonna diretta — RLS via join, vedi `table_order_items`); usata da `Cucina.jsx`/`Ordine.jsx`/`Tavoli.jsx`, ogni evento ricarica lo stato completo invece di applicare il payload. Richiede `alter publication supabase_realtime add table table_order_items` (`20260924_kitchen_courses_stations.sql`, riga non idempotente). `subscribeCallSala()`/`sendCallSala()`: canale **broadcast** dedicato per business (`kitchen-call-<businessId>`), nessuna riga DB — "Chiama sala" da `Cucina.jsx` verso `Tavoli.jsx`/`Ordine.jsx` |
 
 #### Supabase — Edge Functions (invocazione dal frontend)
 | Dove | Cosa fa |
@@ -1033,6 +1276,8 @@ Coperto in dettaglio dalla **Fase 2**. In sintesi: ogni pagina/componente legge/
 | `lib/pushSubscription.js` | lato client, usa l'API browser `PushManager`/`serviceWorker` per creare la subscription (`VAPID_PUBLIC_KEY` pubblica, passata come `applicationServerKey`), salvata su `push_subscriptions` |
 | `notify-new-booking/index.ts` | lato server, usa la libreria `web-push` (npm, via `import webpush from 'npm:web-push'` in Deno) con la chiave privata VAPID per firmare e inviare le notifiche ai browser (che le instradano a loro volta ai servizi push nativi: FCM per Chrome, servizio Apple per Safari — invisibili al codice PIUM) |
 | `public/sw.js` | service worker che riceve l'evento `push` e mostra la notifica |
+
+**Convenzione**: la costante `CACHE` in `public/sw.js` (es. `'pium-v2'` → `'pium-v3'`) va incrementata a ogni aggiornamento importante del progetto — l'`activate` handler cancella ogni cache con un nome diverso da quello corrente, così un service worker già installato su un dispositivo si allinea alla versione nuova invece di restare indefinitamente su cache datate. Bump più recente: `2e87c5f` (branch `feature/ristorante-tavoli`, in occasione del Blocco D di `ristorante_bar`) — irrilevante per il verticale in sé, è la convenzione generale del progetto applicata a un aggiornamento che la meritava.
 
 ---
 
@@ -1299,7 +1544,7 @@ Nessun prezzo/percentuale vive in una singola "tabella di configurazione": sono 
 **Si riusa praticamente identico** (portare la stessa logica, cambiando solo l'infrastruttura sottostante):
 - Tutta la UI React (componenti, form, wizard, macchina a stati di prenotazione) — il markup e l'interazione utente non conoscono Supabase.
 - La logica di dominio pura elencata in sezione 1 (`businessGate.js`, `commissionFor()`, generazione slot, normalizzazione telefono).
-- Il modello dati concettuale (le 20 tabelle e le loro relazioni, Fase 2) — è un buon schema relazionale indipendente dal vendor; va solo re-implementato come DDL nel nuovo RDBMS.
+- Il modello dati concettuale (le 20 tabelle e le loro relazioni su master, 31 includendo le 11 aggiunte dal branch `feature/ristorante-tavoli` — Fase 2) — è un buon schema relazionale indipendente dal vendor; va solo re-implementato come DDL nel nuovo RDBMS.
 - Il flusso di business dei 6 flussi mappati in Fase 4 (onboarding, pagamento, affiliati, booking, gate abbonamento, AI) — sono processi applicativi, non legati a un fornitore specifico.
 
 **Va riscritto** (accoppiamento diretto al vendor):

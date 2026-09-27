@@ -1,11 +1,20 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { notifyNextAppointment, scheduleAllTodayNotifications } from '../../lib/notifications'
 import { normalizePhone, buildWaLink } from '../../lib/phone'
-import PetBoneIcon from '../PetBoneIcon'
-import { CoatBars, SizeBadge } from '../PetIndicators'
+
+// Componenti specifici del verticale 'toelettatura' — caricati con
+// import() dinamico (non in cima al bundle principale) così il loro codice
+// scende sul browser solo per business con quel vertical, dove il ramo
+// gated più sotto li renderizza davvero. Due lazy() separati per CoatBars/
+// SizeBadge (export nominati, non di default: React.lazy richiede un
+// default) puntano allo stesso modulo — Vite li unisce in un solo chunk,
+// scaricato una volta sola.
+const PetBoneIcon = lazy(() => import('../PetBoneIcon'))
+const CoatBars    = lazy(() => import('../PetIndicators').then(m => ({ default: m.CoatBars })))
+const SizeBadge   = lazy(() => import('../PetIndicators').then(m => ({ default: m.SizeBadge })))
 
 const COLORS    = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f43f5e','#84cc16','#a78bfa']
 const DURATIONS = [15, 30, 45, 60, 90, 120]
@@ -1346,7 +1355,9 @@ export default function Agenda({ business, initialView = 'day' }) {
                     )}
                     {selectedPet && (
                       <div className="ag-pet-chips" style={{ marginTop: 8 }}>
-                        <PetBoneIcon name={selectedPet.name} gender={selectedPet.gender} />
+                        <Suspense fallback={null}>
+                          <PetBoneIcon name={selectedPet.name} gender={selectedPet.gender} />
+                        </Suspense>
                       </div>
                     )}
                     {!showPetForm ? (
@@ -1949,9 +1960,11 @@ function DayTimeline({ dayApts, loading, togglingId, confirmDelId, openModal, op
                           )}
                           {showPet && (
                             <div className="ag-apt-pet-row">
-                              <PetBoneIcon name={pet.name} gender={pet.gender} />
-                              <CoatBars coat={pet.coat} />
-                              <SizeBadge size={pet.size} />
+                              <Suspense fallback={null}>
+                                <PetBoneIcon name={pet.name} gender={pet.gender} />
+                                <CoatBars coat={pet.coat} />
+                                <SizeBadge size={pet.size} />
+                              </Suspense>
                             </div>
                           )}
                           {showEmployee && (

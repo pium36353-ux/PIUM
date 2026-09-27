@@ -312,11 +312,10 @@ export default function Admin() {
     setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, is_free: next } : prev)
   }, [])
 
-  // Nessuna whitelist di valori qui di proposito: la colonna è pronta per
-  // verticali futuri ('ristorante', 'bnb', ...) che non sono ancora
-  // implementati lato dashboard — impostare un valore diverso da 'generico'
-  // da qui serve solo a verificare che il resto dell'app lo tratti come
-  // 'generico' (fail-safe), non attiva alcuna funzione.
+  // Campo libero, non un menu con opzioni predefinite di proposito: un
+  // valore non ancora riconosciuto dal codice (o un refuso) si comporta
+  // come 'generico' per costruzione (fail-safe) — vedi i verticali
+  // effettivamente attivi in Dashboard.jsx.
   const setVertical = useCallback(async (biz, nextValue) => {
     const value = nextValue.trim() || 'generico'
     if (value === (biz.vertical ?? 'generico')) return
@@ -325,6 +324,27 @@ export default function Admin() {
     setBizActionError(null)
     setBusinesses(prev => prev.map(b => b.id === biz.id ? { ...b, vertical: value } : b))
     setDrawerBiz(prev => prev?.id === biz.id ? { ...prev, vertical: value } : prev)
+
+    // Seeding automatico dei 4 turni di default per il verticale
+    // ristorante_bar (Task 4 correzione) — solo quando il business non ha
+    // ancora nessun turno configurato, per non duplicarli se si esce e si
+    // rientra dal verticale più volte (il guard sopra evita solo il caso
+    // "stesso valore", non "va via e ritorna"). Best-effort: un fallimento
+    // qui non deve bloccare il salvataggio del vertical, già andato a buon
+    // fine — solo loggato, il titolare può comunque aggiungere turni a
+    // mano da Tavoli.jsx.
+    if (value === 'ristorante_bar') {
+      const { count } = await supabase
+        .from('business_turns')
+        .select('*', { count: 'exact', head: true })
+        .eq('business_id', biz.id)
+      if (!count) {
+        const { error: turnsErr } = await supabase.from('business_turns').insert(
+          [1, 2, 3, 4].map(slot_number => ({ business_id: biz.id, slot_number, name: null }))
+        )
+        if (turnsErr) console.error('[setVertical seed turns]', turnsErr)
+      }
+    }
   }, [])
 
   const copyLink = useCallback((biz) => {
@@ -1108,12 +1128,13 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
                 {biz.is_free ? 'ON' : 'OFF'}
               </button>
             </div>
-            {/* Vertical: colonna pronta per dashboard differenziate future (es. ristorante,
-                bnb), nessuna delle quali è ancora implementata — impostare qui un valore
-                diverso da 'generico' non attiva nulla, serve solo a verificare che il resto
-                dell'app continui a comportarsi in modo identico (fail-safe). Campo libero,
-                non un menu con opzioni predefinite, apposta per non dover "annunciare" nel
-                codice nomi di verticali non ancora costruiti. */}
+            {/* Vertical: campo libero, non un menu con opzioni predefinite — valori
+                riconosciuti dal codice devono essere scritti esattamente (case-sensitive):
+                'toelettatura' attiva la UI animali in Agenda/Clienti, 'ristorante_bar'
+                attiva la sezione Tavoli (copre sia ristoranti sia bar, stesso identico
+                componente). Qualunque altro valore (incluso 'generico', vuoto o refuso di
+                battitura) si comporta come 'generico' — fail-safe per costruzione, non da
+                un controllo esplicito da bypassare. */}
             <div className="adm-drawer-row">
               <span className="adm-drawer-label">Vertical</span>
               <input
@@ -1122,7 +1143,7 @@ function BusinessDrawer({ biz, health, healthLoading, notes, onNotesChange, onSa
                 defaultValue={biz.vertical ?? 'generico'}
                 onBlur={e => onSetVertical(biz, e.target.value)}
                 placeholder="generico"
-                title="Valore libero — nessun verticale specifico è ancora attivo lato dashboard"
+                title="Valori riconosciuti: 'toelettatura', 'ristorante_bar'. Qualunque altro valore equivale a 'generico'."
               />
             </div>
           </div>

@@ -1559,8 +1559,10 @@ body {
 .sv-row-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .sv-action-btn {
@@ -1874,6 +1876,1142 @@ body {
 
 /* ============================================================
    End Servizi component
+   ============================================================ */
+
+/* ============================================================
+   Tavoli component (verticale ristorante_bar)
+   ============================================================ */
+
+.tv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.tv-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+
+  &:hover { box-shadow: var(--shadow); }
+}
+
+/* Riempimento pieno, non solo bordo — colori FISSI (non theme-aware, come
+   .pet-coat-chip in PetIndicators.jsx): lo scopo è un contrasto testo/sfondo
+   garantito indipendentemente dal tema chiaro/scuro del resto dell'app, non
+   un accento che segue il tema. Il colore da solo non deve mai essere
+   l'unico modo di distinguere i due stati (accessibilità) — vedi
+   .tv-status-icon, forma diversa (cerchio+spunta vs sagoma persona), non
+   solo colore diverso. */
+.tv-card--free {
+  background: #E1F0D1;
+  color: #2E5613;
+  border-color: transparent;
+}
+.tv-card--reserved {
+  background: #D9E4F5;
+  color: #1E3A66;
+  border-color: transparent;
+}
+.tv-card--occupied {
+  background: #F7D9CA;
+  color: #7A2E14;
+  border-color: transparent;
+}
+.tv-card--free .tv-card-name,
+.tv-card--free .tv-capacity-label,
+.tv-card--free .tv-no-reservation,
+.tv-card--free .tv-icon-btn,
+.tv-card--free .tv-btn-deactivate,
+.tv-card--reserved .tv-card-name,
+.tv-card--reserved .tv-capacity-label,
+.tv-card--reserved .tv-no-reservation,
+.tv-card--reserved .tv-icon-btn,
+.tv-card--reserved .tv-btn-deactivate,
+.tv-card--occupied .tv-card-name,
+.tv-card--occupied .tv-capacity-label,
+.tv-card--occupied .tv-no-reservation,
+.tv-card--occupied .tv-icon-btn,
+.tv-card--occupied .tv-btn-deactivate {
+  color: inherit;
+}
+.tv-card--free .tv-icon-btn:hover,
+.tv-card--reserved .tv-icon-btn:hover,
+.tv-card--occupied .tv-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+.tv-card--free .tv-btn-deactivate,
+.tv-card--reserved .tv-btn-deactivate,
+.tv-card--occupied .tv-btn-deactivate {
+  border-color: currentColor;
+  opacity: 0.75;
+}
+.tv-card--free .tv-btn-deactivate:hover,
+.tv-card--reserved .tv-btn-deactivate:hover,
+.tv-card--occupied .tv-btn-deactivate:hover {
+  background: rgba(0, 0, 0, 0.08);
+  opacity: 1;
+}
+
+.tv-card--inactive  { opacity: 0.55; }
+
+/* Blocco D: una voce dell'ordine di questo tavolo è appena diventata
+   "pronto" — evidenza visiva temporanea (vedi readyHighlightIds in
+   Tavoli.jsx), oltre a vibrazione/suono. currentColor eredita già dal
+   colore di stato del tavolo, qui solo l'animazione del bordo. */
+.tv-card--ready-pulse {
+  animation: tv-ready-pulse 0.9s ease-in-out 2;
+}
+@keyframes tv-ready-pulse {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.5); }
+}
+
+/* Pulsanti apri/prendi ordine — sullo sfondo pieno della card, stesso
+   principio di .tv-btn-deactivate (bordo/hover in currentColor). */
+.tv-order-btn,
+.tv-walkin-btn {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: inherit;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+
+  &:hover:not(:disabled) { background: rgba(255, 255, 255, 0.8); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.tv-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tv-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tv-status-icon {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.tv-card-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.tv-icon-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--code-bg); color: var(--text-h); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.tv-icon-btn--danger {
+  &:hover { background: rgba(239,68,68,0.1); color: #dc2626; }
+}
+
+.tv-capacity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: text;
+}
+
+.tv-capacity-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.tv-capacity-input {
+  width: 56px;
+  box-sizing: border-box;
+  padding: 5px 6px;
+  font-size: 13px;
+  font-family: var(--sans);
+  text-align: center;
+  color: var(--text-h);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+  appearance: none;
+
+  &:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+}
+
+.tv-status-toggle {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--sans);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tv-status-toggle--free     { background: rgba(34,197,94,0.12);  color: #16a34a; }
+.tv-status-toggle--occupied { background: rgba(239,68,68,0.1);   color: #dc2626; }
+
+.tv-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.tv-badge--gray { background: var(--code-bg); color: var(--text); }
+
+.tv-btn-deactivate {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+
+  &:hover { background: rgba(239,68,68,0.1); color: #dc2626; border-color: rgba(239,68,68,0.35); }
+}
+
+.tv-btn-reactivate {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover:not(:disabled) { opacity: 0.85; }
+  &:disabled { opacity: 0.55; cursor: not-allowed; }
+}
+
+.tv-confirm-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.tv-confirm-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #dc2626;
+  white-space: nowrap;
+}
+
+/* Navigazione data (prenotazioni) */
+.tv-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tv-date-nav-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--code-bg); color: var(--text-h); }
+}
+
+.tv-date-input {
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+
+  &:focus { border-color: var(--accent); }
+}
+
+.tv-date-today-btn {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover { opacity: 0.85; }
+}
+
+.tv-date-label {
+  font-size: 13px;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+/* Card cliccabile per prenotare */
+.tv-card--clickable {
+  cursor: pointer;
+}
+
+/* Prenotazioni mostrate sulla card */
+.tv-reservations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tv-reservation-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: var(--sans);
+  text-align: left;
+  color: var(--text-h);
+  background: var(--code-bg);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: var(--accent-bg); }
+}
+
+.tv-reservation-turn {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 99px;
+}
+
+.tv-reservation-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.tv-reservation-size {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.tv-no-reservation {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.6;
+  margin: 0 !important;
+}
+
+/* Selettore multi-tavolo nel modale prenotazione */
+.tv-table-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tv-table-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+
+  & input { margin: 0; }
+  &:hover { background: var(--code-bg); }
+}
+
+.tv-table-pick--active {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.tv-modal-date {
+  font-weight: 400;
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* Switch turno */
+.tv-turn-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tv-turn-pill {
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+
+  &:hover { background: var(--code-bg); }
+}
+
+.tv-turn-pill--active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.tv-turn-manage-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 99px;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
+  margin-left: 4px;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--code-bg); color: var(--text-h); }
+}
+
+/* ============================================================
+   End Tavoli component
+   ============================================================ */
+
+/* ============================================================
+   Menu component (verticale ristorante_bar) — catalogo piatti/categorie.
+   Riusa ampiamente le classi sv-* di Servizi.jsx (stesso livello di CRUD
+   richiesto), solo poche classi proprie per ciò che è davvero specifico.
+   ============================================================ */
+
+.mn-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mn-group-title {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--text-h) !important;
+  margin: 0 0 8px !important;
+}
+
+.mn-empty-hint {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.6;
+  margin: 0 !important;
+}
+
+.mn-flag-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+
+  &:hover:not(:disabled) { opacity: 0.85; }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.mn-btn-reactivate {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--sans);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover:not(:disabled) { opacity: 0.85; }
+  &:disabled { opacity: 0.55; cursor: not-allowed; }
+}
+
+.mn-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mn-confirm-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #dc2626;
+  white-space: nowrap;
+}
+
+/* Pulsante "Conferme fine turno" con badge — stesso linguaggio visivo del
+   badge rosso già in uso in Dashboard.jsx (.db-nav-badge) per le
+   prenotazioni in attesa, qui senza il margin-left:auto pensato per un
+   nav item a tutta larghezza. */
+.mn-confirmations-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mn-badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Blocco D: select portata/postazione sotto il nome categoria, nel modale
+   "Gestisci categorie" — stessa riga, sotto l'input nome. */
+.mn-category-routing {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+
+  & select { flex: 1; min-width: 160px; }
+}
+
+.mn-btn-sold-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: #fff;
+  background: #dc2626;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+
+  &:hover:not(:disabled) { opacity: 0.88; }
+  &:disabled { opacity: 0.55; cursor: not-allowed; }
+}
+
+/* ============================================================
+   End Menu component
+   ============================================================ */
+
+/* ============================================================
+   Ordine component (verticale ristorante_bar) — schermata ordine,
+   sostituisce interamente la griglia tavoli mentre è aperta (vedi
+   Tavoli.jsx). Riusa ampiamente sv-* e tv-* già esistenti, solo poche
+   classi proprie per griglia piatti, stepper e righe ordine.
+   ============================================================ */
+
+.ord-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ord-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ord-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ord-table-name {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--text-h) !important;
+  margin: 0 !important;
+}
+
+.ord-turn-label {
+  font-size: 12.5px;
+  color: var(--text);
+  padding: 2px 8px;
+  background: var(--code-bg);
+  border-radius: 99px;
+}
+
+.ord-search-row {
+  max-width: 420px;
+}
+
+.ord-category-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ord-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.ord-tile {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+
+  &:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+}
+
+.ord-tile-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ord-tile-price {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ord-tile-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 4px 6px;
+  background: var(--accent-bg);
+  border-radius: 7px;
+
+  & span { font-size: 13px; font-weight: 700; color: var(--accent); min-width: 14px; text-align: center; }
+  & button {
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 6px;
+    background: var(--bg);
+    color: var(--accent);
+    font-size: 15px; font-weight: 700; line-height: 1;
+    cursor: pointer;
+  }
+  & button:hover { background: var(--accent); color: #fff; }
+}
+
+.ord-current {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ord-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ord-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.ord-line-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.ord-line-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ord-line-price {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.ord-line-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+
+  & span { font-size: 13px; font-weight: 700; color: var(--text-h); min-width: 16px; text-align: center; }
+  & button {
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px; font-weight: 700; line-height: 1;
+    cursor: pointer;
+  }
+  & button:hover { background: var(--code-bg); color: var(--text-h); }
+}
+
+.ord-line-notes {
+  flex: 1;
+  min-width: 140px;
+  font-size: 12.5px !important;
+  padding: 6px 10px !important;
+}
+
+.ord-total {
+  align-self: flex-end;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+/* ── Blocco D: invio in cucina, portate/attesa, protezione offline ── */
+
+.ord-current-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ord-pending-hint {
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--accent-bg);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.ord-pending-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.18);
+  padding: 2px 7px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.ord-offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.ord-call-banner {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1E3A66;
+  background: #D9E4F5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.ord-sent-section {
+  transition: box-shadow 0.3s;
+}
+.ord-ready-pulse {
+  animation: ord-pulse 0.9s ease-in-out 2;
+}
+@keyframes ord-pulse {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.35); border-radius: 12px; }
+}
+
+.ord-course-bands {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ord-band-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ord-band-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.ord-band-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ord-line--sent {
+  opacity: 0.9;
+}
+.ord-line--waiting {
+  opacity: 0.55;
+}
+.ord-line--cancelled {
+  opacity: 0.5;
+
+  & .ord-line-name { text-decoration: line-through; }
+}
+
+.ord-line-note-text {
+  font-size: 11.5px;
+  color: var(--text);
+  font-style: italic;
+}
+
+.ord-cancel-item-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: #dc2626;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.ord-cancel-item-btn:hover { background: rgba(239, 68, 68, 0.1); }
+
+.ord-fire-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.ord-fire-choice-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ord-fire-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+/* ============================================================
+   End Ordine component
+   ============================================================ */
+
+/* ============================================================
+   Cucina component (verticale ristorante_bar) — vista cucina, Blocco D.
+   Riusa ampiamente sv-*, ord-* e db-* già esistenti.
+   ============================================================ */
+
+.kt-station-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  max-width: 640px;
+}
+
+.kt-station-pick {
+  padding: 20px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--sans);
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+
+  &:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+}
+
+.kt-tv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.kt-tv-station-label {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+/* Piccolo ma esplicito — un'etichetta leggibile, non un'icona ambigua o il
+   nome della postazione riusato come pulsante travestito. */
+.kt-tv-exit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover { border-color: var(--accent); color: var(--accent); }
+}
+
+.kt-tickets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.kt-ticket {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+.kt-ticket--boosted {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+}
+
+.kt-ticket-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.kt-ticket-table {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.kt-ticket-time {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.kt-band {
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--accent-bg);
+}
+
+/* Colore automatico per slot_number (vedi courseColorClass in Cucina.jsx),
+   MAI una scelta del titolare — sei tinte distinguibili, come i fogli
+   colorati delle comande a carta carbone. Colori FISSI non theme-aware
+   (stesso principio di .tv-card--free/--reserved/--occupied): il
+   contrasto del titolo fascia deve reggere indipendentemente dal tema
+   chiaro/scuro del resto dell'app. Le singole voci dentro (.kt-item) hanno
+   un proprio sfondo e non ereditano questa tinta, solo il titolo fascia
+   siede direttamente sul colore. */
+.kt-band--c0 { background: #FEF3C7; }
+.kt-band--c1 { background: #FCE7F3; }
+.kt-band--c2 { background: #DBEAFE; }
+.kt-band--c3 { background: #D1FAE5; }
+.kt-band--c4 { background: #FFEDD5; }
+.kt-band--c5 { background: #EDE9FE; }
+.kt-band--c0 .kt-band-title { color: #78350F; }
+.kt-band--c1 .kt-band-title { color: #831843; }
+.kt-band--c2 .kt-band-title { color: #1E3A66; }
+.kt-band--c3 .kt-band-title { color: #065F46; }
+.kt-band--c4 .kt-band-title { color: #7C2D12; }
+.kt-band--c5 .kt-band-title { color: #4C1D95; }
+
+/* In attesa: la fascia resta della sua tinta di portata (deve restare
+   riconoscibile), solo attenuata — il grigio pieno di prima copriva
+   qualunque colore proprio quando serviva di più, dato che di default la
+   maggior parte delle fasce di un invio appena fatto parte in attesa. */
+.kt-band--waiting {
+  opacity: 0.6;
+}
+
+.kt-band-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.kt-band-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-h);
+}
+
+.kt-band-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kt-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: var(--bg);
+  cursor: pointer;
+}
+.kt-item--ready {
+  background: rgba(34, 197, 94, 0.16);
+}
+.kt-item--waiting {
+  opacity: 0.55;
+  cursor: default;
+}
+.kt-item--cancelled {
+  opacity: 0.5;
+  cursor: default;
+
+  & .kt-item-name { text-decoration: line-through; }
+}
+
+.kt-item-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.kt-item-note {
+  font-size: 11.5px;
+  color: var(--text);
+  font-style: italic;
+}
+
+/* Modalità "solo schermo" (TV) — caratteri molto grandi, nessun pulsante
+   (già non renderizzati lato JS, qui solo l'ingrandimento). */
+.kt-view--tv .kt-ticket-table   { font-size: 24px; }
+.kt-view--tv .kt-band-title     { font-size: 16px; }
+.kt-view--tv .kt-item-name      { font-size: 19px; }
+.kt-view--tv .kt-item-note      { font-size: 15px; }
+.kt-view--tv .kt-ticket-time    { font-size: 15px; }
+.kt-view--tv .kt-item           { cursor: default; }
+.kt-view--tv .kt-tickets        { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+
+/* ============================================================
+   End Cucina component
    ============================================================ */
 
 /* ============================================================

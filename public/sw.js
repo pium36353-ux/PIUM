@@ -1,4 +1,4 @@
-const CACHE = 'pium-v2'
+const CACHE = 'pium-v3'
 
 const APP_SHELL = [
   '/',
