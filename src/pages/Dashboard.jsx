@@ -26,6 +26,7 @@ import Clienti     from '../components/dashboard/Clienti'
 const Tavoli = lazy(() => import('../components/dashboard/Tavoli'))
 const Menu   = lazy(() => import('../components/dashboard/Menu'))
 const Cucina = lazy(() => import('../components/dashboard/Cucina'))
+const Scorte = lazy(() => import('../components/dashboard/Scorte'))
 
 // Base sempre visibile, indipendente dal verticale. La voce 'tavoli' viene
 // aggiunta SOLO per business.vertical === 'ristorante_bar' — vedi NAV
@@ -77,6 +78,7 @@ export default function Dashboard() {
       { id: 'tavoli', label: 'Tavoli', icon: IconTable },
       { id: 'menu',   label: 'Menu',   icon: IconMenuBook },
       { id: 'cucina', label: 'Cucina', icon: IconChefHat },
+      { id: 'scorte', label: 'Scorte', icon: IconBox },
     )
     return withRistorante
   }, [business?.vertical])
@@ -217,7 +219,7 @@ export default function Dashboard() {
     // per qualunque altro valore Section risolve a undefined per
     // section === 'tavoli' e più sotto `{Section && (...)}` non monta nulla,
     // indipendentemente da come lo stato `section` sia finito su 'tavoli'.
-    ...(business?.vertical === 'ristorante_bar' ? { tavoli: Tavoli, menu: Menu, cucina: Cucina } : {}),
+    ...(business?.vertical === 'ristorante_bar' ? { tavoli: Tavoli, menu: Menu, cucina: Cucina, scorte: Scorte } : {}),
   }[section]
 
   useEffect(() => {
@@ -519,6 +521,9 @@ function IconTable() {
 }
 function IconMenuBook() {
   return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+}
+function IconBox() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
 }
 function IconChefHat() {
   return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>

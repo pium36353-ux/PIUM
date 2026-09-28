@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { ensureDefaultCourses, ensureDefaultStation } from '../../lib/kitchenSeed'
 import { resolveStationId, groupItemsByCourse } from '../../lib/kitchenRouting'
 import { subscribeTableOrderItems, sendCallSala } from '../../lib/kitchenRealtime'
+import { formatTime } from '../../lib/datetime'
 
 // Un ticket "riceve il via" resta in cima alla vista per questa finestra di
 // tempo, poi torna nell'ordine normale (dalla più vecchia alla più
@@ -39,10 +40,10 @@ function courseColorClass(course) {
   return `kt-band--c${idx}`
 }
 
-function formatTime(iso) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-}
+// L'orario di invio mostrato sulle schede usa il formattatore condiviso
+// (fuso del business, non del dispositivo): un tablet con il fuso
+// configurato male mostrerebbe altrimenti orari diversi da quelli della
+// sala — vedi src/lib/datetime.js.
 
 // Vista cucina (Blocco D) — nuovo componente, voce di navigazione propria,
 // montato solo per vertical='ristorante_bar' (React.lazy + doppio gate in

@@ -1,9 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ensureDefaultCourses, ensureDefaultStation } from '../../lib/kitchenSeed'
+import { loadStockState } from '../../lib/stock'
 
 const EMPTY_CATEGORY_FORM = { name: '' }
-const EMPTY_ITEM_FORM = { name: '', price: '', category_id: '', is_available: true }
+const EMPTY_ITEM_FORM = {
+  name: '', price: '', category_id: '', is_available: true,
+  // Blocco E — scorte e costi. vat_rate parte da 10 (aliquota di
+  // somministrazione più comune), le altre vuote: track_stock spento di
+  // default perché la stragrande maggioranza dei piatti non si conta a
+  // pezzo, e una stima assente è uno stato legittimo ("costo non inserito").
+  track_stock: false, min_stock: '', estimated_cost: '', vat_rate: '10',
+}
 
 function courseLabel(c) {
   if (!c) return 'Subito (nessuna portata)'
@@ -169,6 +177,45 @@ export default function Menu({ business, onBusinessPatch }) {
   /* ── Conferme fine turno ── */
   const [confirmationsModalOpen, setConfirmationsModalOpen] = useState(false)
   const [resolvingItemId,        setResolvingItemId]        = useState(null)
+
+  /* ── Blocco E: scorte esaurite ──
+     Stato delle giacenze dalla libreria condivisa (stock.js), la stessa
+     usata da Scorte.jsx: la stima mostrata qui e quella della sezione
+     Scorte vengono per costruzione dallo stesso calcolo. */
+  const [stockByItemId, setStockByItemId] = useState({})
+  const [markingOutId,  setMarkingOutId]  = useState(null)
+
+  const loadStock = useCallback(async (signal = null) => {
+    if (!business) return
+    const state = await loadStockState(business.id)
+    if (signal?.cancelled || !state) return
+    setStockByItemId(state.byItemId)
+  }, [business])
+
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadStock(signal)
+    return () => { signal.cancelled = true }
+  }, [loadStock])
+
+  // Prodotti tracciati con giacenza stimata a zero o sotto: da confermare
+  // esauriti a mano, MAI automaticamente (una giacenza a zero può essere
+  // un conteggio da rettificare, non un prodotto finito davvero).
+  const outOfStockItems = useMemo(() => {
+    return items
+      .filter((i) => i.track_stock && i.is_available)
+      .map((i) => ({ ...i, stock: stockByItemId[i.id] }))
+      .filter((i) => i.stock && i.stock.estimatedStock <= 0)
+      .sort((a, b) => a.stock.estimatedStock - b.stock.estimatedStock || a.name.localeCompare(b.name))
+  }, [items, stockByItemId])
+
+  const markOutOfStock = async (item) => {
+    setMarkingOutId(item.id)
+    const { error } = await supabase.from('menu_items').update({ is_available: false }).eq('id', item.id)
+    setMarkingOutId(null)
+    if (error) { console.error('[markOutOfStock]', error); return }
+    setItems((prev) => prev.map((x) => x.id === item.id ? { ...x, is_available: false } : x))
+  }
 
   const resolveFlags = async (item, markSoldOut) => {
     setResolvingItemId(item.id)
@@ -376,6 +423,10 @@ export default function Menu({ business, onBusinessPatch }) {
       price:       item.price != null ? String(item.price) : '',
       category_id: item.category_id ?? '',
       is_available: item.is_available,
+      track_stock:    !!item.track_stock,
+      min_stock:      item.min_stock != null ? String(item.min_stock) : '',
+      estimated_cost: item.estimated_cost != null ? String(item.estimated_cost) : '',
+      vat_rate:       item.vat_rate != null ? String(item.vat_rate) : '10',
     })
     setItemErrors({})
     setEditingItemId(item.id)
@@ -390,10 +441,20 @@ export default function Menu({ business, onBusinessPatch }) {
     setItemErrors((er) => ({ ...er, [field]: null }))
   }
 
+  // I vincoli qui rispecchiano quelli del database (menu_items_*_positive/
+  // _non_negative): stessa regola in due posti di proposito — il DB è
+  // l'invariante, questo è il messaggio leggibile prima di sbatterci.
   const validateItem = (f) => {
     const e = {}
     if (!f.name.trim()) e.name = 'Il nome è obbligatorio.'
     if (f.price !== '' && isNaN(Number(f.price))) e.price = 'Inserisci un numero valido.'
+    if (f.estimated_cost !== '' && (isNaN(Number(f.estimated_cost)) || Number(f.estimated_cost) < 0))
+      e.estimated_cost = 'Inserisci un costo valido (mai negativo).'
+    if (f.vat_rate === '' || isNaN(Number(f.vat_rate)) || Number(f.vat_rate) < 0)
+      e.vat_rate = 'Inserisci un\'aliquota valida.'
+    if (f.track_stock && f.min_stock !== '' &&
+        (isNaN(Number(f.min_stock)) || !Number.isInteger(Number(f.min_stock)) || Number(f.min_stock) <= 0))
+      e.min_stock = 'Inserisci un numero intero maggiore di zero.'
     return e
   }
 
@@ -408,6 +469,13 @@ export default function Menu({ business, onBusinessPatch }) {
       price:        itemForm.price !== '' ? Number(itemForm.price) : null,
       category_id:  itemForm.category_id || null,
       is_available: itemForm.is_available,
+      track_stock:  itemForm.track_stock,
+      // min_stock ha senso solo per un prodotto tracciato: se la spunta è
+      // spenta la soglia viene azzerata invece di restare appesa a un
+      // prodotto che non ha nessuna giacenza da confrontarci.
+      min_stock:      itemForm.track_stock && itemForm.min_stock !== '' ? Number(itemForm.min_stock) : null,
+      estimated_cost: itemForm.estimated_cost !== '' ? Number(itemForm.estimated_cost) : null,
+      vat_rate:       Number(itemForm.vat_rate),
     }
 
     if (itemModal === 'add') {
@@ -503,7 +571,9 @@ export default function Menu({ business, onBusinessPatch }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="sv-btn-cancel mn-confirmations-btn" onClick={() => setConfirmationsModalOpen(true)}>
             Conferme fine turno
-            {flaggedItems.length > 0 && <span className="mn-badge-count">{flaggedItems.length}</span>}
+            {(flaggedItems.length + outOfStockItems.length) > 0 && (
+              <span className="mn-badge-count">{flaggedItems.length + outOfStockItems.length}</span>
+            )}
           </button>
           <button className="sv-btn-cancel" onClick={() => setStationsModalOpen(true)}>Postazioni</button>
           <button className="sv-btn-cancel" onClick={() => setCoursesModalOpen(true)}>Portate</button>
@@ -871,6 +941,83 @@ export default function Menu({ business, onBusinessPatch }) {
                   <span className="sv-toggle-thumb" />
                 </button>
               </label>
+
+              {/* Blocco E — scorte e costi. Il costo stimato serve ai
+                  margini dei prodotti NON tracciati a magazzino; l'IVA
+                  serve a scorporare il prezzo di vendita. Entrambi
+                  fotografati sulla voce d'ordine al momento dell'invio,
+                  quindi cambiarli qui non tocca mai i margini passati. */}
+              <h3 className="mn-group-title" style={{ marginTop: 8 }}>Scorte e costi</h3>
+
+              <div className="sv-fields-row">
+                <div className="sv-field">
+                  <label className="sv-label" htmlFor="mn-estimated-cost">
+                    Costo stimato (€) <span className="sv-optional">(facoltativo, IVA esclusa)</span>
+                  </label>
+                  <input
+                    id="mn-estimated-cost"
+                    className={`sv-input ${itemErrors.estimated_cost ? 'sv-input--error' : ''}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={itemForm.estimated_cost}
+                    onChange={setItemField('estimated_cost')}
+                    placeholder="es. 1.00"
+                  />
+                  {itemErrors.estimated_cost && <p className="sv-field-error">{itemErrors.estimated_cost}</p>}
+                  <p className="sv-field-hint">Senza costo, il piatto entra nell'incasso ma non nel margine.</p>
+                </div>
+                <div className="sv-field">
+                  <label className="sv-label" htmlFor="mn-vat">Aliquota IVA (%)</label>
+                  <input
+                    id="mn-vat"
+                    className={`sv-input ${itemErrors.vat_rate ? 'sv-input--error' : ''}`}
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={itemForm.vat_rate}
+                    onChange={setItemField('vat_rate')}
+                    placeholder="10"
+                  />
+                  {itemErrors.vat_rate && <p className="sv-field-error">{itemErrors.vat_rate}</p>}
+                </div>
+              </div>
+
+              <label className="sv-toggle-row">
+                <div className="sv-toggle-text">
+                  <span className="sv-toggle-label">Traccia a magazzino</span>
+                  <span className="sv-toggle-hint">Solo per prodotti venduti a pezzo (bibite, dolci confezionati): carichi, giacenza e costo reale dall'ultimo carico</span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={itemForm.track_stock}
+                  className={`sv-toggle ${itemForm.track_stock ? 'sv-toggle--on' : ''}`}
+                  onClick={() => setItemForm((f) => ({ ...f, track_stock: !f.track_stock }))}
+                >
+                  <span className="sv-toggle-thumb" />
+                </button>
+              </label>
+
+              {itemForm.track_stock && (
+                <div className="sv-field sv-field--half">
+                  <label className="sv-label" htmlFor="mn-min-stock">
+                    Soglia di riordino <span className="sv-optional">(facoltativo)</span>
+                  </label>
+                  <input
+                    id="mn-min-stock"
+                    className={`sv-input ${itemErrors.min_stock ? 'sv-input--error' : ''}`}
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={itemForm.min_stock}
+                    onChange={setItemField('min_stock')}
+                    placeholder="es. 6"
+                  />
+                  {itemErrors.min_stock && <p className="sv-field-error">{itemErrors.min_stock}</p>}
+                  <p className="sv-field-hint">Sotto questa quantità il prodotto compare in "Da riordinare" nella sezione Scorte.</p>
+                </div>
+              )}
             </div>
 
             <div className="sv-modal-footer">
@@ -898,6 +1045,49 @@ export default function Menu({ business, onBusinessPatch }) {
             </div>
 
             <div className="sv-modal-body">
+              {/* Blocco E — parte a sé, sopra le segnalazioni manuali:
+                  qui il sistema sa già che la giacenza stimata è finita,
+                  ma l'esaurito resta SEMPRE una conferma del titolare
+                  (una giacenza a zero può essere un conteggio da
+                  rettificare, non un prodotto finito davvero). */}
+              {outOfStockItems.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <h3 className="mn-group-title">Scorte esaurite ({outOfStockItems.length})</h3>
+                  <p className="mn-empty-hint" style={{ marginBottom: 8 }}>
+                    Giacenza stimata a zero o sotto. Nessun prodotto viene mai segnato esaurito da solo.
+                  </p>
+                  <div className="sv-list">
+                    {outOfStockItems.map(item => (
+                      <div key={item.id} className="sv-row">
+                        <div className="sv-row-main">
+                          <div className="sv-row-top">
+                            <span className="sv-name">{item.name}</span>
+                            <div className="sv-row-badges">
+                              <span className="db-badge db-badge--red">
+                                Stima: {item.stock.estimatedStock} pz
+                              </span>
+                            </div>
+                          </div>
+                          <p className="mn-empty-hint" style={{ marginTop: 2 }}>
+                            Registrata {item.stock.registeredStock} pz, venduti non ancora chiusi {item.stock.soldNotClosed} pz
+                          </p>
+                        </div>
+                        <div className="sv-row-actions">
+                          <button
+                            className="mn-btn-sold-out"
+                            disabled={markingOutId === item.id}
+                            onClick={() => markOutOfStock(item)}
+                          >
+                            {markingOutId === item.id ? <MnSpinner small /> : null}
+                            Segna esaurito
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {flaggedItems.length === 0 ? (
                 <p className="db-card-empty">Nessuna segnalazione al momento.</p>
               ) : (
