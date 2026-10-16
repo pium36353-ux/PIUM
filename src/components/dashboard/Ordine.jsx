@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { groupItemsByCourse } from '../../lib/kitchenRouting'
 import { subscribeTableOrderItems, subscribeCallSala, notifyReady } from '../../lib/kitchenRealtime'
+import { loadCostBook, resolveCostSnapshot } from '../../lib/stock'
 
 function turnLabel(t) {
   if (!t) return ''
@@ -50,6 +51,12 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
   const searchTimerRef = useRef(null)
 
   const [activeCourses, setActiveCourses] = useState([])
+
+  // Libro dei costi (Blocco E): track_stock/estimated_cost/vat_rate e
+  // costo dell'ultimo carico per ogni prodotto. Caricato in anticipo, non
+  // interrogato al momento dell'invio, perché l'invio deve poter comporre
+  // la riga completa anche senza rete — la coda offline la salverà da sola.
+  const [costBook, setCostBook] = useState({})
 
   const [closeConfirm, setCloseConfirm] = useState(false)
   const [closing,      setClosing]      = useState(false)
@@ -183,6 +190,15 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
     loadCourses(signal)
     return () => { signal.cancelled = true }
   }, [loadCourses])
+
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadCostBook(business.id).then((book) => {
+      if (signal.cancelled) return
+      setCostBook(book)
+    })
+    return () => { signal.cancelled = true }
+  }, [business.id])
 
   useEffect(() => {
     const signal = { cancelled: false }
@@ -360,7 +376,23 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
     for (const group of composingGroups) {
       const fireStatus = !group.course ? 'subito' : (choices[group.course.id] ?? 'subito')
       for (const it of group.items) {
-        const nextRow = { ...it, sent_at: now, fire_status: fireStatus, fired_at: fireStatus === 'subito' ? now : null }
+        // Costo e IVA fotografati QUI, nello stesso write che valorizza
+        // sent_at: da questo momento il margine di questa voce non cambia
+        // più, nemmeno se domani il titolare corregge la stima del piatto
+        // o registra un carico a prezzo diverso (Blocco E, punto 4).
+        // sent_received_at non viene toccato: lo scrive il trigger del
+        // database, il client non lo scrive mai.
+        const product = it.menu_item_id ? costBook[it.menu_item_id] : null
+        const { cost, source } = resolveCostSnapshot(product)
+        const nextRow = {
+          ...it,
+          sent_at:           now,
+          fire_status:       fireStatus,
+          fired_at:          fireStatus === 'subito' ? now : null,
+          cost_snapshot:     cost,
+          cost_source:       source,
+          vat_rate_snapshot: product?.vat_rate ?? null,
+        }
         setItems((prev) => prev.map((x) => x.id === it.id ? nextRow : x))
         enqueueUpsert(it.id, nextRow)
       }
