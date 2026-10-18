@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSectionParams } from '../../lib/sectionParams'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { normalizePhone } from '../../lib/phone'
@@ -71,7 +71,7 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
      poi si riscrivono quando cambiano: la fonte di verità resta lo stato
      React, l'URL è il suo riflesso. Tutti gli altri parametri già presenti
      (in particolare ?s=) vengono preservati a ogni scrittura. */
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { searchParams, isActiveSection, patchParams } = useSectionParams('tavoli')
   // Fotografia dei parametri al primo render, tenuta in uno stato e non in
   // un ref: serve leggerla durante il render (negli stati iniziali qui
   // sotto) e un ref non va letto in quella fase.
@@ -80,17 +80,6 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
     t: searchParams.get('t'),
     o: searchParams.get('o'),
   }))
-
-  const patchParams = useCallback((patch) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      for (const [k, v] of Object.entries(patch)) {
-        if (v == null || v === '') next.delete(k)
-        else next.set(k, v)
-      }
-      return next
-    }, { replace: true })
-  }, [setSearchParams])
 
   // Data in vista — di proposito non solo "oggi": il titolare deve poter
   // navigare avanti (es. per prendere una prenotazione al 15 del mese).
@@ -140,7 +129,7 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
   const [activeOrder,      setActiveOrder]      = useState(null) // riga table_orders in visualizzazione, o null
   const [activeOrderTable, setActiveOrderTable] = useState(null)
   // Finché il ripristino dell'ordine dall'indirizzo non è stato tentato,
-  // non si scrive nulla su o/tb: altrimenti il primo render (activeOrder
+  // non si scrive nulla su o: altrimenti il primo render (activeOrder
   // ancora null) cancellerebbe il parametro prima di poterlo leggere.
   const [orderRestoreDone, setOrderRestoreDone] = useState(() => !initialParams.o)
   const orderRestoreStartedRef = useRef(false)
@@ -281,18 +270,28 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
     return unsubscribe
   }, [business, openOrders])
 
-  /* ── Sincronizzazione con l'indirizzo ── */
-  useEffect(() => { patchParams({ d: formatDate(selectedDate) }) }, [selectedDate, patchParams])
+  /* ── Sincronizzazione con l'indirizzo ──
+     `isActiveSection` è sia guardia sia dipendenza: finché l'indirizzo
+     porta ancora la sezione precedente (questo componente può essere già
+     montato, vedi la nota in sectionParams.js) non si scrive niente, e
+     appena l'indirizzo arriva su 'tavoli' questi effect si ri-eseguono e
+     scrivono i parametri. Un solo clic basta. ── */
+  useEffect(() => {
+    if (!isActiveSection) return
+    patchParams({ d: formatDate(selectedDate) })
+  }, [isActiveSection, selectedDate, patchParams])
 
   useEffect(() => {
-    if (!selectedTurnId) return
+    if (!isActiveSection || !selectedTurnId) return
     patchParams({ t: selectedTurnId })
-  }, [selectedTurnId, patchParams])
+  }, [isActiveSection, selectedTurnId, patchParams])
 
+  // Solo l'id dell'ordine: il tavolo si ricava da table_id della riga
+  // ordine, non serve un secondo parametro da tenere in sincrono.
   useEffect(() => {
-    if (!orderRestoreDone) return
-    patchParams({ o: activeOrder?.id ?? null, tb: activeOrderTable?.id ?? null })
-  }, [orderRestoreDone, activeOrder, activeOrderTable, patchParams])
+    if (!isActiveSection || !orderRestoreDone) return
+    patchParams({ o: activeOrder?.id ?? null })
+  }, [isActiveSection, orderRestoreDone, activeOrder, patchParams])
 
   // Ripristino dell'ordine aperto dopo un aggiornamento della pagina.
   // Aspetta che i tavoli siano caricati, perché la schermata ordine ha

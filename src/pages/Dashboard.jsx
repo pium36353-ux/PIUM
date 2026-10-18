@@ -378,13 +378,19 @@ export default function Dashboard() {
     // altro verticale questa riga non viene eseguita e la navigazione
     // resta identica a prima, compresa quella dell'Agenda.
     if (isRestaurant) {
-      const params = new URLSearchParams(location.search)
+      const params = new URLSearchParams(window.location.search)
       params.set('s', id)
       // I parametri di una sezione non devono sopravvivere al passaggio a
       // un'altra: un ordine aperto o una data in Tavoli non significano
-      // niente in Cucina.
-      for (const k of ['o', 'tb', 'd', 't', 'st']) params.delete(k)
-      navigate({ search: `?${params.toString()}` }, { replace: true })
+      // niente in Cucina. Le sezioni non li riscrivono più "in ritardo"
+      // perché scrivono solo quando sono loro la sezione attiva
+      // nell'indirizzo (vedi src/lib/sectionParams.js).
+      for (const k of ['o', 'd', 't', 'st']) params.delete(k)
+      // Qui NON si usa replace: il cambio di sezione è l'unica cosa che
+      // deve creare una voce di cronologia, così "indietro" riporta alla
+      // sezione precedente. Le modifiche dentro una sezione (data, turno,
+      // postazione, ordine) sostituiscono invece la voce corrente.
+      navigate({ search: `?${params.toString()}` })
     }
   }
 

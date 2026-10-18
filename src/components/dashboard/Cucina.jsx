@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSectionParams } from '../../lib/sectionParams'
 import { supabase } from '../../lib/supabase'
 import KioskLockButton from './KioskLockButton'
 import { ensureDefaultCourses, ensureDefaultStation } from '../../lib/kitchenSeed'
@@ -63,21 +63,10 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
   // L'URL vince sul localStorage quando c'è (è più specifico: è
   // l'indirizzo di QUESTA schermata), il localStorage resta la
   // preferenza predefinita del dispositivo.
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { searchParams, isActiveSection, patchParams } = useSectionParams('cucina')
   // In uno stato e non in un ref: va letta durante il render, nello stato
   // iniziale della postazione qui sotto.
   const [initialStationParam] = useState(() => searchParams.get('st'))
-
-  const patchParams = useCallback((patch) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      for (const [k, v] of Object.entries(patch)) {
-        if (v == null || v === '') next.delete(k)
-        else next.set(k, v)
-      }
-      return next
-    }, { replace: true })
-  }, [setSearchParams])
 
   const [selectedStationId, setSelectedStationId] = useState(() =>
     initialStationParam || (business ? readLocal(stationStorageKey(business.id)) : null))
@@ -132,10 +121,13 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
   // La postazione scelta finisce sempre nell'indirizzo, anche quando
   // arriva dal localStorage del dispositivo: così la schermata ha un
   // indirizzo proprio e un aggiornamento della pagina non la perde.
+  // `isActiveSection` è guardia e dipendenza insieme: non si scrive
+  // mentre l'indirizzo porta ancora un'altra sezione, e si scrive da sé
+  // appena arriva su 'cucina' (vedi sectionParams.js).
   useEffect(() => {
-    if (!selectedStationId) return
+    if (!isActiveSection || !selectedStationId) return
     patchParams({ st: selectedStationId })
-  }, [selectedStationId, patchParams])
+  }, [isActiveSection, selectedStationId, patchParams])
 
   const chooseStation = (stationId) => {
     setSelectedStationId(stationId)
