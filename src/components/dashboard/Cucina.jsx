@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import KioskLockButton from './KioskLockButton'
 import { ensureDefaultCourses, ensureDefaultStation } from '../../lib/kitchenSeed'
 import { resolveStationId, groupItemsByCourse } from '../../lib/kitchenRouting'
 import { subscribeTableOrderItems, sendCallSala } from '../../lib/kitchenRealtime'
@@ -51,12 +53,34 @@ function courseColorClass(course) {
 // non ha protezione offline dedicata (fuori scopo qui, richiesta solo per
 // la schermata ordine): le azioni sono chiamate dirette, stesso stile del
 // resto del progetto prima del Blocco D.
-export default function Cucina({ business }) {
+export default function Cucina({ business, kioskLock, onKioskLockChange }) {
   const [stations,        setStations]        = useState([])
   const [courses,         setCourses]         = useState([])
   const [settingsLoading, setSettingsLoading]  = useState(true)
 
-  const [selectedStationId, setSelectedStationId] = useState(() => business ? readLocal(stationStorageKey(business.id)) : null)
+  // La postazione vive nell'indirizzo oltre che sul dispositivo: un
+  // aggiornamento della pagina deve riportare sulla stessa postazione.
+  // L'URL vince sul localStorage quando c'è (è più specifico: è
+  // l'indirizzo di QUESTA schermata), il localStorage resta la
+  // preferenza predefinita del dispositivo.
+  const [searchParams, setSearchParams] = useSearchParams()
+  // In uno stato e non in un ref: va letta durante il render, nello stato
+  // iniziale della postazione qui sotto.
+  const [initialStationParam] = useState(() => searchParams.get('st'))
+
+  const patchParams = useCallback((patch) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === '') next.delete(k)
+        else next.set(k, v)
+      }
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const [selectedStationId, setSelectedStationId] = useState(() =>
+    initialStationParam || (business ? readLocal(stationStorageKey(business.id)) : null))
   // Predefinita SEMPRE 'interattiva' al primo avvio su un dispositivo —
   // solo il valore esatto 'solo_schermo' salvato in precedenza sposta la
   // modalità, qualunque altra cosa (niente salvato, storage corrotto,
@@ -101,12 +125,22 @@ export default function Cucina({ business }) {
     if (selectedStationId && !activeStations.some(s => s.id === selectedStationId)) {
       setSelectedStationId(null)
       writeLocal(stationStorageKey(business.id), '')
+      patchParams({ st: null })
     }
-  }, [settingsLoading, activeStations, selectedStationId, business])
+  }, [settingsLoading, activeStations, selectedStationId, business, patchParams])
+
+  // La postazione scelta finisce sempre nell'indirizzo, anche quando
+  // arriva dal localStorage del dispositivo: così la schermata ha un
+  // indirizzo proprio e un aggiornamento della pagina non la perde.
+  useEffect(() => {
+    if (!selectedStationId) return
+    patchParams({ st: selectedStationId })
+  }, [selectedStationId, patchParams])
 
   const chooseStation = (stationId) => {
     setSelectedStationId(stationId)
     writeLocal(stationStorageKey(business.id), stationId)
+    patchParams({ st: stationId })
     setStationPickerOpen(false)
   }
 
@@ -214,6 +248,34 @@ export default function Cucina({ business }) {
     return list
   }, [orders, activeStations, activeCourses, selectedStationId, tick])
 
+  /* ── Totali per piatto ──
+     Calcolati dalle STESSE voci già filtrate per postazione dentro
+     `tickets`, non da una query propria: così non possono raccontare una
+     cosa diversa dalle schede sotto, e si aggiornano in tempo reale
+     insieme a loro (ogni evento ricarica gli ordini → tickets → questi).
+       "Da preparare" = inviate, con il via dato, non ancora pronte.
+       "In arrivo"    = inviate ma ancora in attesa del via.
+     Le voci annullate restano fuori da entrambe (kitchen_status diverso
+     da 'da_preparare'), così come quelle già pronte o consegnate. */
+  const dishTotals = useMemo(() => {
+    const toPrepare = new Map()
+    const incoming  = new Map()
+    for (const ticket of tickets) {
+      for (const band of ticket.bands) {
+        for (const item of band.items) {
+          if (item.kitchen_status !== 'da_preparare') continue
+          const bucket = item.fire_status === 'in_attesa' ? incoming : toPrepare
+          const name = item.item_name_snapshot
+          bucket.set(name, (bucket.get(name) ?? 0) + Number(item.quantity))
+        }
+      }
+    }
+    const toList = (m) => Array.from(m.entries())
+      .map(([name, qty]) => ({ name, qty }))
+      .sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name))
+    return { toPrepare: toList(toPrepare), incoming: toList(incoming) }
+  }, [tickets])
+
   /* ── Azioni ── */
   const markItemReady = async (item) => {
     if (item.kitchen_status !== 'da_preparare' || item.fire_status !== 'subito') return
@@ -294,9 +356,16 @@ export default function Cucina({ business }) {
       {interactive && (
         <div className="db-section-toolbar">
           <p className="db-section-desc">Postazione: <strong>{currentStation.name}</strong> — {tickets.length} tavol{tickets.length !== 1 ? 'i' : 'o'} in corso.</p>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <KioskLockButton
+              area="cucina"
+              lockedArea={kioskLock}
+              pin={business.kiosk_pin}
+              onLock={onKioskLockChange}
+              onUnlock={() => onKioskLockChange(null)}
+            />
             <button className="sv-btn-cancel" onClick={() => chooseMode('solo_schermo')}>Modalità solo schermo</button>
-            <button className="sv-btn-cancel" onClick={() => setStationPickerOpen(true)}>Cambia postazione</button>
+            {!kioskLock && <button className="sv-btn-cancel" onClick={() => setStationPickerOpen(true)}>Cambia postazione</button>}
             <button className="db-btn-primary" disabled={callSent} onClick={handleCallSala}>{callSent ? 'Chiamata inviata' : 'Chiama sala'}</button>
           </div>
         </div>
@@ -319,6 +388,42 @@ export default function Cucina({ business }) {
       {realtimeDown && (
         <div className="ord-offline-banner">
           Aggiornamenti in tempo reale interrotti — riconnessione in corso, lo stato si aggiorna da solo appena torna attiva.
+        </div>
+      )}
+
+      {/* Totali per piatto della postazione: cosa c'è da fare adesso e
+          cosa sta per arrivare. Visibili anche in modalità solo schermo,
+          dove i caratteri diventano grandi insieme al resto della vista. */}
+      {(dishTotals.toPrepare.length > 0 || dishTotals.incoming.length > 0) && (
+        <div className="kt-totals">
+          <div className="kt-total-row">
+            <span className="kt-total-label">Da preparare</span>
+            {dishTotals.toPrepare.length === 0 ? (
+              <span className="kt-total-empty">niente in preparazione</span>
+            ) : (
+              <span className="kt-total-list">
+                {dishTotals.toPrepare.map((d, i) => (
+                  <span key={d.name} className="kt-total-item">
+                    {i > 0 && <span className="kt-total-sep"> · </span>}
+                    <strong>{d.qty}×</strong> {d.name}
+                  </span>
+                ))}
+              </span>
+            )}
+          </div>
+          {dishTotals.incoming.length > 0 && (
+            <div className="kt-total-row kt-total-row--incoming">
+              <span className="kt-total-label">In arrivo</span>
+              <span className="kt-total-list">
+                {dishTotals.incoming.map((d, i) => (
+                  <span key={d.name} className="kt-total-item">
+                    {i > 0 && <span className="kt-total-sep"> · </span>}
+                    <strong>{d.qty}×</strong> {d.name}
+                  </span>
+                ))}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

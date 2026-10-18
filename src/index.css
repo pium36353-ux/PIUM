@@ -3151,6 +3151,178 @@ body {
    ============================================================ */
 
 /* ============================================================
+   Servizio ristorante: avvisi globali, totali cucina, blocco postazione
+   (verticale ristorante_bar)
+   ============================================================ */
+
+/* Avviso di servizio: sopra tutto, leggibile da lontano, si spegne da
+   solo. Colori FISSI come le card tavolo — deve reggere in tema chiaro e
+   scuro, e non è l'unico segnale (arrivano anche suono e vibrazione). */
+.kio-alert {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  max-width: calc(100vw - 32px);
+  padding: 12px 22px;
+  border-radius: 99px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  animation: kio-alert-in 0.2s ease-out;
+}
+.kio-alert--pronto { background: #D1FAE5; color: #065F46; }
+.kio-alert--sala   { background: #D9E4F5; color: #1E3A66; }
+
+@keyframes kio-alert-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Totali per piatto in cima alla vista cucina. */
+.kt-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.kt-total-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* "In arrivo" resta in grigio: è informazione di contorno, non lavoro da
+   fare adesso. */
+.kt-total-row--incoming { opacity: 0.6; }
+
+.kt-total-label {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.kt-total-list {
+  font-size: 14px;
+  color: var(--text-h);
+  line-height: 1.5;
+}
+
+.kt-total-empty {
+  font-size: 13px;
+  color: var(--text);
+  font-style: italic;
+}
+
+.kt-total-sep { color: var(--border); }
+
+/* In modalità solo schermo i totali crescono insieme al resto. */
+.kt-view--tv .kt-total-label { font-size: 15px; }
+.kt-view--tv .kt-total-list  { font-size: 26px; line-height: 1.4; }
+.kt-view--tv .kt-total-empty { font-size: 20px; }
+.kt-view--tv .kt-totals      { padding: 16px 18px; }
+
+/* Lucchetto area di lavoro. */
+.kio-lock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  touch-action: manipulation;
+
+  &:hover { border-color: var(--accent); color: var(--accent); }
+}
+
+.kio-lock-btn--locked {
+  background: #FEF3C7;
+  border-color: #f59e0b;
+  color: #78350F;
+}
+
+/* Riscontro visivo della pressione lunga: chi tiene premuto deve capire
+   che sta succedendo qualcosa, altrimenti rilascia troppo presto. */
+.kio-lock-btn--pressing {
+  background: #f59e0b;
+  color: #fff;
+  border-color: #f59e0b;
+}
+
+.kio-lock-text { white-space: nowrap; }
+
+/* Tastierino del codice di sblocco: tasti grandi, pensati per un dito su
+   un tablet. */
+.kio-pin-modal { max-width: 320px; }
+
+.kio-pin-dots {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin: 8px 0 14px;
+}
+
+.kio-pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+}
+.kio-pin-dot--filled {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.kio-pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.kio-pin-key {
+  padding: 16px 0;
+  font-size: 20px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:hover { background: var(--code-bg); }
+}
+.kio-pin-key--wide { grid-column: span 2; }
+
+/* Da bloccato il contenuto prende tutta la pagina: la barra laterale e la
+   topbar non sono renderizzate, qui si recupera lo spazio che occupavano. */
+.db-shell--kiosk .db-main    { margin-left: 0; width: 100%; }
+.db-shell--kiosk .db-content { padding-top: 16px; }
+
+/* ============================================================
+   End Servizio ristorante
+   ============================================================ */
+
+/* ============================================================
    Social component
    ============================================================ */
 
