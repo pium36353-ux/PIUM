@@ -178,6 +178,39 @@ export default function Menu({ business, onBusinessPatch }) {
   const [confirmationsModalOpen, setConfirmationsModalOpen] = useState(false)
   const [resolvingItemId,        setResolvingItemId]        = useState(null)
 
+  /* ── Codice di blocco postazione ──
+     Sta qui, nella gestione menu, perché è dove vivono già le preferenze
+     di servizio del locale (es. "invia sempre tutto subito") e perché
+     questa sezione è già riservata al verticale ristorante_bar; le
+     impostazioni dell'account (/settings) sono condivise con tutti i
+     verticali e non sarebbero il posto giusto. */
+  const [kioskModalOpen, setKioskModalOpen] = useState(false)
+  const [pinDraft,       setPinDraft]       = useState('')
+  const [pinSaving,      setPinSaving]      = useState(false)
+  const [pinError,       setPinError]       = useState(null)
+
+  const openKioskModal = () => {
+    setPinDraft(business.kiosk_pin ?? '')
+    setPinError(null)
+    setKioskModalOpen(true)
+  }
+
+  const saveKioskPin = async (nextPin) => {
+    setPinSaving(true)
+    setPinError(null)
+    const { error } = await supabase.from('businesses').update({ kiosk_pin: nextPin }).eq('id', business.id)
+    setPinSaving(false)
+    if (error) {
+      console.error('[saveKioskPin]', error)
+      // Il caso tipico è la colonna non ancora creata: meglio dirlo che
+      // lasciare un salvataggio che sembra riuscito.
+      setPinError('Salvataggio non riuscito. Se la migration del codice di blocco non è stata applicata, la colonna non esiste ancora.')
+      return
+    }
+    onBusinessPatch?.({ kiosk_pin: nextPin })
+    setKioskModalOpen(false)
+  }
+
   /* ── Blocco E: scorte esaurite ──
      Stato delle giacenze dalla libreria condivisa (stock.js), la stessa
      usata da Scorte.jsx: la stima mostrata qui e quella della sezione
@@ -575,6 +608,7 @@ export default function Menu({ business, onBusinessPatch }) {
               <span className="mn-badge-count">{flaggedItems.length + outOfStockItems.length}</span>
             )}
           </button>
+          <button className="sv-btn-cancel" onClick={openKioskModal}>Blocco schermo</button>
           <button className="sv-btn-cancel" onClick={() => setStationsModalOpen(true)}>Postazioni</button>
           <button className="sv-btn-cancel" onClick={() => setCoursesModalOpen(true)}>Portate</button>
           <button className="sv-btn-cancel" onClick={() => setCategoriesModalOpen(true)}>Gestisci categorie</button>
@@ -799,6 +833,76 @@ export default function Menu({ business, onBusinessPatch }) {
 
             <div className="sv-modal-footer">
               <button className="sv-btn-cancel" onClick={() => setCoursesModalOpen(false)}>Chiudi</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal codice di blocco postazione */}
+      {kioskModalOpen && (
+        <div className="sv-modal-overlay" onClick={(e) => e.target === e.currentTarget && setKioskModalOpen(false)}>
+          <div className="sv-modal">
+            <div className="sv-modal-header">
+              <h2 className="sv-modal-title">Blocco schermo</h2>
+              <button className="sv-modal-close" onClick={() => setKioskModalOpen(false)} aria-label="Chiudi"><IconX /></button>
+            </div>
+
+            <div className="sv-modal-body">
+              <p className="mn-empty-hint">
+                Dalle sezioni Tavoli e Cucina il pulsante con il lucchetto blocca il dispositivo
+                sull'area di lavoro: menu e altre sezioni spariscono, e il blocco resta anche dopo
+                un aggiornamento della pagina. Si sblocca tenendo premuto il lucchetto.
+              </p>
+              <p className="mn-empty-hint" style={{ marginTop: 6 }}>
+                Un codice di 4 cifre aggiunge una conferma allo sblocco. <strong>Non è una
+                protezione di sicurezza</strong>: serve solo a evitare uscite involontarie durante
+                il servizio.
+              </p>
+
+              <div className="sv-field sv-field--half" style={{ marginTop: 12 }}>
+                <label className="sv-label" htmlFor="mn-kiosk-pin">
+                  Codice <span className="sv-optional">(4 cifre, facoltativo)</span>
+                </label>
+                <input
+                  id="mn-kiosk-pin"
+                  className={`sv-input ${pinError ? 'sv-input--error' : ''}`}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={4}
+                  value={pinDraft}
+                  onChange={(e) => { setPinDraft(e.target.value.replace(/\D/g, '').slice(0, 4)); setPinError(null) }}
+                  placeholder="es. 1234"
+                />
+                {pinError && <p className="sv-field-error">{pinError}</p>}
+                <p className="sv-field-hint">
+                  {business.kiosk_pin
+                    ? 'Un codice è impostato: lo sblocco lo richiede.'
+                    : 'Nessun codice impostato: lo sblocco avviene con la sola pressione lunga.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="sv-modal-footer">
+              {business.kiosk_pin && (
+                <button
+                  className="tv-btn-deactivate"
+                  style={{ marginRight: 'auto' }}
+                  disabled={pinSaving}
+                  onClick={() => saveKioskPin(null)}
+                >
+                  Rimuovi codice
+                </button>
+              )}
+              <button className="sv-btn-cancel" onClick={() => setKioskModalOpen(false)}>Annulla</button>
+              <button
+                className="sv-btn-save"
+                disabled={pinSaving || pinDraft.length !== 4}
+                onClick={() => saveKioskPin(pinDraft)}
+              >
+                {pinSaving ? <MnSpinner small /> : null}
+                {pinSaving ? 'Salvataggio…' : 'Salva codice'}
+              </button>
             </div>
           </div>
         </div>

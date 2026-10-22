@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
@@ -27,6 +27,14 @@ const Tavoli = lazy(() => import('../components/dashboard/Tavoli'))
 const Menu   = lazy(() => import('../components/dashboard/Menu'))
 const Cucina = lazy(() => import('../components/dashboard/Cucina'))
 const Scorte = lazy(() => import('../components/dashboard/Scorte'))
+
+// Avvisi di servizio e blocco postazione: codice del verticale
+// 'ristorante_bar', importato staticamente perché serve agli effect di
+// Dashboard (non è un componente da montare dietro un gate). Sono tre
+// moduli minuscoli e tutto ciò che fanno è dentro un controllo su
+// business.vertical — nessun business non-ristorante li esegue mai.
+import { subscribeTableOrderItems, subscribeCallSala, notifyReady } from '../lib/kitchenRealtime'
+import { KIOSK_AREAS, readKioskLock, writeKioskLock, exitFullscreen } from '../lib/kiosk'
 
 // Base sempre visibile, indipendente dal verticale. La voce 'tavoli' viene
 // aggiunta SOLO per business.vertical === 'ristorante_bar' — vedi NAV
@@ -64,6 +72,25 @@ export default function Dashboard() {
   const [pendingActivation,  setPendingActivation]  = useState(false)
   const [loadError,          setLoadError]          = useState(false)
   const [adminMessages,      setAdminMessages]      = useState([])
+
+  /* ── Verticale 'ristorante_bar': avvisi di servizio e blocco postazione.
+     Tutto ciò che segue è inerte per qualunque altro verticale — ogni
+     effect esce subito se business.vertical non è esattamente
+     'ristorante_bar', e nessuna di queste variabili entra nella logica di
+     navigazione condivisa (navigate_section, agendaInitialView). ── */
+  const isRestaurant = business?.vertical === 'ristorante_bar'
+
+  // Avviso di servizio ricevuto a livello di dashboard, così arriva in
+  // qualunque sezione e non solo dentro la schermata di un ordine.
+  const [serviceAlert, setServiceAlert] = useState(null) // { kind: 'pronto'|'sala', at }
+
+  // La sezione corrente serve dentro la callback della sottoscrizione, che
+  // deve restare stabile: tenerla in un ref evita di disiscriversi e
+  // riscriversi a ogni cambio di sezione.
+  const sectionRef = useRef(section)
+  useEffect(() => { sectionRef.current = section }, [section])
+
+  const [kioskLock, setKioskLock] = useState(null) // 'sala' | 'cucina' | null
 
   // Voce 'tavoli' presente in nav SOLO se business.vertical === 'ristorante_bar'
   // (confronto case-sensitive, valore esatto) — per qualunque altro valore (incluso
@@ -283,10 +310,88 @@ export default function Dashboard() {
     }
   }, [business?.id]) // primitivo stabile — evita reconnessioni su ogni refresh dell'oggetto business
 
+  /* ── Avvisi di servizio (solo 'ristorante_bar') ──
+     Prima questi ascolti vivevano dentro Ordine.jsx, quindi l'avviso
+     arrivava solo a chi era già dentro la schermata di un singolo ordine.
+     Qui arrivano in qualunque sezione.
+     ECCEZIONE: un dispositivo che sta nella vista Cucina non riceve gli
+     avvisi destinati alla sala — né "piatto pronto" (è la cucina stessa
+     ad averlo segnato) né "chiama sala". Il controllo è su sectionRef, non
+     su section, per non ricreare la sottoscrizione a ogni navigazione.
+     La sottoscrizione su table_order_items non ha un filtro business_id
+     perché quella tabella non ha la colonna: si affida alle RLS, come già
+     documentato in src/lib/kitchenRealtime.js. ── */
+  useEffect(() => {
+    if (!isRestaurant || !business) return
+    const businessId = business.id
+    const raise = (kind) => {
+      if (sectionRef.current === 'cucina') return
+      notifyReady()
+      setServiceAlert({ kind, at: Date.now() })
+    }
+    const unsubItems = subscribeTableOrderItems(`dashboard-service-${businessId}`, (payload) => {
+      if (payload.new?.kitchen_status !== 'pronto') return
+      raise('pronto')
+    })
+    const unsubCall = subscribeCallSala(businessId, () => raise('sala'))
+    return () => { unsubItems(); unsubCall() }
+  }, [isRestaurant, business])
+
+  // Il banner si spegne da solo: è un avviso, non un messaggio da chiudere
+  // a mano durante il servizio.
+  useEffect(() => {
+    if (!serviceAlert) return
+    const t = setTimeout(() => setServiceAlert(null), 6000)
+    return () => clearTimeout(t)
+  }, [serviceAlert])
+
+  /* ── Blocco postazione (solo 'ristorante_bar') ── */
+  useEffect(() => {
+    if (!isRestaurant || !business) return
+    setKioskLock(readKioskLock(business.id))
+  }, [isRestaurant, business])
+
+  // Da bloccato, la sezione resta dentro l'area: vale anche dopo un
+  // aggiornamento della pagina (il blocco è salvato sul dispositivo) e
+  // anche se un deep-link ?s= puntasse altrove.
+  useEffect(() => {
+    if (!kioskLock) return
+    const allowed = KIOSK_AREAS[kioskLock]?.sections ?? []
+    if (allowed.length > 0 && !allowed.includes(section)) setSection(allowed[0])
+  }, [kioskLock, section])
+
+  const handleKioskLockChange = (area) => {
+    if (!business) return
+    setKioskLock(area)
+    writeKioskLock(business.id, area)
+    if (area) setSideOpen(false)
+    else exitFullscreen()
+  }
+
   const navigate_section = (id, opts = {}) => {
     if (id === 'agenda') setAgendaInitialView(opts.view ?? 'day')
     setSection(id)
     setSideOpen(false)
+    // Solo per i ristoranti: la sezione finisce nell'indirizzo, così un
+    // aggiornamento della pagina riporta esattamente dove si era (il
+    // ripristino da ?s= esiste già più sopra e vale per tutti). Per ogni
+    // altro verticale questa riga non viene eseguita e la navigazione
+    // resta identica a prima, compresa quella dell'Agenda.
+    if (isRestaurant) {
+      const params = new URLSearchParams(window.location.search)
+      params.set('s', id)
+      // I parametri di una sezione non devono sopravvivere al passaggio a
+      // un'altra: un ordine aperto o una data in Tavoli non significano
+      // niente in Cucina. Le sezioni non li riscrivono più "in ritardo"
+      // perché scrivono solo quando sono loro la sezione attiva
+      // nell'indirizzo (vedi src/lib/sectionParams.js).
+      for (const k of ['o', 'd', 't', 'st']) params.delete(k)
+      // Qui NON si usa replace: il cambio di sezione è l'unica cosa che
+      // deve creare una voce di cronologia, così "indietro" riporta alla
+      // sezione precedente. Le modifiche dentro una sezione (data, turno,
+      // postazione, ordine) sostituiscono invece la voce corrente.
+      navigate({ search: `?${params.toString()}` })
+    }
   }
 
   if (isBlocked) {
@@ -300,14 +405,23 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="db-shell">
+    <div className={`db-shell ${kioskLock ? 'db-shell--kiosk' : ''}`}>
+
+      {/* Avviso di servizio, visibile in qualunque sezione (solo
+          'ristorante_bar'): sopra tutto, si spegne da solo. */}
+      {serviceAlert && (
+        <div className={`kio-alert ${serviceAlert.kind === 'sala' ? 'kio-alert--sala' : 'kio-alert--pronto'}`} role="status">
+          {serviceAlert.kind === 'sala' ? 'La cucina chiama in sala' : 'Un piatto è pronto'}
+        </div>
+      )}
 
       {/* Mobile overlay */}
-      {sideOpen && (
+      {sideOpen && !kioskLock && (
         <div className="db-overlay" onClick={() => setSideOpen(false)} />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — nascosta quando il dispositivo è bloccato su un'area */}
+      {!kioskLock && (
       <aside className={`db-sidebar ${sideOpen ? 'db-sidebar--open' : ''}`}>
         <div className="db-sidebar-top">
           <div className="db-brand">
@@ -368,10 +482,13 @@ export default function Dashboard() {
           </div>
         </div>
       </aside>
+      )}
 
       {/* Main */}
       <div className="db-main">
-        {/* Topbar (mobile) */}
+        {/* Topbar (mobile) — da bloccato niente pulsante menu: l'unica via
+            d'uscita è la pressione lunga sul lucchetto dentro la sezione */}
+        {!kioskLock && (
         <header className="db-topbar">
           <button className="db-menu-btn" onClick={() => setSideOpen(true)} aria-label="Apri menu">
             <IconMenu />
@@ -381,8 +498,10 @@ export default function Dashboard() {
           </span>
           <div style={{ width: 36 }} />
         </header>
+        )}
 
-        {/* Page title (desktop) */}
+        {/* Page title (desktop) — da bloccato niente ritorno a Panoramica */}
+        {!kioskLock && (
         <div className="db-page-header">
           {section !== 'panoramica' && (
             <button className="db-back-btn" onClick={() => navigate_section('panoramica')}>
@@ -393,6 +512,7 @@ export default function Dashboard() {
             {NAV.find(n => n.id === section)?.label}
           </h1>
         </div>
+        )}
 
         <main className="db-content">
           {adminMessages.length > 0 && (
@@ -476,7 +596,7 @@ export default function Dashboard() {
               Pagamento completato! Il tuo piano è ora attivo. Grazie per aver scelto PIUM.
             </div>
           )}
-          {section !== 'panoramica' && (
+          {section !== 'panoramica' && !kioskLock && (
             <button className="db-back-btn db-back-btn--mobile" onClick={() => navigate_section('panoramica')}>
               <IconChevronLeft /> Panoramica
             </button>
@@ -484,7 +604,7 @@ export default function Dashboard() {
           {Section && (
             <ErrorBoundary key={section}>
               <Suspense fallback={<div className="sv-loading">Caricamento…</div>}>
-                <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} onBusinessPatch={patchBusiness} />
+                <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} onBusinessPatch={patchBusiness} kioskLock={kioskLock} onKioskLockChange={handleKioskLockChange} />
               </Suspense>
             </ErrorBoundary>
           )}

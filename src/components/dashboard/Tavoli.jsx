@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useSectionParams } from '../../lib/sectionParams'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { normalizePhone } from '../../lib/phone'
-import { subscribeTableOrderItems, subscribeCallSala, notifyReady } from '../../lib/kitchenRealtime'
+import { subscribeTableOrderItems } from '../../lib/kitchenRealtime'
+import KioskLockButton from './KioskLockButton'
 import Ordine from './Ordine'
 
 const EMPTY_TABLE_FORM = { name: '', capacity: '' }
@@ -37,7 +39,7 @@ function turnLabel(t) {
   return t.name?.trim() || `Turno ${t.slot_number}`
 }
 
-export default function Tavoli({ business }) {
+export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
   const [tables, setTables]       = useState([])
   const [loading, setLoading]     = useState(true)
   const [modal, setModal]         = useState(null)   // null | 'add' | 'edit' (tavolo)
@@ -61,15 +63,44 @@ export default function Tavoli({ business }) {
   const BULK_DEFAULT_CAPACITY = 4
   const BULK_MAX = 50
 
+  /* ── Stato nell'indirizzo ──
+     Data, turno e ordine aperto vivono anche nei parametri dell'URL, così
+     un aggiornamento della pagina riporta esattamente dove si era (serve
+     ai tablet di sala, che restano aperti per tutto il servizio). I
+     parametri si leggono una volta sola all'avvio come valore iniziale e
+     poi si riscrivono quando cambiano: la fonte di verità resta lo stato
+     React, l'URL è il suo riflesso. Tutti gli altri parametri già presenti
+     (in particolare ?s=) vengono preservati a ogni scrittura. */
+  const { searchParams, isActiveSection, patchParams } = useSectionParams('tavoli')
+  // Fotografia dei parametri al primo render, tenuta in uno stato e non in
+  // un ref: serve leggerla durante il render (negli stati iniziali qui
+  // sotto) e un ref non va letto in quella fase.
+  const [initialParams] = useState(() => ({
+    d: searchParams.get('d'),
+    t: searchParams.get('t'),
+    o: searchParams.get('o'),
+  }))
+
   // Data in vista — di proposito non solo "oggi": il titolare deve poter
   // navigare avanti (es. per prendere una prenotazione al 15 del mese).
-  const [selectedDate, setSelectedDate] = useState(() => new Date())
+  // Se l'indirizzo porta una data valida, si parte da quella.
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const fromUrl = initialParams.d
+    if (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl)) {
+      const parsed = parseDate(fromUrl)
+      if (!isNaN(parsed.getTime())) return parsed
+    }
+    return new Date()
+  })
 
   // Turni del business (slot configurabili, es. "Pranzo"/"Cena") e turno
   // attualmente selezionato nello switch — vedi nota su reservationsByTable
   // più sotto sul perché lo stato libero/occupato dipende anche da questo.
   const [turns,          setTurns]          = useState([])
-  const [selectedTurnId, setSelectedTurnId] = useState(null)
+  // Dall'indirizzo se c'è: l'effect più sotto che sceglie il primo turno
+  // attivo lo rispetta già, perché scatta solo se il turno corrente non è
+  // più tra quelli attivi — un turno valido letto dall'URL resta.
+  const [selectedTurnId, setSelectedTurnId] = useState(() => initialParams.t ?? null)
   const [turnsModalOpen, setTurnsModalOpen] = useState(false)
   const [confirmDeactivateTurnId, setConfirmDeactivateTurnId] = useState(null)
   const [busyTurnId,     setBusyTurnId]     = useState(null)
@@ -97,6 +128,11 @@ export default function Tavoli({ business }) {
   const [openOrders, setOpenOrders] = useState([])
   const [activeOrder,      setActiveOrder]      = useState(null) // riga table_orders in visualizzazione, o null
   const [activeOrderTable, setActiveOrderTable] = useState(null)
+  // Finché il ripristino dell'ordine dall'indirizzo non è stato tentato,
+  // non si scrive nulla su o: altrimenti il primo render (activeOrder
+  // ancora null) cancellerebbe il parametro prima di poterlo leggere.
+  const [orderRestoreDone, setOrderRestoreDone] = useState(() => !initialParams.o)
+  const orderRestoreStartedRef = useRef(false)
   const [orderActionBusyId, setOrderActionBusyId] = useState(null) // table.id con un'azione apri-ordine in corso
 
   const load = useCallback(async (signal = null) => {
@@ -208,14 +244,18 @@ export default function Tavoli({ business }) {
       .then(({ error }) => { if (error) console.error('[autoCloseForgottenOrders]', error) })
   }, [business, selectedDate, selectedTurnId])
 
-  // Blocco D — avviso "pronto" e "Chiama sala": ogni evento su una voce
-  // (arrivato da un altro dispositivo o dalla cucina) è mappato al suo
-  // tavolo tramite l'order_id già noto in openOrders (table_order_items non
-  // ha table_id diretto) — se l'ordine non è tra quelli attualmente in
-  // vista (data/turno diversi) non c'è nulla da evidenziare qui, non è un
-  // errore. Nessun ricaricamento di openOrders da qui: lo stato
-  // libero/prenotato/occupato non dipende dal contenuto delle voci, solo
-  // dall'esistenza dell'ordine aperto (vedi getTableStatus).
+  // Evidenza visiva sulla card del tavolo quando una sua voce diventa
+  // "pronto": ogni evento è mappato al tavolo tramite l'order_id già noto
+  // in openOrders (table_order_items non ha table_id diretto) — se
+  // l'ordine non è tra quelli in vista (data/turno diversi) non c'è nulla
+  // da evidenziare qui, non è un errore. Nessun ricaricamento di
+  // openOrders: lo stato libero/prenotato/occupato non dipende dal
+  // contenuto delle voci, solo dall'esistenza dell'ordine aperto.
+  //
+  // Suono, vibrazione e banner NON stanno più qui: sono saliti a livello
+  // di Dashboard.jsx, così l'avviso arriva in qualunque sezione e non
+  // viene emesso due volte dalla stessa pagina. Qui resta solo
+  // l'evidenza locale, che ha senso soltanto su questa griglia.
   const [readyHighlightIds, setReadyHighlightIds] = useState(() => new Set())
   useEffect(() => {
     if (!business) return
@@ -223,7 +263,6 @@ export default function Tavoli({ business }) {
       if (payload.new?.kitchen_status !== 'pronto') return
       const relatedOrder = openOrders.find((o) => o.id === payload.new.order_id)
       if (!relatedOrder) return
-      notifyReady()
       const tableId = relatedOrder.table_id
       setReadyHighlightIds((prev) => new Set(prev).add(tableId))
       setTimeout(() => setReadyHighlightIds((prev) => { const n = new Set(prev); n.delete(tableId); return n }), 6000)
@@ -231,16 +270,56 @@ export default function Tavoli({ business }) {
     return unsubscribe
   }, [business, openOrders])
 
-  const [salaCallBanner, setSalaCallBanner] = useState(false)
+  /* ── Sincronizzazione con l'indirizzo ──
+     `isActiveSection` è sia guardia sia dipendenza: finché l'indirizzo
+     porta ancora la sezione precedente (questo componente può essere già
+     montato, vedi la nota in sectionParams.js) non si scrive niente, e
+     appena l'indirizzo arriva su 'tavoli' questi effect si ri-eseguono e
+     scrivono i parametri. Un solo clic basta. ── */
   useEffect(() => {
-    if (!business) return
-    const unsubscribe = subscribeCallSala(business.id, () => {
-      notifyReady()
-      setSalaCallBanner(true)
-      setTimeout(() => setSalaCallBanner(false), 6000)
-    })
-    return unsubscribe
-  }, [business])
+    if (!isActiveSection) return
+    patchParams({ d: formatDate(selectedDate) })
+  }, [isActiveSection, selectedDate, patchParams])
+
+  useEffect(() => {
+    if (!isActiveSection || !selectedTurnId) return
+    patchParams({ t: selectedTurnId })
+  }, [isActiveSection, selectedTurnId, patchParams])
+
+  // Solo l'id dell'ordine: il tavolo si ricava da table_id della riga
+  // ordine, non serve un secondo parametro da tenere in sincrono.
+  useEffect(() => {
+    if (!isActiveSection || !orderRestoreDone) return
+    patchParams({ o: activeOrder?.id ?? null })
+  }, [isActiveSection, orderRestoreDone, activeOrder, patchParams])
+
+  // Ripristino dell'ordine aperto dopo un aggiornamento della pagina.
+  // Aspetta che i tavoli siano caricati, perché la schermata ordine ha
+  // bisogno della riga del tavolo (nome, capienza). Se l'ordine nel
+  // frattempo è stato chiuso (anche dalla chiusura automatica) o non
+  // esiste, si torna alla griglia senza errori: il parametro viene
+  // semplicemente ripulito.
+  useEffect(() => {
+    if (orderRestoreDone || orderRestoreStartedRef.current) return
+    const orderId = initialParams.o
+    if (!orderId || !business || tables.length === 0) return
+    orderRestoreStartedRef.current = true
+    supabase
+      .from('table_orders')
+      .select('*')
+      .eq('id', orderId)
+      .eq('business_id', business.id)
+      .eq('status', 'aperto')
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) console.error('[restoreOrderFromUrl]', error)
+        if (data) {
+          setActiveOrderTable(tables.find((t) => t.id === data.table_id) ?? null)
+          setActiveOrder(data)
+        }
+        setOrderRestoreDone(true)
+      })
+  }, [orderRestoreDone, business, tables, initialParams])
 
   useEffect(() => {
     const signal = { cancelled: false }
@@ -707,6 +786,8 @@ export default function Tavoli({ business }) {
           turns={turns}
           onClose={closeOrderView}
           onOrderClosed={handleOrderClosed}
+          kioskLock={kioskLock}
+          onKioskLockChange={onKioskLockChange}
         />
       </div>
     )
@@ -715,8 +796,6 @@ export default function Tavoli({ business }) {
   return (
     <div className="db-section">
 
-      {salaCallBanner && <div className="ord-call-banner">La cucina chiama in sala</div>}
-
       {/* Toolbar */}
       <div className="db-section-toolbar">
         <p className="db-section-desc">
@@ -724,9 +803,16 @@ export default function Tavoli({ business }) {
             ? `${tables.length} tavol${tables.length !== 1 ? 'i' : 'o'} — libero, prenotato o occupato calcolato al volo per data e turno.`
             : 'Aggiungi i tavoli della tua sala.'}
         </p>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="sv-btn-cancel" onClick={openBulkAdd}>+ Aggiungi N tavoli</button>
-          <button className="db-btn-primary" onClick={openAddTable}>+ Aggiungi tavolo</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <KioskLockButton
+            area="sala"
+            lockedArea={kioskLock}
+            pin={business.kiosk_pin}
+            onLock={onKioskLockChange}
+            onUnlock={() => onKioskLockChange(null)}
+          />
+          {!kioskLock && <button className="sv-btn-cancel" onClick={openBulkAdd}>+ Aggiungi N tavoli</button>}
+          {!kioskLock && <button className="db-btn-primary" onClick={openAddTable}>+ Aggiungi tavolo</button>}
         </div>
       </div>
 

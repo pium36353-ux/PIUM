@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { groupItemsByCourse } from '../../lib/kitchenRouting'
-import { subscribeTableOrderItems, subscribeCallSala, notifyReady } from '../../lib/kitchenRealtime'
+import { subscribeTableOrderItems } from '../../lib/kitchenRealtime'
 import { loadCostBook, resolveCostSnapshot } from '../../lib/stock'
+import KioskLockButton from './KioskLockButton'
 
 function turnLabel(t) {
   if (!t) return ''
@@ -39,7 +40,7 @@ function stripEmbeds(row) {
 // vertical='ristorante_bar': non ha un proprio controllo perché è importata
 // staticamente solo da Tavoli.jsx, che è già React.lazy() e già gated in
 // Dashboard.jsx.
-export default function Ordine({ business, order, table, turns, onClose, onOrderClosed }) {
+export default function Ordine({ business, order, table, turns, onClose, onOrderClosed, kioskLock, onKioskLockChange }) {
   const [items,        setItems]        = useState([])
   const [itemsLoading, setItemsLoading] = useState(true)
 
@@ -241,8 +242,10 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
       (payload) => {
         const orderId = payload.new?.order_id ?? payload.old?.order_id
         if (orderId !== order.id) return
+        // Solo l'evidenza visiva locale: suono, vibrazione e banner sono
+        // saliti a livello di Dashboard.jsx, così l'avviso arriva in
+        // qualunque sezione e non viene emesso due volte da questa pagina.
         if (payload.new?.kitchen_status === 'pronto') {
-          notifyReady()
           setReadyPulse(true)
           setTimeout(() => setReadyPulse(false), 3000)
         }
@@ -260,18 +263,6 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
     )
     return unsubscribe
   }, [order.id, loadItems])
-
-  // "Chiama sala" dalla vista cucina — stesso avviso ovunque, nessun dato da
-  // ricaricare, solo un banner transitorio + avviso audio/vibrazione.
-  const [salaCallBanner, setSalaCallBanner] = useState(false)
-  useEffect(() => {
-    const unsubscribe = subscribeCallSala(business.id, () => {
-      notifyReady()
-      setSalaCallBanner(true)
-      setTimeout(() => setSalaCallBanner(false), 6000)
-    })
-    return unsubscribe
-  }, [business.id])
 
   const composingItems = useMemo(() => items.filter(i => !i.sent_at), [items])
   const sentItems       = useMemo(() => items.filter(i => i.sent_at), [items])
@@ -503,6 +494,13 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
             Chiudi tavolo
           </button>
         )}
+        <KioskLockButton
+          area="sala"
+          lockedArea={kioskLock}
+          pin={business.kiosk_pin}
+          onLock={onKioskLockChange}
+          onUnlock={() => onKioskLockChange(null)}
+        />
       </div>
 
       {isOffline && (
@@ -515,8 +513,6 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
           <IconOffline /> Aggiornamenti in tempo reale interrotti — riconnessione in corso, lo stato si aggiorna da solo appena torna attiva.
         </div>
       )}
-      {salaCallBanner && <div className="ord-call-banner">La cucina chiama in sala</div>}
-
       <div className="ord-search-row">
         <input
           className="sv-input"
