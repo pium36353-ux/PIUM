@@ -371,6 +371,18 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
       {!interactive && (
         <div className="kt-tv-header">
           <span className="kt-tv-station-label">{currentStation.name}</span>
+          {/* Da bloccato il lucchetto serve anche qui, con la sua
+              indicazione: è l'unica via d'uscita, e in modalità TV non
+              esiste nessun altro comando che la riveli. */}
+          {kioskLock && (
+            <KioskLockButton
+              area="cucina"
+              lockedArea={kioskLock}
+              pin={business.kiosk_pin}
+              onLock={onKioskLockChange}
+              onUnlock={() => onKioskLockChange(null)}
+            />
+          )}
           <button className="kt-tv-exit" onClick={() => chooseMode('interattiva')}>
             ↩ Modalità interattiva
           </button>

@@ -80,23 +80,29 @@ export default function KioskLockButton({ area, lockedArea, pin, onLock, onUnloc
 
   return (
     <>
-      <button
-        type="button"
-        className={`kio-lock-btn ${isLocked ? 'kio-lock-btn--locked' : ''} ${pressing ? 'kio-lock-btn--pressing' : ''}`}
-        title={label}
-        aria-label={label}
-        aria-pressed={isLocked}
-        onClick={handleClick}
-        onPointerDown={handlePointerDown}
-        onPointerUp={cancelPress}
-        onPointerLeave={cancelPress}
-        onPointerCancel={cancelPress}
-      >
-        {isLocked ? <IconLockClosed /> : <IconLockOpen />}
-        <span className="kio-lock-text">
-          {isLocked ? KIOSK_AREAS[lockedArea]?.label ?? 'Bloccato' : 'Blocca'}
-        </span>
-      </button>
+      <span className="kio-lock-wrap">
+        <button
+          type="button"
+          className={`kio-lock-btn ${isLocked ? 'kio-lock-btn--locked' : ''} ${pressing ? 'kio-lock-btn--pressing' : ''}`}
+          title={label}
+          aria-label={label}
+          aria-pressed={isLocked}
+          onClick={handleClick}
+          onPointerDown={handlePointerDown}
+          onPointerUp={cancelPress}
+          onPointerLeave={cancelPress}
+          onPointerCancel={cancelPress}
+        >
+          {isLocked ? <IconLockClosed /> : <IconLockOpen />}
+          <span className="kio-lock-text">
+            {isLocked ? KIOSK_AREAS[lockedArea]?.label ?? 'Bloccato' : 'Blocca'}
+          </span>
+        </button>
+        {/* Sempre visibile da bloccato, in ogni sezione e anche in
+            modalità solo schermo: senza questa riga nessuno capisce come
+            uscire, perché un tocco breve di proposito non fa niente. */}
+        {isLocked && <span className="kio-lock-hint">Tieni premuto per sbloccare</span>}
+      </span>
 
       {pinOpen && (
         <div className="sv-modal-overlay" onClick={(e) => e.target === e.currentTarget && setPinOpen(false)}>

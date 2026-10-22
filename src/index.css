@@ -3269,6 +3269,26 @@ body {
 
 .kio-lock-text { white-space: nowrap; }
 
+/* Pulsante + indicazione di sblocco restano una cosa sola: il lucchetto
+   può finire in barre diverse (Tavoli, Ordine, Cucina, intestazione TV) e
+   la scritta deve seguirlo sempre. */
+.kio-lock-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.kio-lock-hint {
+  font-size: 11.5px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* In modalità solo schermo resta piccola — deve informare chi si avvicina
+   al tablet, non competere con i totali e le comande lette da lontano. */
+.kt-view--tv .kio-lock-hint { font-size: 14px; }
+
 /* Tastierino del codice di sblocco: tasti grandi, pensati per un dito su
    un tablet. */
 .kio-pin-modal { max-width: 320px; }
