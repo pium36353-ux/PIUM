@@ -18,6 +18,15 @@ function courseLabel(c) {
   return c.name?.trim() || `Portata ${c.slot_number}`
 }
 
+// Livelli d'avviso di una postazione. L'ordine qui è quello mostrato nei
+// tre pulsanti, dal più forte al più debole; i valori corrispondono al
+// CHECK su kitchen_stations.alert_level.
+const ALERT_LEVELS = [
+  { value: 'forte',   label: 'Forte',   hint: 'Banner, suono e vibrazione sui dispositivi di sala.' },
+  { value: 'leggero', label: 'Leggero', hint: 'Niente suono: compare in Notifiche sala e sulla card del tavolo.' },
+  { value: 'nessuno', label: 'Nessuno', hint: 'Nessun avviso: compare solo nell\'elenco Notifiche sala.' },
+]
+
 export default function Menu({ business, onBusinessPatch }) {
   const [categories,        setCategories]        = useState([])
   const [categoriesLoading, setCategoriesLoading]  = useState(true)
@@ -398,6 +407,20 @@ export default function Menu({ business, onBusinessPatch }) {
     const { error } = await supabase.from('kitchen_stations').update({ name }).eq('id', s.id)
     if (error) { console.error('[handleRenameStation]', error); return }
     setStations((prev) => prev.map((x) => x.id === s.id ? { ...x, name } : x))
+  }
+
+  // Impostazioni di avviso della postazione (livello, etichetta per le
+  // notifiche, servita dalla sala). Un solo scrittore per tutte e tre:
+  // sono campi indipendenti della stessa riga e non ha senso un handler
+  // per ciascuno. Stato locale aggiornato subito, così l'interruttore non
+  // "torna indietro" aspettando la risposta.
+  const handleStationSetting = async (s, patch) => {
+    setStations((prev) => prev.map((x) => x.id === s.id ? { ...x, ...patch } : x))
+    const { error } = await supabase.from('kitchen_stations').update(patch).eq('id', s.id)
+    if (error) {
+      console.error('[handleStationSetting]', error)
+      setStations((prev) => prev.map((x) => x.id === s.id ? { ...x, ...s } : x))
+    }
   }
 
   const handleAddStation = async () => {
@@ -931,6 +954,65 @@ export default function Menu({ business, onBusinessPatch }) {
                       />
                       {stationBlockedId === s.id && (
                         <p className="sv-field-error">Sposta prima le categorie assegnate su un'altra postazione.</p>
+                      )}
+
+                      {s.is_active && (
+                        <div className="mn-station-settings">
+                          <div className="mn-station-setting">
+                            <span className="mn-station-setting-label">Avviso alla sala</span>
+                            <div className="mn-level-group" role="group" aria-label="Livello avviso">
+                              {ALERT_LEVELS.map(({ value, label, hint }) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  className={`mn-level-btn ${(s.alert_level ?? 'forte') === value ? 'mn-level-btn--on' : ''}`}
+                                  title={hint}
+                                  onClick={() => handleStationSetting(s, { alert_level: value })}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="mn-station-hint">
+                              {ALERT_LEVELS.find(l => l.value === (s.alert_level ?? 'forte'))?.hint}
+                            </p>
+                          </div>
+
+                          <div className="mn-station-setting">
+                            <label className="mn-station-setting-label" htmlFor={`mn-station-label-${s.id}`}>
+                              Nome nelle notifiche
+                            </label>
+                            <input
+                              id={`mn-station-label-${s.id}`}
+                              className="sv-input"
+                              type="text"
+                              defaultValue={s.notification_label ?? ''}
+                              placeholder={s.name}
+                              onBlur={(e) => {
+                                const next = e.target.value.trim() || null
+                                if (next === (s.notification_label ?? null)) return
+                                handleStationSetting(s, { notification_label: next })
+                              }}
+                            />
+                            <p className="mn-station-hint">
+                              Usato per i piatti senza portata: «Tavolo 3 · {s.notification_label?.trim() || s.name} — da servire». Vuoto = il nome della postazione.
+                            </p>
+                          </div>
+
+                          <label className="mn-station-check">
+                            <input
+                              type="checkbox"
+                              checked={s.served_by_hall === true}
+                              onChange={(e) => handleStationSetting(s, { served_by_hall: e.target.checked })}
+                            />
+                            <span>
+                              Servita dalla sala
+                              <span className="mn-station-hint">
+                                Le sue voci risultano consegnate già all'invio: non compaiono in cucina né nei totali, ma restano nell'ordine, nel conto, nei margini e nelle scorte.
+                              </span>
+                            </span>
+                          </label>
+                        </div>
                       )}
                     </div>
                     <div className="sv-row-actions">

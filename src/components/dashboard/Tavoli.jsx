@@ -3,7 +3,8 @@ import { useSectionParams } from '../../lib/sectionParams'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { normalizePhone } from '../../lib/phone'
-import { subscribeTableOrderItems } from '../../lib/kitchenRealtime'
+import { useHallNotificationsData } from '../../lib/hallNotificationsContext'
+import { tableIdsToServe } from '../../lib/hallNotifications'
 import KioskLockButton from './KioskLockButton'
 import Ordine from './Ordine'
 
@@ -39,7 +40,7 @@ function turnLabel(t) {
   return t.name?.trim() || `Turno ${t.slot_number}`
 }
 
-export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
+export default function Tavoli({ business, onNavigate, kioskLock, onKioskLockChange }) {
   const [tables, setTables]       = useState([])
   const [loading, setLoading]     = useState(true)
   const [modal, setModal]         = useState(null)   // null | 'add' | 'edit' (tavolo)
@@ -244,31 +245,25 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
       .then(({ error }) => { if (error) console.error('[autoCloseForgottenOrders]', error) })
   }, [business, selectedDate, selectedTurnId])
 
-  // Evidenza visiva sulla card del tavolo quando una sua voce diventa
-  // "pronto": ogni evento è mappato al tavolo tramite l'order_id già noto
-  // in openOrders (table_order_items non ha table_id diretto) — se
-  // l'ordine non è tra quelli in vista (data/turno diversi) non c'è nulla
-  // da evidenziare qui, non è un errore. Nessun ricaricamento di
-  // openOrders: lo stato libero/prenotato/occupato non dipende dal
-  // contenuto delle voci, solo dall'esistenza dell'ordine aperto.
-  //
-  // Suono, vibrazione e banner NON stanno più qui: sono saliti a livello
-  // di Dashboard.jsx, così l'avviso arriva in qualunque sezione e non
-  // viene emesso due volte dalla stessa pagina. Qui resta solo
-  // l'evidenza locale, che ha senso soltanto su questa griglia.
-  const [readyHighlightIds, setReadyHighlightIds] = useState(() => new Set())
-  useEffect(() => {
-    if (!business) return
-    const unsubscribe = subscribeTableOrderItems(`tavoli-ready-${business.id}`, (payload) => {
-      if (payload.new?.kitchen_status !== 'pronto') return
-      const relatedOrder = openOrders.find((o) => o.id === payload.new.order_id)
-      if (!relatedOrder) return
-      const tableId = relatedOrder.table_id
-      setReadyHighlightIds((prev) => new Set(prev).add(tableId))
-      setTimeout(() => setReadyHighlightIds((prev) => { const n = new Set(prev); n.delete(tableId); return n }), 6000)
-    })
-    return unsubscribe
-  }, [business, openOrders])
+  // Indicazione visiva sulla card del tavolo: "c'è qualcosa da servire".
+  // Prima era un lampo di 6 secondi a ogni singolo piatto che diventava
+  // pronto; ora è lo stesso elenco di notifiche della pagina Notifiche
+  // sala, quindi segue la regola della PORTATA completa e resta visibile
+  // finché la portata non è servita — che è l'informazione utile a chi
+  // guarda la piantina. Nessuna sottoscrizione né calcolo qui: i dati
+  // arrivano dall'unico punto che li legge (vedi hallNotificationsContext.js).
+  // Le postazioni con avviso 'nessuno' restano fuori: chiedono di non
+  // dare nessun avviso, e questa è un avviso.
+  const { notifications: hallNotifications } = useHallNotificationsData()
+  const toServeTableIds = useMemo(
+    () => tableIdsToServe(hallNotifications, new Set(openOrders.map((o) => o.id))),
+    [hallNotifications, openOrders],
+  )
+  // Il contatore sul collegamento conta TUTTE le notifiche in sospeso
+  // (anche di altre date e le chiamate dalla cucina, che non hanno un
+  // tavolo): è il numero che si trova aprendo la pagina. L'indicazione
+  // sulle card, invece, resta limitata agli ordini mostrati qui.
+  const hallPendingCount = hallNotifications.length
 
   /* ── Sincronizzazione con l'indirizzo ──
      `isActiveSection` è sia guardia sia dipendenza: finché l'indirizzo
@@ -804,6 +799,14 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
             : 'Aggiungi i tavoli della tua sala.'}
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {/* Passaggio all'altra schermata dell'area Sala. Visibile
+              sempre, ma indispensabile a lucchetto attivo: da bloccati la
+              barra laterale non è renderizzata, e questo è l'unico modo
+              di arrivare alle notifiche senza aspettare un banner. */}
+          <button className="tv-sala-link" onClick={() => onNavigate?.('notifiche')}>
+            Notifiche sala
+            {hallPendingCount > 0 && <span className="tv-sala-link-count">{hallPendingCount}</span>}
+          </button>
           <KioskLockButton
             area="sala"
             lockedArea={kioskLock}
@@ -906,7 +909,7 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
             return (
               <div
                 key={t.id}
-                className={`tv-card tv-card--clickable ${statusClass} ${readyHighlightIds.has(t.id) ? 'tv-card--ready-pulse' : ''}`}
+                className={`tv-card tv-card--clickable ${statusClass} ${toServeTableIds.has(t.id) ? 'tv-card--to-serve' : ''}`}
                 onClick={handleCardClick}
                 title={cardTitle}
               >
@@ -914,6 +917,7 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
                   <span className="tv-card-title">
                     <span className="tv-status-icon" aria-hidden="true">{statusIcon}</span>
                     <span className="tv-card-name">{t.name}</span>
+                    {toServeTableIds.has(t.id) && <span className="tv-to-serve-badge">da servire</span>}
                   </span>
                   <button className="tv-icon-btn" title="Modifica tavolo" onClick={(e) => { e.stopPropagation(); openEditTable(t) }}>
                     <IconEdit />

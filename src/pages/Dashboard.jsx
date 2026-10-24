@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
@@ -23,17 +23,26 @@ import Clienti     from '../components/dashboard/Clienti'
 // i business che hanno davvero quel vertical attivo, non per tutti. Tavoli è
 // il primo caso reale di questo pattern — qualunque componente futuro dello
 // stesso tipo (nuovo verticale) va aggiunto allo stesso modo.
-const Tavoli = lazy(() => import('../components/dashboard/Tavoli'))
-const Menu   = lazy(() => import('../components/dashboard/Menu'))
-const Cucina = lazy(() => import('../components/dashboard/Cucina'))
-const Scorte = lazy(() => import('../components/dashboard/Scorte'))
+const Tavoli        = lazy(() => import('../components/dashboard/Tavoli'))
+const Menu          = lazy(() => import('../components/dashboard/Menu'))
+const Cucina        = lazy(() => import('../components/dashboard/Cucina'))
+const Scorte        = lazy(() => import('../components/dashboard/Scorte'))
+const NotificheSala = lazy(() => import('../components/dashboard/NotificheSala'))
 
-// Avvisi di servizio e blocco postazione: codice del verticale
-// 'ristorante_bar', importato staticamente perché serve agli effect di
-// Dashboard (non è un componente da montare dietro un gate). Sono tre
-// moduli minuscoli e tutto ciò che fanno è dentro un controllo su
-// business.vertical — nessun business non-ristorante li esegue mai.
-import { subscribeTableOrderItems, subscribeCallSala, notifyReady } from '../lib/kitchenRealtime'
+// Notifiche di sala: TUTTO il loro codice (query, Realtime, calcolo delle
+// portate pronte, banner) vive in questo componente, montato solo dentro
+// il ramo isRestaurant più sotto. Qui non c'è nessuna logica di
+// notifica: prima gli ascolti e il banner stavano in Dashboard, ora
+// Dashboard si limita a montare il provider e a passare la sezione
+// corrente (serve per l'eccezione "la cucina non riceve gli avvisi di
+// sala") e la navigazione (il banner apre la pagina).
+const HallNotificationsProvider = lazy(() => import('../components/dashboard/HallNotificationsProvider'))
+
+// Blocco postazione: codice del verticale 'ristorante_bar', importato
+// staticamente perché serve agli effect di Dashboard (non è un
+// componente da montare dietro un gate). Modulo minuscolo e tutto ciò
+// che fa è dentro un controllo su business.vertical — nessun business
+// non-ristorante lo esegue mai.
 import { KIOSK_AREAS, readKioskLock, writeKioskLock, exitFullscreen } from '../lib/kiosk'
 
 // Base sempre visibile, indipendente dal verticale. La voce 'tavoli' viene
@@ -80,16 +89,6 @@ export default function Dashboard() {
      navigazione condivisa (navigate_section, agendaInitialView). ── */
   const isRestaurant = business?.vertical === 'ristorante_bar'
 
-  // Avviso di servizio ricevuto a livello di dashboard, così arriva in
-  // qualunque sezione e non solo dentro la schermata di un ordine.
-  const [serviceAlert, setServiceAlert] = useState(null) // { kind: 'pronto'|'sala', at }
-
-  // La sezione corrente serve dentro la callback della sottoscrizione, che
-  // deve restare stabile: tenerla in un ref evita di disiscriversi e
-  // riscriversi a ogni cambio di sezione.
-  const sectionRef = useRef(section)
-  useEffect(() => { sectionRef.current = section }, [section])
-
   const [kioskLock, setKioskLock] = useState(null) // 'sala' | 'cucina' | null
 
   // Voce 'tavoli' presente in nav SOLO se business.vertical === 'ristorante_bar'
@@ -102,10 +101,11 @@ export default function Dashboard() {
     if (business?.vertical !== 'ristorante_bar') return NAV_BASE
     const withRistorante = [...NAV_BASE]
     withRistorante.splice(3, 0,
-      { id: 'tavoli', label: 'Tavoli', icon: IconTable },
-      { id: 'menu',   label: 'Menu',   icon: IconMenuBook },
-      { id: 'cucina', label: 'Cucina', icon: IconChefHat },
-      { id: 'scorte', label: 'Scorte', icon: IconBox },
+      { id: 'tavoli',    label: 'Tavoli',         icon: IconTable },
+      { id: 'notifiche', label: 'Notifiche sala', icon: IconBellRing },
+      { id: 'menu',      label: 'Menu',           icon: IconMenuBook },
+      { id: 'cucina',    label: 'Cucina',         icon: IconChefHat },
+      { id: 'scorte',    label: 'Scorte',         icon: IconBox },
     )
     return withRistorante
   }, [business?.vertical])
@@ -246,7 +246,9 @@ export default function Dashboard() {
     // per qualunque altro valore Section risolve a undefined per
     // section === 'tavoli' e più sotto `{Section && (...)}` non monta nulla,
     // indipendentemente da come lo stato `section` sia finito su 'tavoli'.
-    ...(business?.vertical === 'ristorante_bar' ? { tavoli: Tavoli, menu: Menu, cucina: Cucina, scorte: Scorte } : {}),
+    ...(business?.vertical === 'ristorante_bar'
+      ? { tavoli: Tavoli, notifiche: NotificheSala, menu: Menu, cucina: Cucina, scorte: Scorte }
+      : {}),
   }[section]
 
   useEffect(() => {
@@ -310,41 +312,6 @@ export default function Dashboard() {
     }
   }, [business?.id]) // primitivo stabile — evita reconnessioni su ogni refresh dell'oggetto business
 
-  /* ── Avvisi di servizio (solo 'ristorante_bar') ──
-     Prima questi ascolti vivevano dentro Ordine.jsx, quindi l'avviso
-     arrivava solo a chi era già dentro la schermata di un singolo ordine.
-     Qui arrivano in qualunque sezione.
-     ECCEZIONE: un dispositivo che sta nella vista Cucina non riceve gli
-     avvisi destinati alla sala — né "piatto pronto" (è la cucina stessa
-     ad averlo segnato) né "chiama sala". Il controllo è su sectionRef, non
-     su section, per non ricreare la sottoscrizione a ogni navigazione.
-     La sottoscrizione su table_order_items non ha un filtro business_id
-     perché quella tabella non ha la colonna: si affida alle RLS, come già
-     documentato in src/lib/kitchenRealtime.js. ── */
-  useEffect(() => {
-    if (!isRestaurant || !business) return
-    const businessId = business.id
-    const raise = (kind) => {
-      if (sectionRef.current === 'cucina') return
-      notifyReady()
-      setServiceAlert({ kind, at: Date.now() })
-    }
-    const unsubItems = subscribeTableOrderItems(`dashboard-service-${businessId}`, (payload) => {
-      if (payload.new?.kitchen_status !== 'pronto') return
-      raise('pronto')
-    })
-    const unsubCall = subscribeCallSala(businessId, () => raise('sala'))
-    return () => { unsubItems(); unsubCall() }
-  }, [isRestaurant, business])
-
-  // Il banner si spegne da solo: è un avviso, non un messaggio da chiudere
-  // a mano durante il servizio.
-  useEffect(() => {
-    if (!serviceAlert) return
-    const t = setTimeout(() => setServiceAlert(null), 6000)
-    return () => clearTimeout(t)
-  }, [serviceAlert])
-
   /* ── Blocco postazione (solo 'ristorante_bar') ── */
   useEffect(() => {
     if (!isRestaurant || !business) return
@@ -406,6 +373,17 @@ export default function Dashboard() {
     }
   }
 
+  // Estratto in una variabile solo per poterlo avvolgere, per i
+  // ristoranti, nel provider delle notifiche di sala senza duplicare la
+  // riga: il contenuto e le prop sono gli stessi per tutti i verticali.
+  const sectionBlock = Section ? (
+    <ErrorBoundary key={section}>
+      <Suspense fallback={<div className="sv-loading">Caricamento…</div>}>
+        <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} onBusinessPatch={patchBusiness} kioskLock={kioskLock} onKioskLockChange={handleKioskLockChange} />
+      </Suspense>
+    </ErrorBoundary>
+  ) : null
+
   if (isBlocked) {
     return (
       <SubscriptionGate
@@ -418,14 +396,6 @@ export default function Dashboard() {
 
   return (
     <div className={`db-shell ${kioskLock ? 'db-shell--kiosk' : ''}`}>
-
-      {/* Avviso di servizio, visibile in qualunque sezione (solo
-          'ristorante_bar'): sopra tutto, si spegne da solo. */}
-      {serviceAlert && (
-        <div className={`kio-alert ${serviceAlert.kind === 'sala' ? 'kio-alert--sala' : 'kio-alert--pronto'}`} role="status">
-          {serviceAlert.kind === 'sala' ? 'La cucina chiama in sala' : 'Un piatto è pronto'}
-        </div>
-      )}
 
       {/* Mobile overlay */}
       {sideOpen && !kioskLock && (
@@ -613,13 +583,20 @@ export default function Dashboard() {
               <IconChevronLeft /> Panoramica
             </button>
           )}
-          {Section && (
-            <ErrorBoundary key={section}>
-              <Suspense fallback={<div className="sv-loading">Caricamento…</div>}>
-                <Section business={business} user={user} onNavigate={navigate_section} pendingCount={pendingCount} initialView={agendaInitialView} onBusinessPatch={patchBusiness} kioskLock={kioskLock} onKioskLockChange={handleKioskLockChange} />
-              </Suspense>
-            </ErrorBoundary>
-          )}
+          {/* Per i ristoranti la sezione è avvolta dal provider delle
+              notifiche di sala: resta montato attraverso i cambi di
+              sezione (è FUORI dall'ErrorBoundary con key={section}),
+              così le sottoscrizioni non si ricreano a ogni navigazione e
+              il banner arriva in qualunque sezione. Per ogni altro
+              verticale la sezione è renderizzata esattamente come
+              prima. */}
+          {isRestaurant ? (
+            <Suspense fallback={null}>
+              <HallNotificationsProvider business={business} section={section} onNavigate={navigate_section}>
+                {sectionBlock}
+              </HallNotificationsProvider>
+            </Suspense>
+          ) : sectionBlock}
         </main>
       </div>
     </div>
@@ -644,6 +621,11 @@ function IconStar() {
 }
 function IconBell() {
   return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+}
+// Campanella con le onde: distinta da IconBell dei Promemoria, perché le
+// due voci stanno nello stesso menu.
+function IconBellRing() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 8a5 5 0 0 0-10 0c0 6-2.5 7.5-2.5 7.5h15S17 14 17 8"/><path d="M13.73 19a2 2 0 0 1-3.46 0"/><path d="M20.5 5.5a7 7 0 0 1 1.5 4"/><path d="M3.5 5.5a7 7 0 0 0-1.5 4"/></svg>
 }
 function IconMessageCircle() {
   return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>

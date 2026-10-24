@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
-import { groupItemsByCourse } from '../../lib/kitchenRouting'
+import { groupItemsByCourse, isServedByHall } from '../../lib/kitchenRouting'
 import { subscribeTableOrderItems } from '../../lib/kitchenRealtime'
 import { loadCostBook, resolveCostSnapshot } from '../../lib/stock'
 import KioskLockButton from './KioskLockButton'
@@ -52,6 +52,12 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
   const searchTimerRef = useRef(null)
 
   const [activeCourses, setActiveCourses] = useState([])
+  // Postazioni attive: servono solo per sapere quali voci appartengono a
+  // una postazione servita dalla sala, che all'invio nascono già
+  // consegnate. Caricate in anticipo come il libro dei costi, per lo
+  // stesso motivo: l'invio deve poter comporre la riga completa anche
+  // senza rete.
+  const [activeStations, setActiveStations] = useState([])
 
   // Libro dei costi (Blocco E): track_stock/estimated_cost/vat_rate e
   // costo dell'ultimo carico per ogni prodotto. Caricato in anticipo, non
@@ -121,7 +127,7 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
     setItemsLoading(true)
     const { data, error } = await supabase
       .from('table_order_items')
-      .select('*, menu_items(category_id, menu_categories(id, course_id))')
+      .select('*, menu_items(category_id, menu_categories(id, station_id, course_id))')
       .eq('order_id', order.id)
       .order('created_at')
     if (signal?.cancelled) return
@@ -154,6 +160,17 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
     setActiveCourses(data ?? [])
   }, [business])
 
+  const loadStations = useCallback(async (signal = null) => {
+    const { data, error } = await supabase
+      .from('kitchen_stations')
+      .select('*')
+      .eq('business_id', business.id)
+      .eq('is_active', true)
+    if (signal?.cancelled) return
+    if (error) { console.error('[loadStations]', error); return }
+    setActiveStations(data ?? [])
+  }, [business])
+
   // Griglia piatti: ricerca fuzzy per nome (ilike, indice trigram
   // idx_menu_items_name_trgm) + filtro categoria, solo piatti disponibili.
   // menu_categories(id, course_id) incluso per poter risolvere la portata
@@ -161,7 +178,7 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
   const loadGrid = useCallback(async (term, categoryId, signal = null) => {
     setGridLoading(true)
     let q = supabase.from('menu_items')
-      .select('id, name, price, category_id, menu_categories(id, course_id)')
+      .select('id, name, price, category_id, menu_categories(id, station_id, course_id)')
       .eq('business_id', business.id)
       .eq('is_available', true)
     if (categoryId) q = q.eq('category_id', categoryId)
@@ -191,6 +208,12 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
     loadCourses(signal)
     return () => { signal.cancelled = true }
   }, [loadCourses])
+
+  useEffect(() => {
+    const signal = { cancelled: false }
+    loadStations(signal)
+    return () => { signal.cancelled = true }
+  }, [loadStations])
 
   useEffect(() => {
     const signal = { cancelled: false }
@@ -375,11 +398,25 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
         // database, il client non lo scrive mai.
         const product = it.menu_item_id ? costBook[it.menu_item_id] : null
         const { cost, source } = resolveCostSnapshot(product)
+
+        // Postazione servita dalla sala (le bibite che il cameriere
+        // prende al bancone): la voce nasce già consegnata nello stesso
+        // write che la invia. Non passa da nessuna vista cucina, non
+        // entra nei totali e non genera notifiche, ma resta a tutti gli
+        // effetti nell'ordine, nel conto, nei margini (il costo è
+        // fotografato qui sopra come per ogni altra voce) e nello
+        // scarico delle scorte. ready_at vale quanto delivered_at: una
+        // riga consegnata senza ready_at sarebbe uno stato che non
+        // esiste in nessun altro percorso.
+        const byHall = isServedByHall(it, activeStations)
         const nextRow = {
           ...it,
           sent_at:           now,
-          fire_status:       fireStatus,
-          fired_at:          fireStatus === 'subito' ? now : null,
+          fire_status:       byHall ? 'subito' : fireStatus,
+          fired_at:          byHall || fireStatus === 'subito' ? now : null,
+          kitchen_status:    byHall ? 'consegnato' : it.kitchen_status,
+          ready_at:          byHall ? now : it.ready_at,
+          delivered_at:      byHall ? now : it.delivered_at,
           cost_snapshot:     cost,
           cost_source:       source,
           vat_rate_snapshot: product?.vat_rate ?? null,

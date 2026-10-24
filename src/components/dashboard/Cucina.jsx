@@ -3,8 +3,8 @@ import { useSectionParams } from '../../lib/sectionParams'
 import { supabase } from '../../lib/supabase'
 import KioskLockButton from './KioskLockButton'
 import { ensureDefaultCourses, ensureDefaultStation } from '../../lib/kitchenSeed'
-import { resolveStationId, groupItemsByCourse } from '../../lib/kitchenRouting'
-import { subscribeTableOrderItems, sendCallSala } from '../../lib/kitchenRealtime'
+import { resolveStationId, groupItemsByCourse, isServedByHall } from '../../lib/kitchenRouting'
+import { subscribeTableOrderItems, sendCallSala, recordCallSala } from '../../lib/kitchenRealtime'
 import { formatTime } from '../../lib/datetime'
 
 // Un ticket "riceve il via" resta in cima alla vista per questa finestra di
@@ -88,6 +88,15 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
   const activeStations = useMemo(() => stations.filter(s => s.is_active), [stations])
   const activeCourses  = useMemo(() => courses.filter(c => c.is_active), [courses])
 
+  // Postazioni scegliibili da un dispositivo di cucina: quelle servite
+  // dalla sala non lo sono mai. Le loro voci nascono già consegnate
+  // all'invio, quindi una postazione del genere mostrerebbe per sempre
+  // una vista vuota. Attenzione: resolveStationId continua a ricevere
+  // activeStations COMPLETO — risolvere su un elenco filtrato farebbe
+  // ripiegare le voci del bar sulla prima postazione della cucina,
+  // facendole comparire proprio dove non devono.
+  const pickableStations = useMemo(() => activeStations.filter(s => !s.served_by_hall), [activeStations])
+
   // Seeding condiviso con Menu.jsx: se questa è la prima schermata mai
   // aperta per il business, "Cucina" e le 4 portate nascono qui.
   const loadSettings = useCallback(async (signal = null) => {
@@ -111,12 +120,12 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
   // ormai invalido.
   useEffect(() => {
     if (!business || settingsLoading) return
-    if (selectedStationId && !activeStations.some(s => s.id === selectedStationId)) {
+    if (selectedStationId && !pickableStations.some(s => s.id === selectedStationId)) {
       setSelectedStationId(null)
       writeLocal(stationStorageKey(business.id), '')
       patchParams({ st: null })
     }
-  }, [settingsLoading, activeStations, selectedStationId, business, patchParams])
+  }, [settingsLoading, pickableStations, selectedStationId, business, patchParams])
 
   // La postazione scelta finisce sempre nell'indirizzo, anche quando
   // arriva dal localStorage del dispositivo: così la schermata ha un
@@ -216,7 +225,12 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
   const tickets = useMemo(() => {
     const list = []
     for (const o of orders) {
-      const sentItems = (o.table_order_items ?? []).filter(i => i.sent_at)
+      // Le voci delle postazioni servite dalla sala non compaiono mai
+      // qui, nemmeno quando non esiste nessuna postazione attiva (dove la
+      // regola è "mostra tutto"): quelle le ha già prese il cameriere al
+      // bancone, e all'invio sono nate consegnate.
+      const sentItems = (o.table_order_items ?? [])
+        .filter(i => i.sent_at && !isServedByHall(i, activeStations))
       const visible = activeStations.length === 0
         ? sentItems
         : sentItems.filter(i => resolveStationId(i, activeStations) === selectedStationId)
@@ -303,7 +317,12 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
 
   const [callSent, setCallSent] = useState(false)
   const handleCallSala = () => {
+    // Due cose, non una: il broadcast è l'avviso immediato (arriva solo a
+    // chi è collegato in quell'istante), la riga in hall_notifications è
+    // il ricordo, che resta nell'elenco Notifiche sala anche se il
+    // tablet della sala era spento o si è riavviato subito dopo.
     sendCallSala(business.id)
+    recordCallSala(business.id, currentStation?.id ?? null)
     setCallSent(true)
     setTimeout(() => setCallSent(false), 3000)
   }
@@ -316,7 +335,7 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
     return <div className="db-section rb-screen"><div className="sv-loading"><KtSpinner /></div></div>
   }
 
-  const currentStation = activeStations.find(s => s.id === selectedStationId) ?? null
+  const currentStation = pickableStations.find(s => s.id === selectedStationId) ?? null
 
   // Selettore postazione a tutta pagina — non un modale sopra a una vista
   // ancora senza senso senza postazione scelta (stesso principio della
@@ -325,11 +344,11 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
     return (
       <div className="db-section rb-screen">
         <h2 className="sv-modal-title" style={{ marginBottom: 12 }}>Scegli la postazione di questo dispositivo</h2>
-        {activeStations.length === 0 ? (
+        {pickableStations.length === 0 ? (
           <div className="db-card"><p className="db-card-empty">Nessuna postazione attiva ancora.</p></div>
         ) : (
           <div className="kt-station-picker">
-            {activeStations.map(s => (
+            {pickableStations.map(s => (
               <button key={s.id} className="kt-station-pick" onClick={() => chooseStation(s.id)}>{s.name}</button>
             ))}
           </div>

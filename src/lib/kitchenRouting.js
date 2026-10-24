@@ -24,10 +24,32 @@ function categoryOf(item) {
 // nessuna postazione attiva, torna null — è compito del chiamante trattare
 // null come "nessun filtro, mostra tutto" (vedi Cucina.jsx), mai come
 // "nascondi tutto".
+// Il ripiego non sceglie MAI una postazione servita dalla sala: quelle
+// voci nascono già consegnate all'invio, quindi finirebbero in un limbo
+// (mai in cucina, mai in una notifica). Sceglie la prima attiva NON
+// servita dalla sala; se non ne esiste nessuna resta la regola
+// precedente (prima attiva, qualunque essa sia), perché l'alternativa
+// sarebbe tornare null e far sparire la voce da ogni vista — mai.
+// L'assegnazione ESPLICITA a una postazione servita dalla sala invece
+// vale e viene rispettata: è esattamente il caso delle bibite.
 export function resolveStationId(item, activeStations) {
   const stationId = categoryOf(item)?.station_id ?? null
   if (stationId && activeStations.some((s) => s.id === stationId)) return stationId
-  return activeStations[0]?.id ?? null
+  const firstNotServedByHall = activeStations.find((s) => !s.served_by_hall)
+  return (firstNotServedByHall ?? activeStations[0])?.id ?? null
+}
+
+export function resolveStation(item, activeStations) {
+  const stationId = resolveStationId(item, activeStations)
+  return stationId ? activeStations.find((s) => s.id === stationId) ?? null : null
+}
+
+// "Questa voce la prende il cameriere al bancone": usata all'invio (per
+// segnarla subito consegnata) e dalla vista cucina (per non mostrarla).
+// Una sola funzione per entrambi, altrimenti una voce potrebbe essere
+// consegnata all'invio e comparire comunque in cucina, o il contrario.
+export function isServedByHall(item, activeStations) {
+  return resolveStation(item, activeStations)?.served_by_hall === true
 }
 
 // Nessuna portata risolvibile (stessi tre casi) → "subito", non un ripiego

@@ -12,8 +12,14 @@
 // schermata ordine, che è renderizzata da Tavoli.jsx e non è una sezione
 // a sé: così il passaggio piantina → ordine → piantina resta libero senza
 // bisogno di elencarlo qui.
+// 'notifiche' (Notifiche sala) fa parte dell'area Sala: con il lucchetto
+// attivo si passa liberamente fra piantina, ordine e notifiche, che sono
+// le tre schermate di un cameriere in servizio. Il primo elemento
+// dell'elenco è anche la sezione su cui il blocco riporta chi arriva da
+// un deep-link fuori area (vedi Dashboard.jsx), quindi 'tavoli' resta
+// primo.
 export const KIOSK_AREAS = {
-  sala:   { label: 'Sala',   sections: ['tavoli'] },
+  sala:   { label: 'Sala',   sections: ['tavoli', 'notifiche'] },
   cucina: { label: 'Cucina', sections: ['cucina'] },
 }
 

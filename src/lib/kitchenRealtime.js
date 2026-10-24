@@ -35,6 +35,34 @@ export function sendCallSala(businessId) {
   supabase.channel(callSalaChannelName(businessId)).send({ type: 'broadcast', event: 'call_sala', payload: {} })
 }
 
+// La riga in hall_notifications accompagna il broadcast, non lo
+// sostituisce: il broadcast è l'avviso immediato (già in vigore prima di
+// questo blocco), la riga è il ricordo dell'evento per un dispositivo
+// spento o riavviato nell'istante della chiamata. created_at NON viene
+// scritto: lo mette il database, così l'ordine dell'elenco non dipende
+// dall'orologio del tablet della cucina.
+export async function recordCallSala(businessId, stationId) {
+  const { error } = await supabase
+    .from('hall_notifications')
+    .insert({ business_id: businessId, type: 'chiama_sala', station_id: stationId ?? null })
+  if (error) console.error('[recordCallSala]', error)
+}
+
+// hall_notifications HA la colonna business_id, quindi qui il filtro
+// Realtime per business è applicabile — a differenza di
+// table_order_items (vedi nota in testa al file).
+export function subscribeHallNotifications(businessId, onChange) {
+  const channel = supabase.channel(`hall-notifications-${businessId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'hall_notifications',
+      filter: `business_id=eq.${businessId}`,
+    }, onChange)
+    .subscribe()
+  return () => { try { supabase.removeChannel(channel) } catch { /* già rimosso o non ancora connesso */ } }
+}
+
 // Vibrazione (dove supportata) + suono breve. I browser bloccano l'audio
 // finché l'utente non ha interagito con la pagina — AudioContext può
 // lanciare o restare 'suspended': mai un errore visibile per l'utente se il

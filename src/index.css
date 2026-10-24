@@ -1960,16 +1960,31 @@ body {
 
 .tv-card--inactive  { opacity: 0.55; }
 
-/* Blocco D: una voce dell'ordine di questo tavolo è appena diventata
-   "pronto" — evidenza visiva temporanea (vedi readyHighlightIds in
-   Tavoli.jsx), oltre a vibrazione/suono. currentColor eredita già dal
-   colore di stato del tavolo, qui solo l'animazione del bordo. */
-.tv-card--ready-pulse {
+/* Questo tavolo ha una portata pronta e non ancora servita (vedi
+   tableIdsToServe in Tavoli.jsx). Non è più un lampo di pochi secondi a
+   ogni piatto: resta finché la portata non è servita, quindi deve
+   reggere lo sguardo — bordo fermo, non un'animazione infinita, più una
+   pulsazione breve all'arrivo. */
+.tv-card--to-serve {
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.55);
   animation: tv-ready-pulse 0.9s ease-in-out 2;
 }
 @keyframes tv-ready-pulse {
-  0%, 100% { box-shadow: none; }
-  50% { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.5); }
+  0%, 100% { box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.55); }
+  50%      { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.35); }
+}
+
+.tv-to-serve-badge {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #065F46;
+  background: #D1FAE5;
+  border-radius: 99px;
+  white-space: nowrap;
 }
 
 /* Pulsanti apri/prendi ordine — sullo sfondo pieno della card, stesso
@@ -3565,6 +3580,212 @@ body.kiosk-locked .pwa-banner { display: none; }
   /* Piastrelle dei piatti: lo stepper a 44 px ha bisogno di più base,
      altrimenti i due tasti e il numero si schiacciano. */
   & .ord-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+  /* Righe delle notifiche: sono il bersaglio principale di questa
+     pagina, ben oltre i 44 px minimi. */
+  & .hn-row { min-height: 64px; }
+}
+
+/* Collegamento fra le due schermate dell'area Sala (piantina e
+   notifiche): da lucchetto attivo la barra laterale non è renderizzata,
+   quindi questo è l'unico passaggio fra le due. */
+.tv-sala-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:hover { border-color: var(--accent); color: var(--accent); }
+}
+
+.tv-sala-link-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: center;
+  color: #fff;
+  background: #dc2626;
+  border-radius: 99px;
+}
+
+/* ── Notifiche sala ──
+   Elenco unico di cose da fare adesso: righe grandi, testo grande, una
+   sola azione per riga (il tocco). */
+.hn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hn-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  font-family: var(--sans);
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 0.12s, background 0.12s;
+
+  &:hover:not(:disabled) { background: var(--code-bg); }
+  &:disabled { opacity: 0.6; cursor: wait; }
+}
+
+/* Due famiglie, due colori: una portata da servire e una chiamata della
+   cucina richiedono gesti diversi, anche se stanno nello stesso elenco. */
+.hn-row--stato   { border-left-color: #22c55e; }
+.hn-row--evento  { border-left-color: #f59e0b; }
+
+.hn-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.hn-row-kind {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.hn-row-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-h);
+  line-height: 1.3;
+}
+
+.hn-row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.hn-row-time {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.hn-row-action {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Il banner è diventato un pulsante (apre questa pagina): eredita tutto
+   da .kio-alert, qui solo ciò che serve perché un <button> non sembri un
+   pulsante di modulo. */
+.hn-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  font-family: var(--sans);
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hn-alert-text { font-size: 15px; font-weight: 700; }
+.hn-alert-hint { font-size: 11px; font-weight: 500; opacity: 0.75; }
+
+/* ── Impostazioni della postazione (gestione menu) ── */
+.mn-station-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--code-bg);
+  border-radius: 10px;
+}
+
+.mn-station-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mn-station-setting-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.mn-station-hint {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text);
+  margin: 0;
+}
+
+.mn-level-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mn-level-btn {
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:hover { border-color: var(--accent); color: var(--accent); }
+}
+
+.mn-level-btn--on {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+
+  &:hover { color: #fff; }
+}
+
+.mn-station-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-h);
+  cursor: pointer;
+
+  & input { margin-top: 2px; width: 17px; height: 17px; flex-shrink: 0; cursor: pointer; }
+  & .mn-station-hint { display: block; margin-top: 3px; font-weight: 400; }
 }
 
 /* ============================================================
