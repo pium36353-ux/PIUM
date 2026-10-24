@@ -12,6 +12,7 @@ import {
   mergeNotifications,
   strongestAlertLevel,
 } from './hallNotifications'
+import { writeCachedStations } from './stationsCache'
 
 // Codice del solo verticale 'ristorante_bar'. Vive qui e non in
 // Dashboard.jsx: Dashboard si limita a montare il provider dentro il
@@ -88,6 +89,15 @@ export function useHallNotifications(business, { alertsSuppressed = false } = {}
     const next = { stations: st.data ?? [], courses: cs.data ?? [] }
     settingsRef.current = next
     setSettings(next)
+    // Tiene aggiornata la copia sul dispositivo usata dalla schermata
+    // Ordine quando la rete non c'è. Questo provider è montato in
+    // qualunque sezione per un ristorante, quindi è il punto che vede
+    // la configurazione più spesso: se il titolare marca il Bar come
+    // "servito dalla sala" mentre il tablet è in sala, la copia è già
+    // aggiornata al prossimo ordine, anche se nel frattempo la rete
+    // salta. Solo su risposta riuscita: un errore non deve sovrascrivere
+    // la copia buona (st.error è già stato stampato sopra).
+    if (!st.error) writeCachedStations(businessId, next.stations)
   }, [businessId])
 
   // Il rilevamento dei nuovi avvisi gira QUI, nella callback che ha

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activityLog'
 import { groupItemsByCourse, isServedByHall } from '../../lib/kitchenRouting'
+import { readCachedStations, writeCachedStations } from '../../lib/stationsCache'
 import { subscribeTableOrderItems } from '../../lib/kitchenRealtime'
 import { loadCostBook, resolveCostSnapshot } from '../../lib/stock'
 import KioskLockButton from './KioskLockButton'
@@ -57,7 +58,14 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
   // consegnate. Caricate in anticipo come il libro dei costi, per lo
   // stesso motivo: l'invio deve poter comporre la riga completa anche
   // senza rete.
-  const [activeStations, setActiveStations] = useState([])
+  //
+  // Lo stato PARTE dall'ultima configurazione nota salvata sul
+  // dispositivo, non da un elenco vuoto: all'apertura della schermata la
+  // query non ha ancora risposto, e senza rete non risponderà mai. Senza
+  // questa copia una bibita inviata in quella finestra finiva in cucina
+  // come un piatto qualsiasi. La risposta del server la sovrascrive
+  // appena arriva (vedi loadStations).
+  const [activeStations, setActiveStations] = useState(() => readCachedStations(business.id))
 
   // Libro dei costi (Blocco E): track_stock/estimated_cost/vat_rate e
   // costo dell'ultimo carico per ogni prodotto. Caricato in anticipo, non
@@ -167,8 +175,14 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
       .eq('business_id', business.id)
       .eq('is_active', true)
     if (signal?.cancelled) return
+    // Su errore (tipicamente: rete assente) si TIENE la copia salvata
+    // sul dispositivo invece di azzerare: un elenco vuoto farebbe
+    // ripiegare ogni voce su "nessuna postazione servita dalla sala",
+    // che è esattamente lo sbaglio che la copia evita.
     if (error) { console.error('[loadStations]', error); return }
-    setActiveStations(data ?? [])
+    const stations = data ?? []
+    setActiveStations(stations)
+    writeCachedStations(business.id, stations)
   }, [business])
 
   // Griglia piatti: ricerca fuzzy per nome (ilike, indice trigram
