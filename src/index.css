@@ -3505,9 +3505,13 @@ body {
    che Dashboard.jsx mette sul body quando il lucchetto è attivo (solo
    'ristorante_bar' ha il lucchetto, nessun altro verticale può avere
    questa classe). In basso a destra, con z-index 9990, era anche il
-   cerchio scuro che compariva dietro il pulsante del lucchetto. */
+   cerchio scuro che compariva dietro il pulsante del lucchetto.
+   Stesso discorso per il banner "installa l'app": anche quello è montato
+   in App.jsx e su un dispositivo bloccato in sala o in cucina non ha
+   niente da chiedere a chi sta servendo. */
 body.kiosk-locked .bot-fab,
-body.kiosk-locked .bot-window { display: none; }
+body.kiosk-locked .bot-window,
+body.kiosk-locked .pwa-banner { display: none; }
 
 /* ── Aree di tocco: minimo 44×44 px in tutto il verticale ──
    Vale solo dentro .rb-screen, che è la radice delle sole sezioni del
