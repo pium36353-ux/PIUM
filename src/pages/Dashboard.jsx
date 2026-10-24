@@ -360,6 +360,18 @@ export default function Dashboard() {
     if (allowed.length > 0 && !allowed.includes(section)) setSection(allowed[0])
   }, [kioskLock, section])
 
+  // Il blocco deve poter nascondere anche quello che NON sta dentro la
+  // Dashboard: il pulsante "?" del supporto è montato in App.jsx, fuori da
+  // questo albero, quindi non raggiungibile con una prop. Una classe sul
+  // body è l'unico punto comune. Viene messa solo da bloccato (quindi solo
+  // per 'ristorante_bar', l'unico verticale che ha il lucchetto) e rimossa
+  // allo sblocco e allo smontaggio.
+  useEffect(() => {
+    if (!kioskLock) return
+    document.body.classList.add('kiosk-locked')
+    return () => document.body.classList.remove('kiosk-locked')
+  }, [kioskLock])
+
   const handleKioskLockChange = (area) => {
     if (!business) return
     setKioskLock(area)

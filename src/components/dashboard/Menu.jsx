@@ -548,7 +548,7 @@ export default function Menu({ business, onBusinessPatch }) {
 
   if (!business) {
     return (
-      <div className="db-section">
+      <div className="db-section rb-screen">
         <div className="db-empty-banner">Configura prima la tua attività.</div>
       </div>
     )
@@ -592,7 +592,7 @@ export default function Menu({ business, onBusinessPatch }) {
   )
 
   return (
-    <div className="db-section">
+    <div className="db-section rb-screen">
 
       {/* Toolbar */}
       <div className="db-section-toolbar">

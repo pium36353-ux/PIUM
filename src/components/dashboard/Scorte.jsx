@@ -331,13 +331,13 @@ export default function Scorte({ business }) {
   }, [reportRows])
 
   if (!business) {
-    return <div className="db-section"><div className="db-empty-banner">Configura prima la tua attività.</div></div>
+    return <div className="db-section rb-screen"><div className="db-empty-banner">Configura prima la tua attività.</div></div>
   }
 
   const lastClosure = closures[0] ?? null
 
   return (
-    <div className="db-section">
+    <div className="db-section rb-screen">
       <div className="db-section-toolbar">
         <p className="db-section-desc">
           {lastClosure

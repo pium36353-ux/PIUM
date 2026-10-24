@@ -309,11 +309,11 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
   }
 
   if (!business) {
-    return <div className="db-section"><div className="db-empty-banner">Configura prima la tua attività.</div></div>
+    return <div className="db-section rb-screen"><div className="db-empty-banner">Configura prima la tua attività.</div></div>
   }
 
   if (settingsLoading) {
-    return <div className="db-section"><div className="sv-loading"><KtSpinner /></div></div>
+    return <div className="db-section rb-screen"><div className="sv-loading"><KtSpinner /></div></div>
   }
 
   const currentStation = activeStations.find(s => s.id === selectedStationId) ?? null
@@ -323,7 +323,7 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
   // schermata Ordine che sostituisce la griglia, non un overlay).
   if (!currentStation || stationPickerOpen) {
     return (
-      <div className="db-section">
+      <div className="db-section rb-screen">
         <h2 className="sv-modal-title" style={{ marginBottom: 12 }}>Scegli la postazione di questo dispositivo</h2>
         {activeStations.length === 0 ? (
           <div className="db-card"><p className="db-card-empty">Nessuna postazione attiva ancora.</p></div>
@@ -344,7 +344,7 @@ export default function Cucina({ business, kioskLock, onKioskLockChange }) {
   const interactive = mode === 'interattiva'
 
   return (
-    <div className={`db-section kt-view ${!interactive ? 'kt-view--tv' : ''}`}>
+    <div className={`db-section rb-screen kt-view ${!interactive ? 'kt-view--tv' : ''}`}>
       {interactive && (
         <div className="db-section-toolbar">
           <p className="db-section-desc">Postazione: <strong>{currentStation.name}</strong> — {tickets.length} tavol{tickets.length !== 1 ? 'i' : 'o'} in corso.</p>

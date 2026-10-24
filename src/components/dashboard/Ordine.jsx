@@ -466,9 +466,13 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
   )
 
   return (
-    <div className="ord-screen">
+    <div className="ord-screen rb-screen">
+      {/* Intestazione: solo ciò che serve a capire dove si è. "Chiudi
+          tavolo" è stato spostato in fondo alla schermata — in alto, di
+          fianco alla freccia indietro, era il pulsante più grande e più
+          facile da toccare per sbaglio durante il servizio. */}
       <div className="ord-header">
-        <button className="tv-date-nav-btn" onClick={onClose} aria-label="Torna ai tavoli" title="Torna ai tavoli">
+        <button className="tv-date-nav-btn ord-back-btn" onClick={onClose} aria-label="Torna ai tavoli" title="Torna ai tavoli">
           <IconArrowLeft />
         </button>
         <div className="ord-header-title">
@@ -476,24 +480,6 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
           {turn && <span className="ord-turn-label">{turnLabel(turn)}</span>}
           {!order.reservation_id && <span className="db-badge db-badge--blue">Walk-in</span>}
         </div>
-        {closeConfirm ? (
-          <div className="tv-confirm-row">
-            <span className="tv-confirm-label">Chiudere il tavolo?</span>
-            <button className="tv-icon-btn tv-icon-btn--danger" disabled={closing} onClick={handleCloseTable}>
-              {closing ? <OrdSpinner small /> : <IconCheck />}
-            </button>
-            <button className="tv-icon-btn" onClick={() => setCloseConfirm(false)}><IconX /></button>
-          </div>
-        ) : (
-          <button
-            className="mn-btn-sold-out"
-            disabled={pendingIds.size > 0}
-            title={pendingIds.size > 0 ? 'Attendi il salvataggio delle modifiche in sospeso' : undefined}
-            onClick={() => setCloseConfirm(true)}
-          >
-            Chiudi tavolo
-          </button>
-        )}
         <KioskLockButton
           area="sala"
           lockedArea={kioskLock}
@@ -646,7 +632,51 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
         </div>
       )}
 
-      <div className="ord-total">Totale: <strong>{formatPrice(total)}</strong></div>
+      {/* Totale e chiusura tavolo in fondo, dove si arriva quando il
+          servizio al tavolo è finito. Stile volutamente sobrio: non deve
+          attirare il pollice più dei pulsanti di servizio. */}
+      <div className="ord-footer">
+        <div className="ord-total">Totale: <strong>{formatPrice(total)}</strong></div>
+        <button
+          className="ord-close-table-btn"
+          disabled={pendingIds.size > 0}
+          title={pendingIds.size > 0 ? 'Attendi il salvataggio delle modifiche in sospeso' : undefined}
+          onClick={() => setCloseConfirm(true)}
+        >
+          Chiudi tavolo
+        </button>
+        {pendingIds.size > 0 && (
+          <p className="ord-pending-hint">
+            Il tavolo si può chiudere appena le voci in attesa di rete sono salvate.
+          </p>
+        )}
+      </div>
+
+      {/* Conferma di chiusura: pannello dal basso, non più una riga
+          schiacciata nell'intestazione sopra le etichette del turno. */}
+      {closeConfirm && (
+        <div className="sv-modal-overlay ord-sheet-overlay" onClick={(e) => e.target === e.currentTarget && setCloseConfirm(false)}>
+          <div className="ord-sheet">
+            <h2 className="ord-sheet-title">Chiudere il tavolo?</h2>
+            <p className="ord-sheet-text">
+              {table?.name ?? 'Tavolo'}{turn ? ` · ${turnLabel(turn)}` : ''}
+            </p>
+            <p className="ord-sheet-total">Totale <strong>{formatPrice(total)}</strong></p>
+            <p className="ord-sheet-note">
+              Il tavolo torna libero per questa combinazione di data e turno. Le comande restano registrate.
+            </p>
+            <div className="ord-sheet-actions">
+              <button className="ord-sheet-btn ord-sheet-btn--confirm" disabled={closing} onClick={handleCloseTable}>
+                {closing ? <OrdSpinner small /> : null}
+                {closing ? 'Chiusura…' : 'Chiudi tavolo'}
+              </button>
+              <button className="ord-sheet-btn ord-sheet-btn--cancel" disabled={closing} onClick={() => setCloseConfirm(false)}>
+                Annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {sendModalOpen && (
         <div className="sv-modal-overlay" onClick={(e) => e.target === e.currentTarget && setSendModalOpen(false)}>
@@ -698,7 +728,6 @@ export default function Ordine({ business, order, table, turns, onClose, onOrder
 
 /* ── Icons ── */
 function IconArrowLeft() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> }
-function IconCheck()     { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
 function IconX()         { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
 function IconOffline()   { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg> }
 function OrdSpinner({ small }) {

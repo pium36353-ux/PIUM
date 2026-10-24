@@ -765,7 +765,7 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
 
   if (!business) {
     return (
-      <div className="db-section">
+      <div className="db-section rb-screen">
         <div className="db-empty-banner">Configura prima la tua attività.</div>
       </div>
     )
@@ -778,7 +778,7 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
   // separata richiesta esplicitamente — non un modale sopra alla griglia.
   if (activeOrder) {
     return (
-      <div className="db-section">
+      <div className="db-section rb-screen">
         <Ordine
           business={business}
           order={activeOrder}
@@ -794,7 +794,7 @@ export default function Tavoli({ business, kioskLock, onKioskLockChange }) {
   }
 
   return (
-    <div className="db-section">
+    <div className="db-section rb-screen">
 
       {/* Toolbar */}
       <div className="db-section-toolbar">
